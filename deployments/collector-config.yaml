@@ -8,14 +8,19 @@ exporters:
     endpoint: tcp://clickhouse:9000
     database: telemetry
     timeout: 5s
+  logging:
+    loglevel: debug
 service:
+  telemetry:
+    logs:
+      level: debug
   pipelines:
     traces:
       receivers: [otlp]
-      exporters: [clickhouse]
+      exporters: [clickhouse, logging]
     metrics:
       receivers: [otlp]
-      exporters: [clickhouse]
+      exporters: [clickhouse, logging]
     logs:
       receivers: [otlp]
-      exporters: [clickhouse]
+      exporters: [clickhouse, logging]

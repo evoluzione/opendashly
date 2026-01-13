@@ -1,16 +1,25 @@
 package builders
 
-import "strings"
+import (
+	"strconv"
+	"strings"
+	"time"
+)
 
 // BuildTracesQuery creates a ClickHouse SQL statement for traces.
-func BuildTracesQuery(filters map[string]string) string {
-	base := "SELECT trace_id, span_id, parent_span_id, name, start_time, end_time, status, attributes FROM telemetry.traces"
-	clauses := []string{}
-	for k, v := range filters {
-		clauses = append(clauses, "attributes['"+k+"'] = '"+v+"'")
+func BuildTracesQuery(filters map[string]string, from, to time.Time, limit, offset int) string {
+	base := "SELECT TraceId AS traceId, any(SpanName) AS name, max(Timestamp) AS lastSeen FROM telemetry.otel_traces"
+	clauses := buildOtelClauses("Timestamp", filters, from, to, "ServiceName", "TraceId", []string{"ResourceAttributes", "SpanAttributes"})
+	query := base
+	if len(clauses) > 0 {
+		query += " WHERE " + strings.Join(clauses, " AND ")
 	}
-	if len(clauses) == 0 {
-		return base
+	query += " GROUP BY TraceId ORDER BY lastSeen DESC"
+	if limit > 0 {
+		query += " LIMIT " + strconv.Itoa(limit)
+		if offset > 0 {
+			query += " OFFSET " + strconv.Itoa(offset)
+		}
 	}
-	return base + " WHERE " + strings.Join(clauses, " AND ")
+	return query
 }

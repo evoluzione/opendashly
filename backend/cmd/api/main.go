@@ -17,13 +17,16 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	_, err = storage.NewClient(ctx, cfg.ClickHouseAddr)
+	client, err := storage.NewClient(ctx, cfg.ClickHouseAddr)
 	if err != nil {
 		log.Fatal(err)
 	}
+	if err := storage.ApplyMigrations(ctx, client.Conn); err != nil {
+		log.Fatal(err)
+	}
 
-	queryService := &query.Service{}
-	relatedService := &query.RelatedService{}
+	queryService := &query.Service{Storage: client}
+	relatedService := &query.RelatedService{Storage: client}
 	savedRepo := query.NewSavedQueryRepo()
 
 	handler := api.NewRouter(queryService, relatedService, savedRepo)

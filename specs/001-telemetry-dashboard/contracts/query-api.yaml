@@ -137,6 +137,9 @@ components:
           type: object
           additionalProperties:
             type: string
+        page:
+          type: integer
+          minimum: 1
         limit:
           type: integer
           minimum: 1
@@ -194,6 +197,8 @@ components:
               type: integer
             metricCount:
               type: integer
+        pagination:
+          $ref: '#/components/schemas/PaginationSet'
         results:
           type: object
           properties:
@@ -267,6 +272,27 @@ components:
                 format: date-time
               value:
                 type: number
+    Pagination:
+      type: object
+      required: [page, limit, total, totalPages]
+      properties:
+        page:
+          type: integer
+        limit:
+          type: integer
+        total:
+          type: integer
+        totalPages:
+          type: integer
+    PaginationSet:
+      type: object
+      properties:
+        logs:
+          $ref: '#/components/schemas/Pagination'
+        traces:
+          $ref: '#/components/schemas/Pagination'
+        metrics:
+          $ref: '#/components/schemas/Pagination'
     RelatedTelemetry:
       type: object
       properties:

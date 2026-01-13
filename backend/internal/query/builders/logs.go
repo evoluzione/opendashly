@@ -1,16 +1,25 @@
 package builders
 
-import "strings"
+import (
+	"strconv"
+	"strings"
+	"time"
+)
 
 // BuildLogsQuery creates a ClickHouse SQL statement for logs.
-func BuildLogsQuery(filters map[string]string) string {
-	base := "SELECT timestamp, severity, body, attributes, trace_id, span_id FROM telemetry.logs"
-	clauses := []string{}
-	for k, v := range filters {
-		clauses = append(clauses, "attributes['"+k+"'] = '"+v+"'")
+func BuildLogsQuery(filters map[string]string, from, to time.Time, limit, offset int) string {
+	base := "SELECT Timestamp AS timestamp, SeverityText AS severity, Body AS body, TraceId AS traceId, SpanId AS spanId FROM telemetry.otel_logs"
+	clauses := buildOtelClauses("Timestamp", filters, from, to, "ServiceName", "TraceId", []string{"ResourceAttributes", "LogAttributes"})
+	query := base
+	if len(clauses) > 0 {
+		query += " WHERE " + strings.Join(clauses, " AND ")
 	}
-	if len(clauses) == 0 {
-		return base
+	query += " ORDER BY Timestamp DESC"
+	if limit > 0 {
+		query += " LIMIT " + strconv.Itoa(limit)
+		if offset > 0 {
+			query += " OFFSET " + strconv.Itoa(offset)
+		}
 	}
-	return base + " WHERE " + strings.Join(clauses, " AND ")
+	return query
 }

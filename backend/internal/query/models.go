@@ -7,6 +7,7 @@ type QueryRequest struct {
 	Signals   []string          `json:"signals"`
 	TimeRange TimeRange         `json:"timeRange"`
 	Filters   map[string]string `json:"filters"`
+	Page      int               `json:"page"`
 	Limit     int               `json:"limit"`
 	OrderBy   string            `json:"orderBy"`
 }
@@ -38,6 +39,7 @@ type QueryRunResult struct {
 	RunID   string       `json:"runId"`
 	Status  string       `json:"status"`
 	Summary QueryRunSummary `json:"summary"`
+	Pagination PaginationSet `json:"pagination"`
 	Results Results      `json:"results"`
 }
 
@@ -46,4 +48,19 @@ type Results struct {
 	Logs    []any `json:"logs"`
 	Traces  []any `json:"traces"`
 	Metrics []any `json:"metrics"`
+}
+
+// Pagination captures paging metadata for a signal.
+type Pagination struct {
+	Page       int `json:"page"`
+	Limit      int `json:"limit"`
+	Total      int `json:"total"`
+	TotalPages int `json:"totalPages"`
+}
+
+// PaginationSet groups paging metadata per signal.
+type PaginationSet struct {
+	Logs    Pagination `json:"logs"`
+	Traces  Pagination `json:"traces"`
+	Metrics Pagination `json:"metrics"`
 }

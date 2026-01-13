@@ -64,8 +64,8 @@ description: "Task list template for feature implementation"
 
 - [x] T014 [P] [US1] Contract test for `/api/query/run` in `backend/tests/contract/query_run_test.go`
 - [x] T015 [P] [US1] Integration test for query flow in `frontend/tests/integration/query_flow.spec.ts`
-- [ ] T052 [P] [US1] Extend contract coverage for pagination metadata in `backend/tests/contract/query_run_test.go`
-- [ ] T053 [P] [US1] Extend integration test to cover quick time ranges and auto-refresh in `frontend/tests/integration/query_flow.spec.ts`
+- [x] T052 [P] [US1] Extend contract coverage for pagination metadata in `backend/tests/contract/query_run_test.go`
+- [x] T053 [P] [US1] Extend integration test to cover quick time ranges and auto-refresh in `frontend/tests/integration/query_flow.spec.ts`
 
 ### Implementation for User Story 1
 
@@ -82,18 +82,18 @@ description: "Task list template for feature implementation"
 - [x] T026 [US1] Build trace results list in `frontend/src/components/TraceResultsList.svelte`
 - [x] T027 [US1] Build metric chart component in `frontend/src/components/MetricChart.svelte`
 - [x] T028 [US1] Assemble query page in `frontend/src/routes/query/+page.svelte`
-- [ ] T054 [US1] Add pagination params and metadata to query contract in `specs/001-telemetry-dashboard/contracts/query-api.yaml`
-- [ ] T055 [US1] Add page/limit fields to query models in `backend/internal/query/models.go`
-- [ ] T056 [US1] Apply limit/offset per signal query in `backend/internal/query/service.go`
-- [ ] T057 [US1] Surface pagination metadata in query response in `backend/internal/api/handlers/query.go`
-- [ ] T058 [P] [US1] Add pagination controls to log results in `frontend/src/components/LogResultsTable.svelte`
-- [ ] T059 [P] [US1] Add pagination controls to trace results in `frontend/src/components/TraceResultsList.svelte`
-- [ ] T060 [P] [US1] Add pagination controls to metrics view in `frontend/src/components/MetricChart.svelte`
-- [ ] T061 [US1] Add quick time range presets to query form in `frontend/src/components/QueryForm.svelte`
-- [ ] T062 [US1] Add custom date range selection to query form in `frontend/src/components/QueryForm.svelte`
-- [ ] T063 [US1] Add auto-refresh interval controls in `frontend/src/components/QueryForm.svelte`
-- [ ] T064 [US1] Implement auto-refresh scheduling in `frontend/src/lib/stores/query.ts`
-- [ ] T065 [US1] Wire pagination + refresh parameters in `frontend/src/services/query.ts`
+- [x] T054 [US1] Add pagination params and metadata to query contract in `specs/001-telemetry-dashboard/contracts/query-api.yaml`
+- [x] T055 [US1] Add page/limit fields to query models in `backend/internal/query/models.go`
+- [x] T056 [US1] Apply limit/offset per signal query in `backend/internal/query/service.go`
+- [x] T057 [US1] Surface pagination metadata in query response in `backend/internal/api/handlers/query.go`
+- [x] T058 [P] [US1] Add pagination controls to log results in `frontend/src/components/LogResultsTable.svelte`
+- [x] T059 [P] [US1] Add pagination controls to trace results in `frontend/src/components/TraceResultsList.svelte`
+- [x] T060 [P] [US1] Add pagination controls to metrics view in `frontend/src/components/MetricChart.svelte`
+- [x] T061 [US1] Add quick time range presets to query form in `frontend/src/components/QueryForm.svelte`
+- [x] T062 [US1] Add custom date range selection to query form in `frontend/src/components/QueryForm.svelte`
+- [x] T063 [US1] Add auto-refresh interval controls in `frontend/src/components/QueryForm.svelte`
+- [x] T064 [US1] Implement auto-refresh scheduling in `frontend/src/lib/stores/query.ts`
+- [x] T065 [US1] Wire pagination + refresh parameters in `frontend/src/services/query.ts`
 
 **Checkpoint**: At this point, User Story 1 should be fully functional and testable independently
 

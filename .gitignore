@@ -22,7 +22,6 @@ test-results/
 Thumbs.db
 *.tmp
 *.swp
-.specify/memory/
 .specify/.cache/
 .vscode/
 .idea/

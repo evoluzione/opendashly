@@ -24,6 +24,8 @@ func TestQueryRunContract(t *testing.T) {
 			"to":   "2026-01-02T00:00:00Z",
 		},
 		"filters": map[string]string{"service.name": "api"},
+		"page":    1,
+		"limit":   50,
 	}
 	body, _ := json.Marshal(payload)
 
@@ -35,5 +37,16 @@ func TestQueryRunContract(t *testing.T) {
 
 	if rec.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d", rec.Code)
+	}
+
+	var result query.QueryRunResult
+	if err := json.NewDecoder(rec.Body).Decode(&result); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+	if result.Pagination.Logs.Page != 1 {
+		t.Fatalf("expected logs page 1, got %d", result.Pagination.Logs.Page)
+	}
+	if result.Pagination.Logs.Limit != 50 {
+		t.Fatalf("expected logs limit 50, got %d", result.Pagination.Logs.Limit)
 	}
 }
