@@ -1,0 +1,11 @@
+.git/
+.gitignore
+Dockerfile
+node_modules/
+.svelte-kit/
+dist/
+build/
+coverage/
+*.log
+*.tmp
+*.swp

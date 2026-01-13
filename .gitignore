@@ -1,0 +1,28 @@
+# Go
+*.exe
+*.test
+*.out
+/vendor/
+
+# Node
+node_modules/
+dist/
+build/
+.svelte-kit/
+coverage/
+playwright-report/
+test-results/
+.vite/
+.eslintcache
+*.log
+.env*
+
+# Universal
+.DS_Store
+Thumbs.db
+*.tmp
+*.swp
+.specify/memory/
+.specify/.cache/
+.vscode/
+.idea/
