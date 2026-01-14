@@ -24,3 +24,9 @@
   "orderBy": "timestamp_desc"
 }
 ```
+
+## Query Visibility Rules
+
+- All filters applied to the dashboard are user-visible and editable.
+- Service selection is represented as an explicit `service.name` filter (or no filter when set to "Tutti").
+- Saved queries must persist the full filter set without hidden defaults.

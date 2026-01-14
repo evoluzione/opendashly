@@ -3,6 +3,8 @@ package auth
 import (
 	"context"
 	"net/http"
+	"strings"
+	"time"
 )
 
 type contextKey string
@@ -10,21 +12,79 @@ type contextKey string
 const (
 	tenantKey contextKey = "tenant_id"
 	userKey   contextKey = "user_id"
+	roleKey   contextKey = "role"
 )
 
-// Middleware enforces a simple auth/tenant model using request headers.
-func Middleware(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		tenantID := r.Header.Get("X-Tenant-ID")
-		userID := r.Header.Get("X-User-ID")
-		if tenantID == "" || userID == "" {
-			w.WriteHeader(http.StatusUnauthorized)
-			return
-		}
-		ctx := context.WithValue(r.Context(), tenantKey, tenantID)
-		ctx = context.WithValue(ctx, userKey, userID)
-		next.ServeHTTP(w, r.WithContext(ctx))
-	})
+type MiddlewareOptions struct {
+	Mode            string
+	CookieName      string
+	JWTSecret       []byte
+	Repo            Repository
+	TenantID        string
+	AllowlistPaths  []string
+	SessionDuration time.Duration
+}
+
+// Middleware enforces authentication using the configured auth mode.
+func Middleware(opts MiddlewareOptions) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if r.Method == http.MethodOptions {
+				w.WriteHeader(http.StatusNoContent)
+				return
+			}
+			for _, path := range opts.AllowlistPaths {
+				if r.URL.Path == path {
+					next.ServeHTTP(w, r)
+					return
+				}
+			}
+			if strings.EqualFold(opts.Mode, "header") {
+				tenantID := r.Header.Get("X-Tenant-ID")
+				userID := r.Header.Get("X-User-ID")
+				if tenantID == "" || userID == "" {
+					w.WriteHeader(http.StatusUnauthorized)
+					return
+				}
+				ctx := context.WithValue(r.Context(), tenantKey, tenantID)
+				ctx = context.WithValue(ctx, userKey, userID)
+				next.ServeHTTP(w, r.WithContext(ctx))
+				return
+			}
+
+			cookie, err := r.Cookie(opts.CookieName)
+			if err != nil || cookie.Value == "" {
+				w.WriteHeader(http.StatusUnauthorized)
+				return
+			}
+			claims, err := ParseToken(opts.JWTSecret, cookie.Value)
+			if err != nil {
+				w.WriteHeader(http.StatusUnauthorized)
+				return
+			}
+			if opts.Repo == nil {
+				w.WriteHeader(http.StatusUnauthorized)
+				return
+			}
+			user, err := opts.Repo.GetByID(r.Context(), claims.UserID)
+			if err != nil {
+				w.WriteHeader(http.StatusUnauthorized)
+				return
+			}
+			if user.IsDisabled {
+				w.WriteHeader(http.StatusForbidden)
+				return
+			}
+			if user.MustChangePassword && !isAllowedDuringPasswordChange(r.URL.Path) {
+				w.WriteHeader(http.StatusForbidden)
+				return
+			}
+			ctx := context.WithValue(r.Context(), tenantKey, opts.TenantID)
+			ctx = context.WithValue(ctx, userKey, user.ID)
+			ctx = context.WithValue(ctx, roleKey, user.Role)
+			next.ServeHTTP(w, r.WithContext(ctx))
+		})
+	}
 }
 
 // TenantID extracts tenant id from context.
@@ -41,4 +101,21 @@ func UserID(ctx context.Context) string {
 		return v
 	}
 	return ""
+}
+
+// Role extracts role from context.
+func Role(ctx context.Context) string {
+	if v, ok := ctx.Value(roleKey).(string); ok {
+		return v
+	}
+	return ""
+}
+
+func isAllowedDuringPasswordChange(path string) bool {
+	switch path {
+	case "/api/auth/logout", "/api/auth/change-password", "/api/auth/session":
+		return true
+	default:
+		return false
+	}
 }

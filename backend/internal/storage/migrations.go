@@ -31,6 +31,7 @@ func ApplyMigrations(ctx context.Context, conn driver.Conn) error {
 	}
 	sort.Strings(files)
 	for _, file := range files {
+		log.Printf("migration file start: %s", file)
 		contents, err := migrationsFS.ReadFile("migrations/" + file)
 		if err != nil {
 			return fmt.Errorf("read migration %s: %w", file, err)

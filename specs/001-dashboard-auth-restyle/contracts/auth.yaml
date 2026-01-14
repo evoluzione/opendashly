@@ -1,0 +1,163 @@
+openapi: 3.0.3
+info:
+  title: Dashboard Auth and User Management API
+  version: 1.0.0
+servers:
+  - url: /api
+paths:
+  /auth/login:
+    post:
+      summary: Authenticate a user and start a session
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [username, password]
+              properties:
+                username:
+                  type: string
+                password:
+                  type: string
+      responses:
+        "200":
+          description: Login successful
+          headers:
+            Set-Cookie:
+              description: Session cookie
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthSession"
+        "401":
+          description: Invalid credentials
+  /auth/logout:
+    post:
+      summary: End the current session
+      responses:
+        "204":
+          description: Logged out
+  /auth/change-password:
+    post:
+      summary: Change password for the current user
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [currentPassword, newPassword]
+              properties:
+                currentPassword:
+                  type: string
+                newPassword:
+                  type: string
+      responses:
+        "200":
+          description: Password changed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthSession"
+        "401":
+          description: Not authenticated
+        "403":
+          description: Current password invalid
+  /auth/session:
+    get:
+      summary: Fetch current session information
+      responses:
+        "200":
+          description: Current session
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthSession"
+        "401":
+          description: Not authenticated
+  /users:
+    get:
+      summary: List users (admin only)
+      responses:
+        "200":
+          description: User list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/User"
+        "401":
+          description: Not authenticated
+        "403":
+          description: Not authorized
+    post:
+      summary: Create a user (admin only)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/NewUser"
+      responses:
+        "201":
+          description: User created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+        "401":
+          description: Not authenticated
+        "403":
+          description: Not authorized
+  /services:
+    get:
+      summary: List available services for filtering
+      responses:
+        "200":
+          description: Services list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  services:
+                    type: array
+                    items:
+                      type: string
+
+components:
+  schemas:
+    AuthSession:
+      type: object
+      properties:
+        user:
+          $ref: "#/components/schemas/User"
+        mustChangePassword:
+          type: boolean
+    User:
+      type: object
+      properties:
+        id:
+          type: string
+        username:
+          type: string
+        role:
+          type: string
+          enum: [admin, user]
+        isDisabled:
+          type: boolean
+    NewUser:
+      type: object
+      required: [username, password, role]
+      properties:
+        username:
+          type: string
+        password:
+          type: string
+        role:
+          type: string
+          enum: [admin, user]

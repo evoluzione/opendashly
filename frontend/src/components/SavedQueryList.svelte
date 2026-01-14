@@ -10,7 +10,7 @@
       const result = await listSavedQueries();
       items = result.items;
     } catch (err) {
-      error = err instanceof Error ? err.message : 'Failed to load saved queries';
+      error = err instanceof Error ? err.message : 'Impossibile caricare le query salvate';
     }
   }
 
@@ -33,8 +33,8 @@
     {#each items as item}
       <li>
         <strong>{item.name}</strong>
-        <button on:click={() => run(item.id)}>Run</button>
-        <button on:click={() => remove(item.id)}>Delete</button>
+        <button on:click={() => run(item.id)}>Esegui</button>
+        <button on:click={() => remove(item.id)}>Elimina</button>
       </li>
     {/each}
   </ul>

@@ -4,5 +4,5 @@
   export let params;
 </script>
 
-<h2>Saved Queries</h2>
+<h2>Query salvate</h2>
 <SavedQueryList />

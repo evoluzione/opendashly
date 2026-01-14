@@ -10,10 +10,9 @@ export async function apiRequest<T>(path: string, options: RequestInit = {}): Pr
     response = await fetch(url, {
       headers: {
         'Content-Type': 'application/json',
-        'X-Tenant-ID': 'demo-tenant',
-        'X-User-ID': 'demo-user',
         ...(options.headers || {})
       },
+      credentials: 'include',
       ...options
     });
   } catch (error) {
@@ -37,5 +36,12 @@ export async function apiRequest<T>(path: string, options: RequestInit = {}): Pr
     throw new Error(`Request failed: ${response.status}`);
   }
 
+  if (response.status === 204) {
+    return undefined as T;
+  }
+  const contentLength = response.headers.get('content-length');
+  if (contentLength === '0') {
+    return undefined as T;
+  }
   return response.json() as Promise<T>;
 }

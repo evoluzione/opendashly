@@ -15,7 +15,11 @@ func TestQueryRunContract(t *testing.T) {
 	queryService := &query.Service{}
 	relatedService := &query.RelatedService{}
 	savedRepo := query.NewSavedQueryRepo()
-	handler := api.NewRouter(queryService, relatedService, savedRepo)
+	handler := api.NewRouter(api.RouterConfig{
+		QueryService:   queryService,
+		RelatedService: relatedService,
+		SavedRepo:      savedRepo,
+	})
 
 	payload := map[string]any{
 		"signals": []string{"logs"},

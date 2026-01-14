@@ -1,6 +1,7 @@
 import { get, writable } from 'svelte/store';
 import type { QueryRunResult, QueryRequest } from '../../services/query';
 import { runQuery } from '../../services/query';
+import { fetchServices } from '../../services/services';
 
 type QueryState = {
   loading: boolean;
@@ -8,6 +9,13 @@ type QueryState = {
   result: QueryRunResult | null;
   lastRequest: QueryRequest | null;
   autoRefreshSeconds: number | null;
+};
+
+type ServiceState = {
+  services: string[];
+  selectedService: string;
+  loading: boolean;
+  error: string | null;
 };
 
 const initial: QueryState = {
@@ -19,6 +27,15 @@ const initial: QueryState = {
 };
 
 export const queryState = writable<QueryState>(initial);
+
+const servicesInitial: ServiceState = {
+  services: [],
+  selectedService: 'Tutti',
+  loading: false,
+  error: null
+};
+
+export const servicesState = writable<ServiceState>(servicesInitial);
 
 let refreshTimer: ReturnType<typeof setInterval> | null = null;
 
@@ -67,6 +84,26 @@ export async function executeQuery(
       result: options.retainResult ? state.result : null
     }));
   }
+}
+
+export async function loadServices() {
+  servicesState.update((state) => ({ ...state, loading: true, error: null }));
+  try {
+    const response = await fetchServices();
+    servicesState.update((state) => ({
+      ...state,
+      services: response.services ?? [],
+      loading: false,
+      error: null
+    }));
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Failed to load services';
+    servicesState.update((state) => ({ ...state, loading: false, error: message }));
+  }
+}
+
+export function selectService(value: string) {
+  servicesState.update((state) => ({ ...state, selectedService: value }));
 }
 
 export function setAutoRefresh(seconds: number | null) {
