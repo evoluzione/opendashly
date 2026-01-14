@@ -1,6 +1,7 @@
 services:
 
   clickhouse:
+    container_name: clickhouse
     image: clickhouse/clickhouse-server:24
     ports:
       - "8123:8123"
@@ -16,6 +17,7 @@ services:
       retries: 10
 
   otel-collector:
+    container_name: otel-collector
     image: otel/opentelemetry-collector-contrib:0.99.0
     command: ["--config=/etc/otelcol/config.yaml"]
     ports:
@@ -28,6 +30,7 @@ services:
         condition: service_healthy
 
   backend:
+    container_name: backend
     build:
       context: ../backend
     ports:
@@ -41,6 +44,7 @@ services:
       - otel-collector
       
   frontend:
+    container_name: frontend
     build:
       context: ../frontend
     ports:
