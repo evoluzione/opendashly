@@ -1,23 +1,57 @@
 <script lang="ts">
   import { createEventDispatcher } from 'svelte';
+  import CorrelationPanel from './CorrelationPanel.svelte';
+  import TraceSpanTimeline from './TraceSpanTimeline.svelte';
 
   export let traces: any[] = [];
   export let pagination: { page: number; totalPages: number } | null = null;
 
   const dispatch = createEventDispatcher();
+  let selectedTrace: any | null = null;
 
   function changePage(nextPage: number) {
     dispatch('pageChange', { page: nextPage });
   }
+
+  function formatTimestamp(value: string | number | Date) {
+    if (!value) return '-';
+    const date = value instanceof Date ? value : new Date(value);
+    return new Intl.DateTimeFormat('it-IT', {
+      dateStyle: 'short',
+      timeStyle: 'medium'
+    }).format(date);
+  }
+
+  function shortId(id?: string) {
+    if (!id) return '';
+    return id.length > 12 ? `${id.slice(0, 8)}...${id.slice(-4)}` : id;
+  }
+
+  function formatDuration(value?: number) {
+    if (!value || value <= 0) return '0 ms';
+    if (value < 1000) return `${Math.round(value)} ms`;
+    if (value < 60000) return `${(value / 1000).toFixed(2)} s`;
+    return `${(value / 60000).toFixed(2)} min`;
+  }
 </script>
 
-<ul class="trace-list">
-  {#each traces as trace}
-    <li>
-      <a href={`/traces/${trace.traceId}`}>{trace.name} ({trace.traceId})</a>
-    </li>
-  {/each}
-</ul>
+{#if traces.length === 0}
+  <div class="empty">Nessuna traccia trovata per i filtri selezionati.</div>
+{:else}
+  <ul class="trace-list">
+    {#each traces as trace}
+      <li>
+        <button type="button" class="trace-row" on:click={() => (selectedTrace = trace)}>
+          <span class="name">{trace.name || 'Trace senza nome'}</span>
+          <span class="service">{trace.service || 'Servizio non specificato'}</span>
+          <span class="last-seen">{formatTimestamp(trace.lastSeen)}</span>
+          <span class="count">Span {trace.spanCount ?? 0}</span>
+          <span class="duration">{formatDuration(trace.durationMs)}</span>
+        </button>
+      </li>
+    {/each}
+  </ul>
+{/if}
 
 {#if pagination}
   <div class="pager">
@@ -39,7 +73,38 @@
   </div>
 {/if}
 
+{#if selectedTrace}
+  <div class="modal-backdrop" role="dialog" aria-modal="true" on:click={() => (selectedTrace = null)}>
+    <div class="modal" on:click|stopPropagation>
+      <header>
+        <div>
+          <p class="kicker">Dettagli traccia</p>
+          <h3>{selectedTrace.name || 'Trace senza nome'}</h3>
+        </div>
+        <button type="button" class="close" on:click={() => (selectedTrace = null)}>Chiudi</button>
+      </header>
+      <div class="meta">
+        <span class="pill">Trace ID {selectedTrace.traceId}</span>
+        <span class="pill">Servizio {selectedTrace.service || '-'}</span>
+        <span class="pill">Span {selectedTrace.spanCount ?? 0}</span>
+        <span class="pill">Ultimo span {formatTimestamp(selectedTrace.lastSeen)}</span>
+      </div>
+      <div class="details-panel">
+        <TraceSpanTimeline traceId={selectedTrace.traceId} />
+        <CorrelationPanel traceId={selectedTrace.traceId} />
+      </div>
+    </div>
+  </div>
+{/if}
+
 <style>
+  .empty {
+    color: #94a3b8;
+    font-size: 14px;
+    text-align: center;
+    padding: 40px 0;
+  }
+
   .trace-list {
     list-style: none;
     padding: 0;
@@ -48,43 +113,45 @@
     flex-direction: column;
     gap: 8px;
   }
-  
-  li {
-    padding: 16px 20px;
-    background: #f8fafc;
-    border-radius: 12px;
-    border: 1px solid #e2e8f0;
-    transition: all 0.2s ease;
-  }
-  
-  li:hover {
-    border-color: #6366f1;
-    background: rgba(99, 102, 241, 0.03);
-    transform: translateX(4px);
-  }
-  
-  li a {
-    color: #334155;
-    text-decoration: none;
-    font-weight: 500;
-    font-size: 14px;
-    display: flex;
+
+  .trace-row {
+    width: 100%;
+    display: grid;
+    grid-template-columns: 1.2fr 1fr 160px 120px 100px;
+    gap: 16px;
     align-items: center;
-    gap: 8px;
+    padding: 12px 16px;
+    border-radius: 10px;
+    border: 1px solid rgba(148, 163, 184, 0.2);
+    background: white;
+    cursor: pointer;
+    text-align: left;
+    transition: border 0.15s ease, box-shadow 0.15s ease;
   }
-  
-  li a::before {
-    content: '';
-    width: 8px;
-    height: 8px;
-    border-radius: 50%;
-    background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+
+  .trace-row:hover {
+    border-color: #2563eb;
+    box-shadow: 0 2px 8px rgba(37, 99, 235, 0.12);
   }
-  
-  li:hover a {
-    color: #6366f1;
+
+  .name {
+    font-size: 13px;
+    color: #0f172a;
+    font-weight: 600;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
-  
+
+  .service,
+  .last-seen,
+  .count,
+  .duration {
+    font-size: 12px;
+    color: #64748b;
+    font-weight: 600;
+  }
+
   .pager {
     display: flex;
     align-items: center;
@@ -94,7 +161,7 @@
     padding-top: 20px;
     border-top: 1px solid #f1f5f9;
   }
-  
+
   .pager button {
     padding: 10px 16px;
     font-size: 13px;
@@ -106,19 +173,102 @@
     cursor: pointer;
     transition: all 0.2s ease;
   }
-  
+
   .pager button:hover:not(:disabled) {
-    border-color: #6366f1;
-    color: #6366f1;
+    border-color: #2563eb;
+    color: #2563eb;
   }
-  
+
   .pager button:disabled {
     opacity: 0.4;
     cursor: not-allowed;
   }
-  
+
   .pager span {
     font-size: 13px;
     color: #64748b;
+  }
+
+  .modal-backdrop {
+    position: fixed;
+    inset: 0;
+    background: rgba(15, 23, 42, 0.45);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+    z-index: 60;
+  }
+
+  .modal {
+    width: min(1100px, 96vw);
+    max-height: 90vh;
+    overflow: auto;
+    background: white;
+    border-radius: 16px;
+    padding: 24px;
+    box-shadow: 0 20px 40px rgba(15, 23, 42, 0.2);
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+
+  .modal header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+  }
+
+  .kicker {
+    margin: 0 0 6px 0;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: #94a3b8;
+  }
+
+  .modal h3 {
+    margin: 0;
+    font-size: 18px;
+    color: #0f172a;
+  }
+
+  .close {
+    border: none;
+    background: #1d4ed8;
+    color: white;
+    padding: 8px 14px;
+    border-radius: 999px;
+    font-weight: 600;
+    cursor: pointer;
+  }
+
+  .meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .pill {
+    font-size: 12px;
+    padding: 6px 10px;
+    border-radius: 999px;
+    background: #f1f5f9;
+    color: #475569;
+    font-weight: 600;
+  }
+
+  .details-panel :global(.panel) {
+    padding: 0;
+    border: none;
+    box-shadow: none;
+  }
+
+  @media (max-width: 720px) {
+    .trace-row {
+      grid-template-columns: 1fr;
+      gap: 6px;
+    }
   }
 </style>

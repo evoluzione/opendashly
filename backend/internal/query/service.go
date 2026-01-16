@@ -140,17 +140,22 @@ func wrapAny[T any](items []T) []any {
 }
 
 type LogEntry struct {
-	Timestamp time.Time `json:"timestamp"`
-	Severity  string    `json:"severity"`
-	Body      string    `json:"body"`
-	TraceID   string    `json:"traceId,omitempty"`
-	SpanID    string    `json:"spanId,omitempty"`
+	Timestamp          time.Time         `json:"timestamp"`
+	Severity           string            `json:"severity"`
+	Body               string            `json:"body"`
+	TraceID            string            `json:"traceId,omitempty"`
+	SpanID             string            `json:"spanId,omitempty"`
+	ResourceAttributes map[string]string `json:"resourceAttributes,omitempty"`
+	LogAttributes      map[string]string `json:"logAttributes,omitempty"`
 }
 
 type TraceEntry struct {
-	TraceID  string    `json:"traceId"`
-	Name     string    `json:"name"`
-	LastSeen time.Time `json:"lastSeen,omitempty"`
+	TraceID   string    `json:"traceId"`
+	Name      string    `json:"name"`
+	Service   string    `json:"service,omitempty"`
+	SpanCount uint64    `json:"spanCount,omitempty"`
+	LastSeen  time.Time `json:"lastSeen,omitempty"`
+	DurationMs int64    `json:"durationMs,omitempty"`
 }
 
 type MetricPoint struct {
@@ -180,7 +185,7 @@ func fetchLogs(ctx context.Context, conn driver.Conn, query string) ([]LogEntry,
 	results := []LogEntry{}
 	for rows.Next() {
 		var row LogEntry
-		if err := rows.Scan(&row.Timestamp, &row.Severity, &row.Body, &row.TraceID, &row.SpanID); err != nil {
+		if err := rows.Scan(&row.Timestamp, &row.Severity, &row.Body, &row.TraceID, &row.SpanID, &row.ResourceAttributes, &row.LogAttributes); err != nil {
 			return nil, fmt.Errorf("scan logs: %w", err)
 		}
 		results = append(results, row)
@@ -200,8 +205,11 @@ func fetchTraces(ctx context.Context, conn driver.Conn, query string) ([]TraceEn
 	results := []TraceEntry{}
 	for rows.Next() {
 		var row TraceEntry
-		if err := rows.Scan(&row.TraceID, &row.Name, &row.LastSeen); err != nil {
+		if err := rows.Scan(&row.TraceID, &row.Name, &row.Service, &row.SpanCount, &row.LastSeen, &row.DurationMs); err != nil {
 			return nil, fmt.Errorf("scan traces: %w", err)
+		}
+		if row.DurationMs < 0 {
+			row.DurationMs = 0
 		}
 		results = append(results, row)
 	}

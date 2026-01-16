@@ -26,55 +26,57 @@
 
 <section class="login">
   <div class="login-left">
-    <div class="branding">
-      <div class="logo">
-        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <path d="M12 2L2 7l10 5 10-5-10-5z"/>
-          <path d="M2 17l10 5 10-5"/>
-          <path d="M2 12l10 5 10-5"/>
-        </svg>
-      </div>
-      <div class="brand-text">
-        <h1>OpenTelemetry</h1>
-        <span>Dashboard</span>
-      </div>
-    </div>
-    
-    <div class="features">
-      <div class="feature">
-        <div class="feature-icon">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
-            <polyline points="14 2 14 8 20 8"/>
+    <div class="login-left-inner">
+      <div class="branding">
+        <div class="logo">
+          <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M12 2L2 7l10 5 10-5-10-5z"/>
+            <path d="M2 17l10 5 10-5"/>
+            <path d="M2 12l10 5 10-5"/>
           </svg>
         </div>
-        <div>
-          <strong>Logs</strong>
-          <p>Esplora e filtra i log in tempo reale</p>
+        <div class="brand-text">
+          <h1>OpenTelemetry</h1>
+          <span>Dashboard</span>
         </div>
       </div>
-      <div class="feature">
-        <div class="feature-icon">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <line x1="18" y1="20" x2="18" y2="10"/>
-            <line x1="12" y1="20" x2="12" y2="4"/>
-            <line x1="6" y1="20" x2="6" y2="14"/>
-          </svg>
+      
+      <div class="features">
+        <div class="feature">
+          <div class="feature-icon">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+              <polyline points="14 2 14 8 20 8"/>
+            </svg>
+          </div>
+          <div>
+            <strong>Logs</strong>
+            <p>Esplora e filtra i log in tempo reale</p>
+          </div>
         </div>
-        <div>
-          <strong>Metriche</strong>
-          <p>Visualizza metriche e performance</p>
+        <div class="feature">
+          <div class="feature-icon">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <line x1="18" y1="20" x2="18" y2="10"/>
+              <line x1="12" y1="20" x2="12" y2="4"/>
+              <line x1="6" y1="20" x2="6" y2="14"/>
+            </svg>
+          </div>
+          <div>
+            <strong>Metriche</strong>
+            <p>Visualizza metriche e performance</p>
+          </div>
         </div>
-      </div>
-      <div class="feature">
-        <div class="feature-icon">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
-          </svg>
-        </div>
-        <div>
-          <strong>Tracce</strong>
-          <p>Analizza le tracce distribuite</p>
+        <div class="feature">
+          <div class="feature-icon">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
+            </svg>
+          </div>
+          <div>
+            <strong>Tracce</strong>
+            <p>Analizza le tracce distribuite</p>
+          </div>
         </div>
       </div>
     </div>
@@ -162,8 +164,16 @@
     display: flex;
     flex-direction: column;
     justify-content: center;
+    align-items: center;
     position: relative;
     overflow: hidden;
+  }
+
+  .login-left-inner {
+    width: min(520px, 100%);
+    display: flex;
+    flex-direction: column;
+    gap: 32px;
   }
   
   .login-left::before {

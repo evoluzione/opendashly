@@ -103,9 +103,11 @@
     padding: 24px 16px;
     background: linear-gradient(180deg, #0f172a 0%, #1e293b 100%);
     width: 240px;
-    min-height: 100vh;
-    position: relative;
+    height: 100vh;
+    position: sticky;
+    top: 0;
     flex-shrink: 0;
+    overflow-y: auto;
   }
   
   .sidebar::before {

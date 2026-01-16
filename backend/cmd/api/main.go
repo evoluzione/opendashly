@@ -30,6 +30,7 @@ func main() {
 
 	queryService := &query.Service{Storage: client}
 	relatedService := &query.RelatedService{Storage: client}
+	traceSpansService := &query.TraceSpansService{Storage: client}
 	savedRepo := query.NewSavedQueryRepo()
 	authRepo := &auth.Repo{Conn: client.Conn}
 	if err := seedDefaultAdmin(ctx, authRepo); err != nil {
@@ -58,6 +59,7 @@ func main() {
 	handler := api.NewRouter(api.RouterConfig{
 		QueryService:    queryService,
 		RelatedService:  relatedService,
+		TraceSpansService: traceSpansService,
 		SavedRepo:       savedRepo,
 		AuthHandler:     authHandler,
 		UsersHandler:    usersHandler,

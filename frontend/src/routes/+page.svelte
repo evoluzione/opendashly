@@ -62,8 +62,9 @@
   .dashboard {
     display: grid;
     grid-template-columns: 240px minmax(0, 1fr) 320px;
-    min-height: 100vh;
+    height: 100vh;
     width: 100%;
+    overflow: hidden;
   }
   
   .content {
@@ -73,6 +74,7 @@
     flex-direction: column;
     gap: 24px;
     overflow-x: hidden;
+    overflow-y: auto;
   }
   
   .content-header {
@@ -115,14 +117,11 @@
   .filters {
     background: white;
     border-left: 1px solid rgba(15, 23, 42, 0.06);
+    overflow-y: auto;
   }
   
   .filters .panel {
-    position: sticky;
-    top: 0;
     padding: 24px;
-    max-height: 100vh;
-    overflow-y: auto;
   }
   
   .filters h3 {
@@ -153,6 +152,7 @@
   @media (max-width: 1200px) {
     .dashboard {
       grid-template-columns: 220px 1fr;
+      height: auto;
     }
     .filters {
       grid-column: span 2;
@@ -160,7 +160,7 @@
       border-top: 1px solid rgba(15, 23, 42, 0.06);
     }
     .filters .panel {
-      max-height: none;
+      padding: 24px;
     }
   }
   

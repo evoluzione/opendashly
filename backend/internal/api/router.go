@@ -12,6 +12,7 @@ import (
 type RouterConfig struct {
 	QueryService    *query.Service
 	RelatedService  *query.RelatedService
+	TraceSpansService *query.TraceSpansService
 	SavedRepo       *query.SavedQueryRepo
 	AuthHandler     *handlers.AuthHandler
 	UsersHandler    *handlers.UsersHandler
@@ -35,6 +36,7 @@ func NewRouter(cfg RouterConfig) http.Handler {
 
 	queryHandler := &handlers.QueryHandler{Service: cfg.QueryService}
 	traceRelated := &handlers.TraceRelatedHandler{Service: cfg.RelatedService}
+	traceSpans := &handlers.TraceSpansHandler{Service: cfg.TraceSpansService}
 	savedHandler := &handlers.SavedQueriesHandler{Repo: cfg.SavedRepo, Runner: cfg.QueryService}
 
 	r.Post("/api/query/run", queryHandler.ServeHTTP)
@@ -44,6 +46,7 @@ func NewRouter(cfg RouterConfig) http.Handler {
 	r.Delete("/api/queries/{queryId}", savedHandler.Delete)
 	r.Post("/api/queries/{queryId}/run", savedHandler.Run)
 	r.Get("/api/traces/{traceId}/related", traceRelated.ServeHTTP)
+	r.Get("/api/traces/{traceId}/spans", traceSpans.ServeHTTP)
 
 	if cfg.AuthHandler != nil {
 		r.Post("/api/auth/login", cfg.AuthHandler.Login)
