@@ -75,7 +75,7 @@ export async function executeQuery(
     queryState.update((state) => ({ ...state, loading: false, error: null, result }));
     scheduleAutoRefresh();
   } catch (err) {
-    const message = err instanceof Error ? err.message : 'Unknown error';
+    const message = err instanceof Error ? err.message : 'Errore sconosciuto';
     console.debug('query.execute.error', { message, error: err });
     queryState.update((state) => ({
       ...state,
@@ -97,7 +97,7 @@ export async function loadServices() {
       error: null
     }));
   } catch (err) {
-    const message = err instanceof Error ? err.message : 'Failed to load services';
+    const message = err instanceof Error ? err.message : 'Impossibile caricare i servizi';
     servicesState.update((state) => ({ ...state, loading: false, error: message }));
   }
 }

@@ -11,6 +11,7 @@ import (
 	"opentelemetry-dashboard/backend/internal/auth"
 	"opentelemetry-dashboard/backend/internal/config"
 	"opentelemetry-dashboard/backend/internal/query"
+	"opentelemetry-dashboard/backend/internal/retention"
 	"opentelemetry-dashboard/backend/internal/storage"
 )
 
@@ -20,7 +21,7 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	client, err := storage.NewClient(ctx, cfg.ClickHouseAddr)
+	client, err := storage.NewClient(ctx, cfg.ClickHouseAddr, cfg.ClickHouseUser, cfg.ClickHousePassword)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -36,6 +37,19 @@ func main() {
 	if err := seedDefaultAdmin(ctx, authRepo); err != nil {
 		log.Fatal(err)
 	}
+
+	retentionRepo := &retention.Repo{Conn: client.Conn}
+	cleanupService := &retention.CleanupService{
+		Repo: retentionRepo,
+		Conn: client.Conn,
+	}
+	retentionHandler := &handlers.RetentionHandler{
+		Repo:    retentionRepo,
+		Service: cleanupService,
+	}
+
+	scheduler := retention.NewScheduler(cleanupService, cfg.CleanupIntervalMinutes)
+	go scheduler.Start(context.Background())
 
 	authHandler := &handlers.AuthHandler{
 		Repo:       authRepo,
@@ -57,14 +71,15 @@ func main() {
 	})
 
 	handler := api.NewRouter(api.RouterConfig{
-		QueryService:    queryService,
-		RelatedService:  relatedService,
+		QueryService:      queryService,
+		RelatedService:    relatedService,
 		TraceSpansService: traceSpansService,
-		SavedRepo:       savedRepo,
-		AuthHandler:     authHandler,
-		UsersHandler:    usersHandler,
-		ServicesHandler: servicesHandler,
-		AuthMiddleware:  authMiddleware,
+		SavedRepo:         savedRepo,
+		AuthHandler:       authHandler,
+		UsersHandler:      usersHandler,
+		ServicesHandler:   servicesHandler,
+		RetentionHandler:  retentionHandler,
+		AuthMiddleware:    authMiddleware,
 	})
 	log.Printf("listening on %s", cfg.ListenAddr)
 	log.Fatal(http.ListenAndServe(cfg.ListenAddr, handler))

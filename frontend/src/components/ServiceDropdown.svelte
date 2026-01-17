@@ -25,7 +25,7 @@
   {:else if $servicesState.error}
     <span class="status error">{$servicesState.error}</span>
   {:else if $servicesState.services.length === 0}
-    <span class="status">Nessun service disponibile.</span>
+    <span class="status">Nessun servizio disponibile.</span>
   {/if}
 </div>
 

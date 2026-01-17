@@ -35,7 +35,7 @@ export async function loginUser(username: string, password: string): Promise<Aut
     authState.set({ user: session.user, mustChangePassword: session.mustChangePassword, loading: false, error: null });
     return session;
   } catch (err) {
-    const message = err instanceof Error ? err.message : 'Login failed';
+    const message = err instanceof Error ? err.message : 'Accesso non riuscito';
     authState.set({ user: null, mustChangePassword: false, loading: false, error: message });
     return null;
   }
@@ -48,7 +48,7 @@ export async function changePasswordForUser(currentPassword: string, newPassword
     authState.set({ user: session.user, mustChangePassword: session.mustChangePassword, loading: false, error: null });
     return session;
   } catch (err) {
-    const message = err instanceof Error ? err.message : 'Change password failed';
+    const message = err instanceof Error ? err.message : 'Cambio password non riuscito';
     authState.update((state) => ({ ...state, loading: false, error: message }));
     return null;
   }

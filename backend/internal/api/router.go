@@ -10,14 +10,15 @@ import (
 )
 
 type RouterConfig struct {
-	QueryService    *query.Service
-	RelatedService  *query.RelatedService
+	QueryService      *query.Service
+	RelatedService    *query.RelatedService
 	TraceSpansService *query.TraceSpansService
-	SavedRepo       *query.SavedQueryRepo
-	AuthHandler     *handlers.AuthHandler
-	UsersHandler    *handlers.UsersHandler
-	ServicesHandler *handlers.ServicesHandler
-	AuthMiddleware  func(http.Handler) http.Handler
+	SavedRepo         *query.SavedQueryRepo
+	AuthHandler       *handlers.AuthHandler
+	UsersHandler      *handlers.UsersHandler
+	ServicesHandler   *handlers.ServicesHandler
+	RetentionHandler  *handlers.RetentionHandler
+	AuthMiddleware    func(http.Handler) http.Handler
 }
 
 // NewRouter builds the API router.
@@ -60,6 +61,12 @@ func NewRouter(cfg RouterConfig) http.Handler {
 	}
 	if cfg.ServicesHandler != nil {
 		r.Get("/api/services", cfg.ServicesHandler.List)
+	}
+	if cfg.RetentionHandler != nil {
+		r.Get("/api/admin/retention/settings", cfg.RetentionHandler.GetSettings)
+		r.Put("/api/admin/retention/settings", cfg.RetentionHandler.UpdateSettings)
+		r.Post("/api/admin/retention/cleanup", cfg.RetentionHandler.ManualCleanup)
+		r.Get("/api/admin/retention/jobs", cfg.RetentionHandler.ListJobs)
 	}
 
 	return r

@@ -1,17 +1,19 @@
 <script lang="ts">
+  import { page } from '$app/stores';
   import CorrelationPanel from '../../../components/CorrelationPanel.svelte';
-  export let params;
+
+  export let params: Record<string, string> = {};
 </script>
 
 <section class="trace-detail">
   <header>
     <div>
       <p class="kicker">Dettaglio traccia</p>
-      <h2>{params.traceId}</h2>
+      <h2>{$page.params.traceId}</h2>
     </div>
     <a class="back" href="/">Torna alla dashboard</a>
   </header>
-  <CorrelationPanel traceId={params.traceId} />
+  <CorrelationPanel traceId={$page.params.traceId} />
 </section>
 
 <style>

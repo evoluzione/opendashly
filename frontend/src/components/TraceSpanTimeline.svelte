@@ -14,7 +14,7 @@
     try {
       spans = await fetchTraceSpans(traceId);
     } catch (err) {
-      error = err instanceof Error ? err.message : 'Failed to load spans';
+      error = err instanceof Error ? err.message : 'Impossibile caricare gli span';
     } finally {
       loading = false;
     }
@@ -60,12 +60,12 @@
 
 <section class="timeline">
   <header>
-    <h4>Span timeline</h4>
+    <h4>Linea temporale degli span</h4>
     <p>Durata totale: {Math.round(rangeMs)} ms</p>
   </header>
 
   {#if loading}
-    <p class="status">Caricamento spans...</p>
+    <p class="status">Caricamento span...</p>
   {:else if error}
     <p class="status error">{error}</p>
   {:else if spans.length === 0}
@@ -74,7 +74,7 @@
     <div class="span-list">
       <div class="span-header">
         <span>Span</span>
-        <span>Timeline</span>
+        <span>Linea temporale</span>
         <span>Durata</span>
       </div>
       <div class="span-grid">

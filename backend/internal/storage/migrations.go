@@ -7,6 +7,7 @@ import (
 	"log"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/ClickHouse/clickhouse-go/v2/lib/driver"
 )
@@ -16,6 +17,36 @@ var migrationsFS embed.FS
 
 // ApplyMigrations executes bundled SQL migrations in ClickHouse.
 func ApplyMigrations(ctx context.Context, conn driver.Conn) error {
+	if err := conn.Exec(ctx, "CREATE DATABASE IF NOT EXISTS telemetry"); err != nil {
+		return fmt.Errorf("ensure telemetry database: %w", err)
+	}
+	if err := conn.Exec(ctx, `CREATE TABLE IF NOT EXISTS telemetry.schema_migrations (
+		name String,
+		applied_at DateTime
+	) ENGINE = MergeTree()
+	ORDER BY (name)`); err != nil {
+		return fmt.Errorf("ensure schema_migrations table: %w", err)
+	}
+
+	applied := make(map[string]struct{})
+	rows, err := conn.Query(ctx, "SELECT name FROM telemetry.schema_migrations")
+	if err != nil {
+		return fmt.Errorf("list applied migrations: %w", err)
+	}
+	for rows.Next() {
+		var name string
+		if err := rows.Scan(&name); err != nil {
+			rows.Close()
+			return fmt.Errorf("scan applied migration: %w", err)
+		}
+		applied[name] = struct{}{}
+	}
+	if err := rows.Err(); err != nil {
+		rows.Close()
+		return fmt.Errorf("read applied migrations: %w", err)
+	}
+	rows.Close()
+
 	entries, err := migrationsFS.ReadDir("migrations")
 	if err != nil {
 		return fmt.Errorf("list migrations: %w", err)
@@ -31,6 +62,10 @@ func ApplyMigrations(ctx context.Context, conn driver.Conn) error {
 	}
 	sort.Strings(files)
 	for _, file := range files {
+		if _, ok := applied[file]; ok {
+			log.Printf("migration already applied: %s", file)
+			continue
+		}
 		log.Printf("migration file start: %s", file)
 		contents, err := migrationsFS.ReadFile("migrations/" + file)
 		if err != nil {
@@ -46,6 +81,9 @@ func ApplyMigrations(ctx context.Context, conn driver.Conn) error {
 				return fmt.Errorf("apply migration %s statement %q: %w", file, stmt, err)
 			}
 			log.Printf("migration applied: %s", stmt)
+		}
+		if err := conn.Exec(ctx, "INSERT INTO telemetry.schema_migrations (name, applied_at) VALUES (?, ?)", file, time.Now()); err != nil {
+			return fmt.Errorf("record migration %s: %w", file, err)
 		}
 	}
 	return nil

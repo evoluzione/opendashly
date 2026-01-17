@@ -13,6 +13,17 @@
     dispatch('pageChange', { page: nextPage });
   }
 
+  function closeModal() {
+    selectedTrace = null;
+  }
+
+  function handleBackdropKeydown(event: KeyboardEvent) {
+    if (event.key === 'Enter' || event.key === ' ' || event.key === 'Escape') {
+      event.preventDefault();
+      closeModal();
+    }
+  }
+
   function formatTimestamp(value: string | number | Date) {
     if (!value) return '-';
     const date = value instanceof Date ? value : new Date(value);
@@ -42,7 +53,7 @@
     {#each traces as trace}
       <li>
         <button type="button" class="trace-row" on:click={() => (selectedTrace = trace)}>
-          <span class="name">{trace.name || 'Trace senza nome'}</span>
+          <span class="name">{trace.name || 'Traccia senza nome'}</span>
           <span class="service">{trace.service || 'Servizio non specificato'}</span>
           <span class="last-seen">{formatTimestamp(trace.lastSeen)}</span>
           <span class="count">Span {trace.spanCount ?? 0}</span>
@@ -74,17 +85,24 @@
 {/if}
 
 {#if selectedTrace}
-  <div class="modal-backdrop" role="dialog" aria-modal="true" on:click={() => (selectedTrace = null)}>
-    <div class="modal" on:click|stopPropagation>
+  <div
+    class="modal-backdrop"
+    role="button"
+    tabindex="0"
+    aria-label="Chiudi dettagli traccia"
+    on:click={closeModal}
+    on:keydown={handleBackdropKeydown}
+  >
+    <div class="modal" role="dialog" aria-modal="true" on:click|stopPropagation>
       <header>
         <div>
           <p class="kicker">Dettagli traccia</p>
-          <h3>{selectedTrace.name || 'Trace senza nome'}</h3>
+          <h3>{selectedTrace.name || 'Traccia senza nome'}</h3>
         </div>
-        <button type="button" class="close" on:click={() => (selectedTrace = null)}>Chiudi</button>
+        <button type="button" class="close" on:click={closeModal}>Chiudi</button>
       </header>
       <div class="meta">
-        <span class="pill">Trace ID {selectedTrace.traceId}</span>
+        <span class="pill">ID traccia {selectedTrace.traceId}</span>
         <span class="pill">Servizio {selectedTrace.service || '-'}</span>
         <span class="pill">Span {selectedTrace.spanCount ?? 0}</span>
         <span class="pill">Ultimo span {formatTimestamp(selectedTrace.lastSeen)}</span>

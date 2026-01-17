@@ -8,7 +8,7 @@
   import { saveQuery } from '../../services/saved_queries';
   import type { QueryRequest } from '../../services/query';
 
-  export let params;
+  export let params: Record<string, string> = {};
 
   let queryName = '';
   let lastRequest: QueryRequest | null = null;
@@ -29,7 +29,7 @@
   async function handleSave() {
     if (!lastRequest) return;
     await saveQuery({
-      name: queryName || 'Saved Query',
+      name: queryName || 'Query salvata',
       description: '',
       request: lastRequest
     });
@@ -43,14 +43,14 @@
 <QueryForm on:run={handleRun} />
 
 {#if $queryState.loading}
-  <p>Loading...</p>
+  <p>Caricamento...</p>
 {:else if $queryState.error}
   <p class="error">{$queryState.error}</p>
 {:else if !$queryState.result}
-  <p class="empty">No results yet. Run a query to see telemetry.</p>
+  <p class="empty">Ancora nessun risultato. Esegui una query per vedere la telemetria.</p>
 {:else}
   <section>
-    <h2>Logs</h2>
+    <h2>Log</h2>
     <LogResultsTable
       logs={$queryState.result.results.logs}
       pagination={$queryState.result.pagination?.logs ?? null}
@@ -58,7 +58,7 @@
     />
   </section>
   <section>
-    <h2>Traces</h2>
+    <h2>Tracce</h2>
     <TraceResultsList
       traces={$queryState.result.results.traces}
       pagination={$queryState.result.pagination?.traces ?? null}
@@ -66,7 +66,7 @@
     />
   </section>
   <section>
-    <h2>Metrics</h2>
+    <h2>Metriche</h2>
     <MetricChart
       series={$queryState.result.results.metrics}
       pagination={$queryState.result.pagination?.metrics ?? null}
@@ -74,8 +74,8 @@
     />
   </section>
   <div class="save">
-    <input bind:value={queryName} placeholder="Save query as" />
-    <button on:click={handleSave}>Save Query</button>
+    <input bind:value={queryName} placeholder="Salva query come" />
+    <button on:click={handleSave}>Salva query</button>
   </div>
 {/if}
 

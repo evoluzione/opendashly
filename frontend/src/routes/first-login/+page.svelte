@@ -2,6 +2,8 @@
   import { goto } from '$app/navigation';
   import { authState, changePasswordForUser } from '../../lib/stores/auth';
 
+  export let params: Record<string, string> = {};
+
   let currentPassword = '';
   let newPassword = '';
 

@@ -8,6 +8,8 @@
   import MetricChart from '../components/MetricChart.svelte';
   import { executeQuery, queryState, setAutoRefresh } from '../lib/stores/query';
 
+  export let params: Record<string, string> = {};
+
   let activeTab: 'logs' | 'metriche' | 'tracce' = 'logs';
 
   function handleRun(event: CustomEvent) {
@@ -23,7 +25,7 @@
   <section class="content">
     <div class="content-header">
       <div>
-        <h2>{activeTab === 'logs' ? 'Logs' : activeTab === 'metriche' ? 'Metriche' : 'Tracce'}</h2>
+        <h2>{activeTab === 'logs' ? 'Log' : activeTab === 'metriche' ? 'Metriche' : 'Tracce'}</h2>
         <p>Esplora i dati con filtri espliciti e servizi selezionabili.</p>
       </div>
       <div class="service">
@@ -61,10 +63,11 @@
 <style>
   .dashboard {
     display: grid;
-    grid-template-columns: 240px minmax(0, 1fr) 320px;
+    grid-template-columns: minmax(0, 1fr) 320px;
     height: 100vh;
     width: 100%;
     overflow: hidden;
+    padding-left: 240px;
   }
   
   .content {
@@ -119,7 +122,7 @@
     border-left: 1px solid rgba(15, 23, 42, 0.06);
     overflow-y: auto;
   }
-  
+
   .filters .panel {
     padding: 24px;
   }
@@ -151,11 +154,12 @@
   
   @media (max-width: 1200px) {
     .dashboard {
-      grid-template-columns: 220px 1fr;
+      grid-template-columns: 1fr;
       height: auto;
+      padding-left: 220px;
     }
     .filters {
-      grid-column: span 2;
+      grid-column: 1;
       border-left: none;
       border-top: 1px solid rgba(15, 23, 42, 0.06);
     }
@@ -167,6 +171,7 @@
   @media (max-width: 820px) {
     .dashboard {
       grid-template-columns: 1fr;
+      padding-left: 0;
     }
     .filters {
       grid-column: 1;

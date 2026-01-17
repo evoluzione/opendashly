@@ -1,7 +1,7 @@
 <script lang="ts">
   import { authState, logoutUser } from '../lib/stores/auth';
   
-  export let activeTab: 'logs' | 'metriche' | 'tracce' = 'logs';
+  export let activeTab: 'logs' | 'metriche' | 'tracce' | null = null;
   export let onSelect: (tab: 'logs' | 'metriche' | 'tracce') => void;
 </script>
 
@@ -30,7 +30,7 @@
           <line x1="16" y1="13" x2="8" y2="13"/>
           <line x1="16" y1="17" x2="8" y2="17"/>
         </svg>
-        <span>Logs</span>
+        <span>Log</span>
       </button>
       <button class:selected={activeTab === 'metriche'} on:click={() => onSelect('metriche')}>
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -51,7 +51,7 @@
   
   {#if $authState.user?.role === 'admin'}
     <div class="nav-section">
-      <span class="nav-label">Admin</span>
+      <span class="nav-label">Amministrazione</span>
       <nav>
         <a href="/admin/users" class="nav-link">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -61,6 +61,13 @@
             <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
           </svg>
           <span>Gestione utenti</span>
+        </a>
+        <a href="/admin/retention" class="nav-link">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="10"/>
+            <polyline points="12 6 12 12 16 14"/>
+          </svg>
+          <span>Conservazione e pulizia</span>
         </a>
       </nav>
     </div>
@@ -104,10 +111,12 @@
     background: linear-gradient(180deg, #0f172a 0%, #1e293b 100%);
     width: 240px;
     height: 100vh;
-    position: sticky;
+    position: fixed;
     top: 0;
+    left: 0;
     flex-shrink: 0;
     overflow-y: auto;
+    z-index: 50;
   }
   
   .sidebar::before {

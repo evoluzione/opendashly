@@ -8,6 +8,8 @@ exporters:
     endpoint: tcp://clickhouse:9000
     database: telemetry
     timeout: 5s
+    username: otel
+    password: otelpass
   logging:
     loglevel: debug
 service:

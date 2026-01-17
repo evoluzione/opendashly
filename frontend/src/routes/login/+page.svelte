@@ -2,6 +2,8 @@
   import { goto } from '$app/navigation';
   import { authState, loginUser } from '../../lib/stores/auth';
 
+  export let params: Record<string, string> = {};
+
   let username = '';
   let password = '';
 
@@ -50,7 +52,7 @@
             </svg>
           </div>
           <div>
-            <strong>Logs</strong>
+            <strong>Log</strong>
             <p>Esplora e filtra i log in tempo reale</p>
           </div>
         </div>

@@ -11,10 +11,10 @@
   let selectedTraceId: string | null = null;
 
   const severityStyles: Record<string, { label: string; color: string }> = {
-    fatal: { label: 'Fatal', color: '#b91c1c' },
-    error: { label: 'Error', color: '#b91c1c' },
-    warn: { label: 'Warn', color: '#b45309' },
-    warning: { label: 'Warn', color: '#b45309' },
+    fatal: { label: 'Fatale', color: '#b91c1c' },
+    error: { label: 'Errore', color: '#b91c1c' },
+    warn: { label: 'Avviso', color: '#b45309' },
+    warning: { label: 'Avviso', color: '#b45309' },
     info: { label: 'Info', color: '#1d4ed8' },
     debug: { label: 'Debug', color: '#475569' }
   };
@@ -85,6 +85,21 @@
     selectedLog = null;
     selectedTraceId = traceId;
   }
+
+  function closeLogModal() {
+    selectedLog = null;
+  }
+
+  function closeTraceModal() {
+    selectedTraceId = null;
+  }
+
+  function handleBackdropKeydown(event: KeyboardEvent, onClose: () => void) {
+    if (event.key === 'Enter' || event.key === ' ' || event.key === 'Escape') {
+      event.preventDefault();
+      onClose();
+    }
+  }
 </script>
 
 {#if logs.length === 0}
@@ -100,7 +115,7 @@
           <span class="severity" style={`color:${severity.color}`}>{severity.label}</span>
           <span class="message">{extractMessage(log.body, structuredBody)}</span>
           {#if log.traceId}
-            <span class="trace">Trace {shortId(log.traceId)}</span>
+            <span class="trace">Traccia {shortId(log.traceId)}</span>
           {/if}
         </button>
       </li>
@@ -131,14 +146,21 @@
 {#if selectedLog}
   {@const structuredBody = parseStructured(selectedLog.body)}
   {@const tags = buildTags(selectedLog)}
-  <div class="modal-backdrop" role="dialog" aria-modal="true" on:click={() => (selectedLog = null)}>
-    <div class="modal" on:click|stopPropagation>
+  <div
+    class="modal-backdrop"
+    role="button"
+    tabindex="0"
+    aria-label="Chiudi dettagli log"
+    on:click={closeLogModal}
+    on:keydown={(event) => handleBackdropKeydown(event, closeLogModal)}
+  >
+    <div class="modal" role="dialog" aria-modal="true" on:click|stopPropagation>
       <header>
         <div>
           <p class="kicker">Dettagli log</p>
           <h3>{formatTimestamp(selectedLog.timestamp)}</h3>
         </div>
-        <button type="button" class="close" on:click={() => (selectedLog = null)}>Chiudi</button>
+        <button type="button" class="close" on:click={closeLogModal}>Chiudi</button>
       </header>
       <div class="meta">
         <span class="pill">Severita: {selectedLog.severity || 'info'}</span>
@@ -148,7 +170,7 @@
             class="pill link"
             on:click={() => openTraceModal(selectedLog.traceId)}
           >
-            Trace {selectedLog.traceId}
+            Traccia {selectedLog.traceId}
           </button>
         {/if}
         {#if selectedLog.spanId}
@@ -169,19 +191,19 @@
       <div class="json-grid">
         {#if structuredBody}
           <div>
-            <h4>Body</h4>
+            <h4>Corpo</h4>
             <pre>{JSON.stringify(structuredBody, null, 2)}</pre>
           </div>
         {/if}
         {#if selectedLog.resourceAttributes && Object.keys(selectedLog.resourceAttributes).length > 0}
           <div>
-            <h4>Resource attributes</h4>
+            <h4>Attributi risorsa</h4>
             <pre>{JSON.stringify(selectedLog.resourceAttributes, null, 2)}</pre>
           </div>
         {/if}
         {#if selectedLog.logAttributes && Object.keys(selectedLog.logAttributes).length > 0}
           <div>
-            <h4>Log attributes</h4>
+            <h4>Attributi log</h4>
             <pre>{JSON.stringify(selectedLog.logAttributes, null, 2)}</pre>
           </div>
         {/if}
@@ -193,17 +215,19 @@
 {#if selectedTraceId}
   <div
     class="modal-backdrop"
-    role="dialog"
-    aria-modal="true"
-    on:click={() => (selectedTraceId = null)}
+    role="button"
+    tabindex="0"
+    aria-label="Chiudi dettagli traccia"
+    on:click={closeTraceModal}
+    on:keydown={(event) => handleBackdropKeydown(event, closeTraceModal)}
   >
-    <div class="modal trace-modal" on:click|stopPropagation>
+    <div class="modal trace-modal" role="dialog" aria-modal="true" on:click|stopPropagation>
       <header>
         <div>
           <p class="kicker">Dettagli traccia</p>
           <h3>{selectedTraceId}</h3>
         </div>
-        <button type="button" class="close" on:click={() => (selectedTraceId = null)}>Chiudi</button>
+        <button type="button" class="close" on:click={closeTraceModal}>Chiudi</button>
       </header>
       <TraceSpanTimeline traceId={selectedTraceId} />
       <CorrelationPanel traceId={selectedTraceId} />

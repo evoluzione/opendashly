@@ -115,12 +115,20 @@
   }
   header h2 {
     margin: 0 0 6px 0;
+    font-size: 22px;
+    color: #0f172a;
+  }
+  header p {
+    margin: 0;
+    color: #64748b;
+    font-size: 14px;
   }
   .panel {
     background: #fff;
     border-radius: 16px;
     padding: 20px;
-    border: 1px solid rgba(15, 20, 25, 0.08);
+    border: 1px solid rgba(15, 23, 42, 0.06);
+    box-shadow: 0 1px 3px rgba(15, 23, 42, 0.08);
   }
   .form {
     display: grid;
@@ -128,33 +136,67 @@
     gap: 12px;
   }
   label {
-    font-size: 12px;
+    display: block;
+    font-size: 11px;
+    font-weight: 600;
     text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: #64748b;
+    margin-bottom: 6px;
   }
   input,
   select {
     width: 100%;
-    padding: 10px 12px;
+    padding: 12px 14px;
     border-radius: 10px;
-    border: 1px solid rgba(15, 20, 25, 0.15);
+    border: 1px solid #e2e8f0;
+    background: #f8fafc;
+    font-size: 14px;
+    color: #0f172a;
+    transition: all 0.2s ease;
+  }
+  input:focus,
+  select:focus {
+    outline: none;
+    border-color: #6366f1;
+    box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.12);
+    background: #fff;
   }
   button {
-    padding: 10px 14px;
+    padding: 12px 16px;
     border-radius: 10px;
     border: none;
-    background: #0f172a;
+    background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
     color: #fff;
     cursor: pointer;
+    font-weight: 600;
+    transition: all 0.2s ease;
+    box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3);
+  }
+  button:hover:not(:disabled) {
+    transform: translateY(-1px);
+    box-shadow: 0 6px 16px rgba(99, 102, 241, 0.4);
+  }
+  button:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
   }
   table {
     width: 100%;
     border-collapse: collapse;
+    font-size: 14px;
   }
   th,
   td {
     text-align: left;
     padding: 10px 6px;
-    border-bottom: 1px solid rgba(15, 20, 25, 0.08);
+    border-bottom: 1px solid rgba(15, 23, 42, 0.06);
+  }
+  th {
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: #64748b;
   }
   .status {
     color: #6b6f76;

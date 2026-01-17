@@ -14,9 +14,13 @@ type Client struct {
 }
 
 // NewClient creates a ClickHouse client from DSN.
-func NewClient(ctx context.Context, dsn string) (*Client, error) {
+func NewClient(ctx context.Context, dsn string, user string, password string) (*Client, error) {
 	conn, err := clickhouse.Open(&clickhouse.Options{
 		Addr: []string{dsn},
+		Auth: clickhouse.Auth{
+			Username: user,
+			Password: password,
+		},
 	})
 	if err != nil {
 		return nil, fmt.Errorf("open clickhouse: %w", err)

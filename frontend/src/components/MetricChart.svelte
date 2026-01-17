@@ -43,7 +43,7 @@
         series: [
           {},
           {
-            label: selected?.name ?? 'series',
+            label: selected?.name ?? 'serie',
             stroke: palette[selectedIndex % palette.length],
             width: 2
           }
@@ -112,7 +112,7 @@
       <select id="metric-select" bind:value={activeSeries}>
         {#each series as metric, idx}
           <option value={idx}>
-            {metric.name ?? 'Series'}{metric.unit ? ` (${metric.unit})` : ''}
+            {metric.name ?? 'Serie'}{metric.unit ? ` (${metric.unit})` : ''}
           </option>
         {/each}
       </select>

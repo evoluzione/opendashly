@@ -12,7 +12,7 @@
     try {
       related = await fetchRelated(traceId);
     } catch (err) {
-      error = err instanceof Error ? err.message : 'Failed to load related telemetry';
+      error = err instanceof Error ? err.message : 'Impossibile caricare la telemetria correlata';
     }
   });
 </script>
@@ -31,11 +31,11 @@
   {:else}
     <div class="grid">
       <div class="block">
-        <h4>Logs</h4>
+        <h4>Log</h4>
         <LogResultsTable logs={related.logs} />
       </div>
       <div class="block">
-        <h4>Metrics</h4>
+        <h4>Metriche</h4>
         <MetricChart series={related.metrics} />
       </div>
     </div>

@@ -1,0 +1,62 @@
+import { apiRequest } from './api';
+
+export type SignalType = 'logs' | 'traces' | 'metrics';
+
+export type RetentionSetting = {
+  signalType: SignalType;
+  retentionDays: number;
+};
+
+export type RetentionSettings = {
+  settings: RetentionSetting[];
+};
+
+export type CleanupRequest = {
+  signalTypes: SignalType[];
+  serviceName?: string;
+};
+
+export type CleanupResult = {
+  jobId: string;
+  signalType: SignalType;
+  recordsDeleted: number;
+};
+
+export type CleanupResponse = {
+  jobId: string;
+  results: CleanupResult[];
+};
+
+export type CleanupJob = {
+  jobId: string;
+  jobType: string;
+  signalType: string;
+  serviceName: string;
+  startedAt: string;
+  completedAt: string | null;
+  status: string;
+  recordsDeleted: number;
+  errorMessage: string;
+};
+
+export function getRetentionSettings(): Promise<RetentionSettings> {
+  return apiRequest<RetentionSettings>('/api/admin/retention/settings');
+}
+
+export function updateRetentionSetting(signalType: SignalType, retentionDays: number): Promise<void> {
+  return apiRequest<void>('/api/admin/retention/settings', {
+    method: 'PUT',
+    body: JSON.stringify({ signalType, retentionDays })
+  });
+}
+
+export function executeCleanup(request: CleanupRequest): Promise<CleanupResponse> {
+  return apiRequest<CleanupResponse>('/api/admin/retention/cleanup', {
+    method: 'POST',
+    body: JSON.stringify(request)
+  });
+}
+
+export function listCleanupJobs(): Promise<{ jobs: CleanupJob[] }> {
+  return apiRequest<{ jobs: CleanupJob[] }>('/api/admin/retention/jobs');
+}

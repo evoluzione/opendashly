@@ -5,6 +5,8 @@
   import { goto } from '$app/navigation';
   import { authState, loadSession, logoutUser } from '../lib/stores/auth';
 
+  export let params: Record<string, string> = {};
+
   const publicRoutes = ['/login'];
 
   onMount(() => {
