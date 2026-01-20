@@ -83,6 +83,7 @@ func main() {
 		ServicesHandler:   servicesHandler,
 		RetentionHandler:  retentionHandler,
 		AuthMiddleware:    authMiddleware,
+		CORSAllowedOrigins: cfg.CORSAllowedOrigins,
 	})
 	log.Printf("listening on %s", cfg.ListenAddr)
 	log.Fatal(http.ListenAndServe(cfg.ListenAddr, handler))

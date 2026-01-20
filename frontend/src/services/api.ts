@@ -1,4 +1,15 @@
-const baseUrl = import.meta.env.VITE_API_BASE ?? '';
+const envBaseUrl = import.meta.env.VITE_API_BASE ?? '';
+const baseUrl = (() => {
+  if (envBaseUrl && envBaseUrl !== 'http://localhost:8080') {
+    return envBaseUrl;
+  }
+  if (typeof window === 'undefined') {
+    return envBaseUrl;
+  }
+  const host = window.location.hostname;
+  const protocol = window.location.protocol;
+  return `${protocol}//${host}:8080`;
+})();
 
 export async function apiRequest<T>(path: string, options: RequestInit = {}): Promise<T> {
   const url = `${baseUrl}${path}`;

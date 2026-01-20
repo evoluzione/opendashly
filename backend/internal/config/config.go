@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"strconv"
+	"strings"
 )
 
 // Config holds runtime configuration for the API.
@@ -16,6 +17,7 @@ type Config struct {
 	AuthSecret             string
 	AuthCookieName         string
 	CleanupIntervalMinutes int
+	CORSAllowedOrigins     []string
 }
 
 // Load reads configuration from environment variables.
@@ -29,6 +31,7 @@ func Load() (*Config, error) {
 		AuthSecret:             os.Getenv("AUTH_SECRET"),
 		AuthCookieName:         os.Getenv("AUTH_COOKIE_NAME"),
 		CleanupIntervalMinutes: getEnvInt("CLEANUP_INTERVAL_MINUTES", 1440),
+		CORSAllowedOrigins:     getEnvCSV("CORS_ALLOWED_ORIGINS", []string{"http://localhost:5173"}),
 	}
 	if cfg.ClickHouseAddr == "" {
 		return nil, fmt.Errorf("CLICKHOUSE_ADDR is required")
@@ -55,4 +58,23 @@ func getEnvInt(key string, defaultVal int) int {
 		}
 	}
 	return defaultVal
+}
+
+func getEnvCSV(key string, defaultVals []string) []string {
+	raw := os.Getenv(key)
+	if raw == "" {
+		return defaultVals
+	}
+	parts := strings.Split(raw, ",")
+	out := make([]string, 0, len(parts))
+	for _, part := range parts {
+		value := strings.TrimSpace(part)
+		if value != "" {
+			out = append(out, value)
+		}
+	}
+	if len(out) == 0 {
+		return defaultVals
+	}
+	return out
 }
