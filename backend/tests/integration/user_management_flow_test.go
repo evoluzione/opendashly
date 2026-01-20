@@ -9,10 +9,10 @@ import (
 	"testing"
 	"time"
 
-	"opentelemetry-dashboard/backend/internal/api"
-	"opentelemetry-dashboard/backend/internal/api/handlers"
-	"opentelemetry-dashboard/backend/internal/auth"
-	"opentelemetry-dashboard/backend/internal/query"
+	"opendashly/backend/internal/api"
+	"opendashly/backend/internal/api/handlers"
+	"opendashly/backend/internal/auth"
+	"opendashly/backend/internal/query"
 )
 
 func TestUserManagementIntegration(t *testing.T) {

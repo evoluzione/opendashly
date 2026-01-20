@@ -6,7 +6,7 @@ import (
 	"sync"
 	"time"
 
-	"opentelemetry-dashboard/backend/internal/auth"
+	"opendashly/backend/internal/auth"
 )
 
 var errNotFound = errors.New("not found")

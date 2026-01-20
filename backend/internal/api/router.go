@@ -5,8 +5,9 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
-	"opentelemetry-dashboard/backend/internal/api/handlers"
-	"opentelemetry-dashboard/backend/internal/query"
+	"opendashly/backend/internal/api/handlers"
+	"opendashly/backend/internal/query"
+	"opendashly/backend/internal/status"
 )
 
 type RouterConfig struct {
@@ -14,6 +15,7 @@ type RouterConfig struct {
 	RelatedService    *query.RelatedService
 	TraceSpansService *query.TraceSpansService
 	SavedRepo         *query.SavedQueryRepo
+	StatusService     *status.Service
 	AuthHandler       *handlers.AuthHandler
 	UsersHandler      *handlers.UsersHandler
 	ServicesHandler   *handlers.ServicesHandler
@@ -26,6 +28,7 @@ func NewRouter(cfg RouterConfig) http.Handler {
 	r := chi.NewRouter()
 	r.Use(corsMiddleware)
 	r.Use(middleware.RequestID)
+	r.Use(middleware.Logger)
 	r.Use(middleware.Recoverer)
 	if cfg.AuthMiddleware != nil {
 		r.Use(cfg.AuthMiddleware)
@@ -38,9 +41,12 @@ func NewRouter(cfg RouterConfig) http.Handler {
 	queryHandler := &handlers.QueryHandler{Service: cfg.QueryService}
 	traceRelated := &handlers.TraceRelatedHandler{Service: cfg.RelatedService}
 	traceSpans := &handlers.TraceSpansHandler{Service: cfg.TraceSpansService}
+	statusHandler := &handlers.StatusHandler{Service: cfg.StatusService}
 	savedHandler := &handlers.SavedQueriesHandler{Repo: cfg.SavedRepo, Runner: cfg.QueryService}
+	smartQuery := &handlers.SmartQueryHandler{}
 
 	r.Post("/api/query/run", queryHandler.ServeHTTP)
+	r.Post("/api/query/smart", smartQuery.ServeHTTP)
 	r.Get("/api/queries", savedHandler.List)
 	r.Post("/api/queries", savedHandler.Create)
 	r.Get("/api/queries/{queryId}", savedHandler.Get)
@@ -48,6 +54,7 @@ func NewRouter(cfg RouterConfig) http.Handler {
 	r.Post("/api/queries/{queryId}/run", savedHandler.Run)
 	r.Get("/api/traces/{traceId}/related", traceRelated.ServeHTTP)
 	r.Get("/api/traces/{traceId}/spans", traceSpans.ServeHTTP)
+	r.Get("/api/status/summary", statusHandler.ServeHTTP)
 
 	if cfg.AuthHandler != nil {
 		r.Post("/api/auth/login", cfg.AuthHandler.Login)

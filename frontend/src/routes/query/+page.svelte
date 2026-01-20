@@ -12,17 +12,33 @@
 
   let queryName = '';
   let lastRequest: QueryRequest | null = null;
+  let pageSize = '100';
+  const pageSizeOptions = ['25', '50', '100', '200'];
 
   async function handleRun(event) {
-    lastRequest = event.detail.request;
-    setAutoRefresh(event.detail.autoRefreshSeconds ?? null);
-    await executeQuery(event.detail.request);
+    const limit = Number(pageSize) || 100;
+    lastRequest = { ...event.detail.request, limit, page: 1 };
+    setAutoRefresh(event.detail.autoRefreshSeconds ?? null, event.detail.autoRefreshRangeMinutes ?? null);
+    await executeQuery(lastRequest);
+  }
+
+  function handleModeChange(event) {
+    if (event.detail.mode !== 'auto') {
+      stopAutoRefresh();
+    }
   }
 
   async function handlePageChange(_signal: 'logs' | 'traces' | 'metrics', nextPage: number) {
     if (!lastRequest) return;
     const page = nextPage < 1 ? 1 : nextPage;
     lastRequest = { ...lastRequest, page };
+    await executeQuery(lastRequest, { retainResult: true });
+  }
+
+  async function handlePageSizeChange() {
+    if (!lastRequest) return;
+    const limit = Number(pageSize) || 100;
+    lastRequest = { ...lastRequest, limit, page: 1 };
     await executeQuery(lastRequest, { retainResult: true });
   }
 
@@ -40,15 +56,30 @@
   });
 </script>
 
-<QueryForm on:run={handleRun} />
+<QueryForm on:run={handleRun} on:modeChange={handleModeChange} />
 
-{#if $queryState.loading}
-  <p>Caricamento...</p>
-{:else if $queryState.error}
+{#if $queryState.error}
   <p class="error">{$queryState.error}</p>
-{:else if !$queryState.result}
-  <p class="empty">Ancora nessun risultato. Esegui una query per vedere la telemetria.</p>
+{/if}
+
+{#if !$queryState.result}
+  {#if $queryState.loading}
+    <p>Caricamento...</p>
+  {:else}
+    <p class="empty">Ancora nessun risultato. Esegui una query per vedere la telemetria.</p>
+  {/if}
 {:else}
+  {#if $queryState.loading}
+    <p class="loading">Aggiornamento in corso...</p>
+  {/if}
+  <div class="page-size">
+    <label for="page-size">Risultati per pagina (log e tracce)</label>
+    <select id="page-size" bind:value={pageSize} on:change={handlePageSizeChange}>
+      {#each pageSizeOptions as size}
+        <option value={size}>{size}</option>
+      {/each}
+    </select>
+  </div>
   <section>
     <h2>Log</h2>
     <LogResultsTable
@@ -89,8 +120,32 @@
   .error {
     color: #b91c1c;
   }
+  .loading {
+    color: #0f172a;
+    font-weight: 600;
+  }
   .save {
     display: flex;
     gap: 8px;
+  }
+  .page-size {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin: 12px 0 20px;
+  }
+  .page-size label {
+    font-size: 12px;
+    font-weight: 600;
+    color: #475569;
+  }
+  .page-size select {
+    padding: 8px 12px;
+    border-radius: 8px;
+    border: 1px solid #e2e8f0;
+    background: #f8fafc;
+    color: #0f172a;
+    font-size: 13px;
+    font-weight: 600;
   }
 </style>

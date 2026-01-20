@@ -1,4 +1,4 @@
-module opentelemetry-dashboard/backend
+module opendashly/backend
 
 go 1.22
 

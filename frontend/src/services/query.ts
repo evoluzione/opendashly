@@ -24,6 +24,12 @@ export type QueryRunResult = {
   results: { logs: any[]; traces: any[]; metrics: any[] };
 };
 
+export type SmartQueryResponse = {
+  sql: string;
+  request: QueryRequest;
+  warnings?: string[];
+};
+
 export function runQuery(request: QueryRequest): Promise<QueryRunResult> {
   console.debug('query.run.request', {
     signals: request.signals,
@@ -36,5 +42,12 @@ export function runQuery(request: QueryRequest): Promise<QueryRunResult> {
   return apiRequest<QueryRunResult>('/api/query/run', {
     method: 'POST',
     body: JSON.stringify(request)
+  });
+}
+
+export function generateSmartQuery(payload: { prompt: string }): Promise<SmartQueryResponse> {
+  return apiRequest<SmartQueryResponse>('/api/query/smart', {
+    method: 'POST',
+    body: JSON.stringify(payload)
   });
 }

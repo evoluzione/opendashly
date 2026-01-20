@@ -9,6 +9,7 @@ type QueryState = {
   result: QueryRunResult | null;
   lastRequest: QueryRequest | null;
   autoRefreshSeconds: number | null;
+  autoRefreshRangeMinutes: number | null;
 };
 
 type ServiceState = {
@@ -23,7 +24,8 @@ const initial: QueryState = {
   error: null,
   result: null,
   lastRequest: null,
-  autoRefreshSeconds: null
+  autoRefreshSeconds: null,
+  autoRefreshRangeMinutes: null
 };
 
 export const queryState = writable<QueryState>(initial);
@@ -39,6 +41,64 @@ export const servicesState = writable<ServiceState>(servicesInitial);
 
 let refreshTimer: ReturnType<typeof setInterval> | null = null;
 
+function logKey(entry: any) {
+  const timestamp = entry?.timestamp ?? '';
+  const traceId = entry?.traceId ?? '';
+  const spanId = entry?.spanId ?? '';
+  const body =
+    typeof entry?.body === 'string' ? entry.body : JSON.stringify(entry?.body ?? '');
+  return `${timestamp}|${traceId}|${spanId}|${body}`;
+}
+
+function traceKey(entry: any) {
+  return entry?.traceId ?? '';
+}
+
+function mergeByKey<T>(
+  latest: T[],
+  previous: T[],
+  keyFn: (item: T) => string,
+  limit?: number
+) {
+  const seen = new Set<string>();
+  const merged: T[] = [];
+  for (const item of latest) {
+    const key = keyFn(item);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    merged.push(item);
+  }
+  for (const item of previous) {
+    const key = keyFn(item);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    merged.push(item);
+  }
+  return typeof limit === 'number' && limit > 0 ? merged.slice(0, limit) : merged;
+}
+
+function mergeResult(
+  previous: QueryRunResult,
+  latest: QueryRunResult,
+  request: QueryRequest
+) {
+  const logLimit = request.limit ?? latest.pagination?.logs?.limit;
+  const traceLimit = request.limit ?? latest.pagination?.traces?.limit;
+  return {
+    ...latest,
+    results: {
+      ...latest.results,
+      logs: mergeByKey(latest.results.logs ?? [], previous.results.logs ?? [], logKey, logLimit),
+      traces: mergeByKey(
+        latest.results.traces ?? [],
+        previous.results.traces ?? [],
+        traceKey,
+        traceLimit
+      )
+    }
+  };
+}
+
 function resetRefreshTimer() {
   if (refreshTimer) {
     clearInterval(refreshTimer);
@@ -53,8 +113,24 @@ function scheduleAutoRefresh() {
     return;
   }
   refreshTimer = setInterval(() => {
-    void executeQuery(currentState.lastRequest, { retainResult: true });
+    const latest = get(queryState);
+    if (!latest.lastRequest) {
+      return;
+    }
+    const request = latest.autoRefreshRangeMinutes
+      ? buildRollingRangeRequest(latest.lastRequest, latest.autoRefreshRangeMinutes)
+      : latest.lastRequest;
+    void executeQuery(request, { retainResult: true });
   }, currentState.autoRefreshSeconds * 1000);
+}
+
+function buildRollingRangeRequest(request: QueryRequest, minutes: number): QueryRequest {
+  const now = new Date();
+  const from = new Date(now.getTime() - minutes * 60 * 1000);
+  return {
+    ...request,
+    timeRange: { from: from.toISOString(), to: now.toISOString() }
+  };
 }
 
 export async function executeQuery(
@@ -62,6 +138,7 @@ export async function executeQuery(
   options: { retainResult?: boolean } = {}
 ) {
   console.debug('query.execute.start', { retainResult: !!options.retainResult, request });
+  const previousResult = get(queryState).result;
   queryState.update((state) => ({
     ...state,
     loading: true,
@@ -70,8 +147,13 @@ export async function executeQuery(
     lastRequest: request
   }));
   try {
-    const result = await runQuery(request);
-    console.debug('query.execute.success', { runId: result.runId, status: result.status });
+    const response = await runQuery(request);
+    console.debug('query.execute.success', { runId: response.runId, status: response.status });
+    const shouldMerge =
+      !!options.retainResult &&
+      !!previousResult &&
+      (request.page === undefined || request.page === 1);
+    const result = shouldMerge ? mergeResult(previousResult, response, request) : response;
     queryState.update((state) => ({ ...state, loading: false, error: null, result }));
     scheduleAutoRefresh();
   } catch (err) {
@@ -106,12 +188,20 @@ export function selectService(value: string) {
   servicesState.update((state) => ({ ...state, selectedService: value }));
 }
 
-export function setAutoRefresh(seconds: number | null) {
-  queryState.update((state) => ({ ...state, autoRefreshSeconds: seconds }));
+export function setAutoRefresh(seconds: number | null, rangeMinutes: number | null = null) {
+  queryState.update((state) => ({
+    ...state,
+    autoRefreshSeconds: seconds,
+    autoRefreshRangeMinutes: rangeMinutes
+  }));
   scheduleAutoRefresh();
 }
 
 export function stopAutoRefresh() {
   resetRefreshTimer();
-  queryState.update((state) => ({ ...state, autoRefreshSeconds: null }));
+  queryState.update((state) => ({
+    ...state,
+    autoRefreshSeconds: null,
+    autoRefreshRangeMinutes: null
+  }));
 }

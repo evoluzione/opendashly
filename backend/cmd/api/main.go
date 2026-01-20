@@ -6,13 +6,14 @@ import (
 	"net/http"
 	"time"
 
-	"opentelemetry-dashboard/backend/internal/api"
-	"opentelemetry-dashboard/backend/internal/api/handlers"
-	"opentelemetry-dashboard/backend/internal/auth"
-	"opentelemetry-dashboard/backend/internal/config"
-	"opentelemetry-dashboard/backend/internal/query"
-	"opentelemetry-dashboard/backend/internal/retention"
-	"opentelemetry-dashboard/backend/internal/storage"
+	"opendashly/backend/internal/api"
+	"opendashly/backend/internal/api/handlers"
+	"opendashly/backend/internal/auth"
+	"opendashly/backend/internal/config"
+	"opendashly/backend/internal/query"
+	"opendashly/backend/internal/retention"
+	"opendashly/backend/internal/status"
+	"opendashly/backend/internal/storage"
 )
 
 func main() {
@@ -32,6 +33,7 @@ func main() {
 	queryService := &query.Service{Storage: client}
 	relatedService := &query.RelatedService{Storage: client}
 	traceSpansService := &query.TraceSpansService{Storage: client}
+	statusService := &status.Service{Storage: client}
 	savedRepo := query.NewSavedQueryRepo()
 	authRepo := &auth.Repo{Conn: client.Conn}
 	if err := seedDefaultAdmin(ctx, authRepo); err != nil {
@@ -74,6 +76,7 @@ func main() {
 		QueryService:      queryService,
 		RelatedService:    relatedService,
 		TraceSpansService: traceSpansService,
+		StatusService:     statusService,
 		SavedRepo:         savedRepo,
 		AuthHandler:       authHandler,
 		UsersHandler:      usersHandler,

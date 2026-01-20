@@ -1,13 +1,13 @@
 <div align="center">
 
-# 📊 OpenTelemetry Dashboard
+# 📊 Opendashly
 
 ### Complete Observability Platform with Logs, Traces, and Metrics
 
+[![OpenTelemetry](https://img.shields.io/badge/OpenTelemetry-1.20-4F46E5?style=flat&logo=opentelemetry)](https://opentelemetry.io)
+[![ClickHouse](https://img.shields.io/badge/ClickHouse-24-FFCC01?style=flat&logo=clickhouse)](https://clickhouse.com)
 [![Go Version](https://img.shields.io/badge/Go-1.22+-00ADD8?style=flat&logo=go)](https://golang.org)
 [![SvelteKit](https://img.shields.io/badge/SvelteKit-4.2-FF3E00?style=flat&logo=svelte)](https://kit.svelte.dev)
-[![ClickHouse](https://img.shields.io/badge/ClickHouse-24-FFCC01?style=flat&logo=clickhouse)](https://clickhouse.com)
-[![License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
 [Features](#-features) • [Quick Start](#-quick-start) • [Architecture](#-architecture)
 
@@ -17,9 +17,9 @@
 
 ## 🎯 Overview
 
-**OpenTelemetry Dashboard** is a production-ready observability platform that ingests, stores, and visualizes telemetry data from OpenTelemetry-instrumented applications. Built with performance and scalability in mind, it provides a unified interface for exploring logs, traces, and metrics.
+**Opendashly** is a production-ready observability platform that ingests, stores, and visualizes telemetry data from OpenTelemetry-instrumented applications. Built with performance and scalability in mind, it provides a unified interface for exploring logs, traces, and metrics.
 
-### Why This Dashboard?
+### Why Opendashly?
 
 - **🚀 High Performance**: ClickHouse-powered storage handles millions of events per second
 - **🔐 Enterprise Auth**: JWT-based authentication with role-based access control
@@ -76,6 +76,11 @@
 - Shareable query templates
 - Query history tracking
 - Multi-signal queries (logs + traces + metrics)
+
+#### 🔎 **Search Modes**
+- **Automatic**: pick a quick range and refresh results periodically
+- **Manual**: set start/end date and time explicitly
+- **Smart**: write a natural-language prompt and generate the query automatically
 
 ---
 
@@ -347,13 +352,13 @@ Built with these excellent open-source projects:
 
 ## 📧 Support
 
-- **Issues**: [GitHub Issues](https://github.com/yourusername/opentelemetry-dashboard/issues)
-- **Discussions**: [GitHub Discussions](https://github.com/yourusername/opentelemetry-dashboard/discussions)
+- **Issues**: [GitHub Issues](https://github.com/yourusername/opendashly/issues)
+- **Discussions**: [GitHub Discussions](https://github.com/yourusername/opendashly/discussions)
 
 ---
 
 <div align="center">
 
-**[⬆ Back to Top](#-opentelemetry-dashboard)**
+**[⬆ Back to Top](#-opendashly)**
 
 </div>

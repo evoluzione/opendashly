@@ -5,7 +5,7 @@ import (
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
-	"opentelemetry-dashboard/backend/internal/query"
+	"opendashly/backend/internal/query"
 )
 
 type SavedQueriesHandler struct {

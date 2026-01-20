@@ -34,13 +34,16 @@
     </div>
 
     <div class="results">
-      {#if $queryState.loading}
-        <div class="status">Caricamento risultati...</div>
-      {:else if $queryState.error}
+      {#if $queryState.error}
         <div class="status error">{$queryState.error}</div>
       {:else if !$queryState.result}
-        <div class="status">Avvia una query per vedere i risultati.</div>
+        <div class="status">
+          {$queryState.loading ? 'Caricamento risultati...' : 'Avvia una query per vedere i risultati.'}
+        </div>
       {:else}
+        {#if $queryState.loading}
+          <div class="status">Aggiornamento in corso...</div>
+        {/if}
         {#if activeTab === 'logs'}
           <LogResultsTable logs={$queryState.result.results.logs} />
         {:else if activeTab === 'metriche'}

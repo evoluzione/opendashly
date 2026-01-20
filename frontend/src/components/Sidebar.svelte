@@ -1,8 +1,67 @@
 <script lang="ts">
+  import { onDestroy, onMount } from 'svelte';
   import { authState, logoutUser } from '../lib/stores/auth';
-  
+  import { fetchStatusSummary, type StatusSummary } from '../services/status';
+
   export let activeTab: 'logs' | 'metriche' | 'tracce' | null = null;
   export let onSelect: (tab: 'logs' | 'metriche' | 'tracce') => void;
+
+  let statusSummary: StatusSummary | null = null;
+  let statusError = '';
+  let statusTimer: ReturnType<typeof setInterval> | null = null;
+  let statusAnchor: HTMLDivElement | null = null;
+  let tooltipStyle = '';
+  let showTooltip = false;
+
+  const numberFormat = new Intl.NumberFormat('it-IT');
+
+  function formatCount(value: number | undefined) {
+    if (value === undefined || value === null) return '-';
+    return numberFormat.format(value);
+  }
+
+  function statusLabel() {
+    if (!statusSummary && statusError) return 'Sistema non disponibile';
+    if (!statusSummary) return 'Stato in aggiornamento';
+    return statusSummary.ok ? 'Sistema attivo' : 'Sistema con problemi';
+  }
+
+  async function loadStatus() {
+    try {
+      statusSummary = await fetchStatusSummary();
+      statusError = statusSummary.error ?? '';
+    } catch (err) {
+      statusSummary = null;
+      statusError = err instanceof Error ? err.message : 'Errore sconosciuto';
+    }
+  }
+
+  function updateTooltipPosition() {
+    if (!statusAnchor) return;
+    const rect = statusAnchor.getBoundingClientRect();
+    tooltipStyle = `left:${Math.round(rect.left)}px;top:${Math.round(rect.top)}px;`;
+  }
+
+  function handleTooltipOpen() {
+    showTooltip = true;
+    updateTooltipPosition();
+  }
+
+  function handleTooltipClose() {
+    showTooltip = false;
+  }
+
+  onMount(() => {
+    loadStatus();
+    statusTimer = setInterval(loadStatus, 30000);
+  });
+
+  onDestroy(() => {
+    if (statusTimer) {
+      clearInterval(statusTimer);
+      statusTimer = null;
+    }
+  });
 </script>
 
 <aside class="sidebar">
@@ -15,7 +74,7 @@
       </svg>
     </div>
     <div class="brand-text">
-      <span class="name">OpenTelemetry</span>
+      <span class="name">Opendashly</span>
       <span class="tagline">Dashboard</span>
     </div>
   </div>
@@ -74,9 +133,74 @@
   {/if}
   
   <div class="sidebar-footer">
-    <div class="status-indicator">
-      <span class="dot"></span>
-      <span>Sistema attivo</span>
+    <div
+      class="status-indicator"
+      tabindex="0"
+      bind:this={statusAnchor}
+      on:mouseenter={handleTooltipOpen}
+      on:mouseleave={handleTooltipClose}
+      on:focus={handleTooltipOpen}
+      on:blur={handleTooltipClose}
+    >
+      <span
+        class="dot"
+        class:ok={statusSummary?.ok}
+        class:error={!statusSummary?.ok && statusSummary !== null}
+        class:idle={!statusSummary}
+      ></span>
+      <span>{statusLabel()}</span>
+      <div
+        class="status-tooltip"
+        class:visible={showTooltip}
+        role="tooltip"
+        style={tooltipStyle}
+      >
+        {#if statusSummary}
+          <div class="tooltip-title">Telemetria</div>
+          <div class="tooltip-row">
+            <span>Log totali</span>
+            <span>{formatCount(statusSummary.counts.logs.total)}</span>
+          </div>
+          <div class="tooltip-row">
+            <span>Log ultimi 5/10/60m</span>
+            <span>
+              {formatCount(statusSummary.counts.logs.last5m)} /
+              {formatCount(statusSummary.counts.logs.last10m)} /
+              {formatCount(statusSummary.counts.logs.last60m)}
+            </span>
+          </div>
+          <div class="tooltip-row">
+            <span>Tracce totali</span>
+            <span>{formatCount(statusSummary.counts.traces.total)}</span>
+          </div>
+          <div class="tooltip-row">
+            <span>Tracce ultimi 5/10/60m</span>
+            <span>
+              {formatCount(statusSummary.counts.traces.last5m)} /
+              {formatCount(statusSummary.counts.traces.last10m)} /
+              {formatCount(statusSummary.counts.traces.last60m)}
+            </span>
+          </div>
+          <div class="tooltip-row">
+            <span>Metriche totali</span>
+            <span>{formatCount(statusSummary.counts.metrics.total)}</span>
+          </div>
+          <div class="tooltip-row">
+            <span>Metriche ultimi 5/10/60m</span>
+            <span>
+              {formatCount(statusSummary.counts.metrics.last5m)} /
+              {formatCount(statusSummary.counts.metrics.last10m)} /
+              {formatCount(statusSummary.counts.metrics.last60m)}
+            </span>
+          </div>
+        {:else}
+          <div class="tooltip-title">Telemetria</div>
+          <div class="tooltip-row">
+            <span>Stato</span>
+            <span>{statusError || 'Caricamento...'}</span>
+          </div>
+        {/if}
+      </div>
     </div>
     
     {#if $authState.user}
@@ -110,12 +234,14 @@
     padding: 24px 16px;
     background: linear-gradient(180deg, #0f172a 0%, #1e293b 100%);
     width: 240px;
+    box-sizing: border-box;
     height: 100vh;
     position: fixed;
     top: 0;
     left: 0;
     flex-shrink: 0;
     overflow-y: auto;
+    overflow-x: hidden;
     z-index: 50;
   }
   
@@ -241,15 +367,79 @@
     gap: 8px;
     font-size: 12px;
     color: #64748b;
+    position: relative;
+    cursor: default;
   }
   
   .dot {
     width: 8px;
     height: 8px;
     border-radius: 50%;
+    background: #94a3b8;
+    box-shadow: none;
+    animation: pulse 2s ease-in-out infinite;
+  }
+
+  .dot.ok {
     background: #22c55e;
     box-shadow: 0 0 8px rgba(34, 197, 94, 0.6);
-    animation: pulse 2s ease-in-out infinite;
+  }
+
+  .dot.error {
+    background: #ef4444;
+    box-shadow: 0 0 8px rgba(239, 68, 68, 0.6);
+  }
+
+  .dot.idle {
+    background: #94a3b8;
+    box-shadow: none;
+  }
+
+  .status-tooltip {
+    position: fixed;
+    left: 0;
+    top: 0;
+    width: 280px;
+    padding: 12px;
+    border-radius: 12px;
+    background: rgba(15, 23, 42, 0.95);
+    color: #e2e8f0;
+    font-size: 11px;
+    line-height: 1.4;
+    box-shadow: 0 10px 20px rgba(15, 23, 42, 0.4);
+    border: 1px solid rgba(148, 163, 184, 0.2);
+    opacity: 0;
+    transform: translateY(calc(-100% - 10px));
+    pointer-events: none;
+    transition: opacity 0.15s ease, transform 0.15s ease;
+    z-index: 10;
+    overflow-wrap: anywhere;
+  }
+
+  .status-tooltip.visible {
+    opacity: 1;
+    transform: translateY(calc(-100% - 10px));
+  }
+
+  .tooltip-title {
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: #c7d2fe;
+    margin-bottom: 8px;
+  }
+
+  .tooltip-row {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 6px;
+  }
+
+  .tooltip-row span:last-child {
+    font-weight: 600;
+    color: #f8fafc;
   }
   
   .user-section {

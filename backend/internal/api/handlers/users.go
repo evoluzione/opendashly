@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 
-	"opentelemetry-dashboard/backend/internal/auth"
+	"opendashly/backend/internal/auth"
 )
 
 type UsersHandler struct {

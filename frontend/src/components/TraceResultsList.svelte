@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { createEventDispatcher } from 'svelte';
+  import { createEventDispatcher, onDestroy } from 'svelte';
   import CorrelationPanel from './CorrelationPanel.svelte';
   import TraceSpanTimeline from './TraceSpanTimeline.svelte';
 
@@ -8,6 +8,10 @@
 
   const dispatch = createEventDispatcher();
   let selectedTrace: any | null = null;
+  let knownKeys = new Set<string>();
+  let highlightKeys = new Set<string>();
+  let highlightTimers = new Map<string, ReturnType<typeof setTimeout>>();
+  let initialized = false;
 
   function changePage(nextPage: number) {
     dispatch('pageChange', { page: nextPage });
@@ -44,6 +48,46 @@
     if (value < 60000) return `${(value / 1000).toFixed(2)} s`;
     return `${(value / 60000).toFixed(2)} min`;
   }
+
+  function traceKey(entry: any) {
+    return entry?.traceId ?? '';
+  }
+
+  function markHighlight(key: string) {
+    const existing = highlightTimers.get(key);
+    if (existing) {
+      clearTimeout(existing);
+    }
+    highlightKeys = new Set([...highlightKeys, key]);
+    const timeout = setTimeout(() => {
+      highlightTimers.delete(key);
+      if (!highlightKeys.has(key)) return;
+      const next = new Set(highlightKeys);
+      next.delete(key);
+      highlightKeys = next;
+    }, 3000);
+    highlightTimers.set(key, timeout);
+  }
+
+  $: if (traces) {
+    const nextKeys = new Set(traces.map(traceKey));
+    if (!initialized) {
+      knownKeys = nextKeys;
+      initialized = true;
+    } else {
+      for (const key of nextKeys) {
+        if (!knownKeys.has(key)) {
+          markHighlight(key);
+        }
+      }
+      knownKeys = nextKeys;
+    }
+  }
+
+  onDestroy(() => {
+    highlightTimers.forEach((timer) => clearTimeout(timer));
+    highlightTimers.clear();
+  });
 </script>
 
 {#if traces.length === 0}
@@ -51,8 +95,14 @@
 {:else}
   <ul class="trace-list">
     {#each traces as trace}
+      {@const key = traceKey(trace)}
       <li>
-        <button type="button" class="trace-row" on:click={() => (selectedTrace = trace)}>
+        <button
+          type="button"
+          class="trace-row"
+          class:new-item={highlightKeys.has(key)}
+          on:click={() => (selectedTrace = trace)}
+        >
           <span class="name">{trace.name || 'Traccia senza nome'}</span>
           <span class="service">{trace.service || 'Servizio non specificato'}</span>
           <span class="last-seen">{formatTimestamp(trace.lastSeen)}</span>
@@ -150,6 +200,26 @@
   .trace-row:hover {
     border-color: #2563eb;
     box-shadow: 0 2px 8px rgba(37, 99, 235, 0.12);
+  }
+
+  .trace-row.new-item {
+    background: #fef3c7;
+    border-color: #f59e0b;
+    box-shadow: 0 0 0 1px rgba(245, 158, 11, 0.2);
+    animation: trace-highlight-fade 3s ease-out forwards;
+  }
+
+  @keyframes trace-highlight-fade {
+    0% {
+      background: #fef3c7;
+      border-color: #f59e0b;
+      box-shadow: 0 0 0 1px rgba(245, 158, 11, 0.2);
+    }
+    100% {
+      background: white;
+      border-color: rgba(148, 163, 184, 0.2);
+      box-shadow: none;
+    }
   }
 
   .name {

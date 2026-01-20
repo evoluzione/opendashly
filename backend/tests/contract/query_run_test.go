@@ -7,8 +7,8 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"opentelemetry-dashboard/backend/internal/api"
-	"opentelemetry-dashboard/backend/internal/query"
+	"opendashly/backend/internal/api"
+	"opendashly/backend/internal/query"
 )
 
 func TestQueryRunContract(t *testing.T) {

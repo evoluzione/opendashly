@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"time"
 
-	"opentelemetry-dashboard/backend/internal/query/builders"
-	"opentelemetry-dashboard/backend/internal/storage"
+	"opendashly/backend/internal/query/builders"
+	"opendashly/backend/internal/storage"
 )
 
 // RelatedService fetches correlated telemetry for a trace.

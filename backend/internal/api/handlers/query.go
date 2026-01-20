@@ -6,7 +6,7 @@ import (
 	"net/http"
 	"time"
 
-	"opentelemetry-dashboard/backend/internal/query"
+	"opendashly/backend/internal/query"
 )
 
 // QueryHandler runs ad-hoc queries.

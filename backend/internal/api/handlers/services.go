@@ -3,7 +3,7 @@ package handlers
 import (
 	"net/http"
 
-	"opentelemetry-dashboard/backend/internal/query"
+	"opendashly/backend/internal/query"
 )
 
 type ServicesHandler struct {

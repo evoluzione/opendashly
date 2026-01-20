@@ -11,10 +11,12 @@ export type TraceSpan = {
   parentSpanId?: string;
   name: string;
   service?: string;
+  source?: string;
   startTime: string;
   endTime: string;
   duration: number;
   status?: string;
+  spanKind?: number | string;
 };
 
 export function fetchRelated(traceId: string): Promise<RelatedTelemetry> {

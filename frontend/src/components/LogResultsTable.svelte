@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { createEventDispatcher } from 'svelte';
+  import { createEventDispatcher, onDestroy } from 'svelte';
   import CorrelationPanel from './CorrelationPanel.svelte';
   import TraceSpanTimeline from './TraceSpanTimeline.svelte';
 
@@ -9,6 +9,10 @@
   const dispatch = createEventDispatcher();
   let selectedLog: any | null = null;
   let selectedTraceId: string | null = null;
+  let knownKeys = new Set<string>();
+  let highlightKeys = new Set<string>();
+  let highlightTimers = new Map<string, ReturnType<typeof setTimeout>>();
+  let initialized = false;
 
   const severityStyles: Record<string, { label: string; color: string }> = {
     fatal: { label: 'Fatale', color: '#b91c1c' },
@@ -48,6 +52,30 @@
     } catch {
       return null;
     }
+  }
+
+  function logKey(entry: any) {
+    const timestamp = entry?.timestamp ?? '';
+    const traceId = entry?.traceId ?? '';
+    const spanId = entry?.spanId ?? '';
+    const body = typeof entry?.body === 'string' ? entry.body : JSON.stringify(entry?.body ?? '');
+    return `${timestamp}|${traceId}|${spanId}|${body}`;
+  }
+
+  function markHighlight(key: string) {
+    const existing = highlightTimers.get(key);
+    if (existing) {
+      clearTimeout(existing);
+    }
+    highlightKeys = new Set([...highlightKeys, key]);
+    const timeout = setTimeout(() => {
+      highlightTimers.delete(key);
+      if (!highlightKeys.has(key)) return;
+      const next = new Set(highlightKeys);
+      next.delete(key);
+      highlightKeys = next;
+    }, 3000);
+    highlightTimers.set(key, timeout);
   }
 
   function extractMessage(body: any, structured: any) {
@@ -100,6 +128,26 @@
       onClose();
     }
   }
+
+  $: if (logs) {
+    const nextKeys = new Set(logs.map(logKey));
+    if (!initialized) {
+      knownKeys = nextKeys;
+      initialized = true;
+    } else {
+      for (const key of nextKeys) {
+        if (!knownKeys.has(key)) {
+          markHighlight(key);
+        }
+      }
+      knownKeys = nextKeys;
+    }
+  }
+
+  onDestroy(() => {
+    highlightTimers.forEach((timer) => clearTimeout(timer));
+    highlightTimers.clear();
+  });
 </script>
 
 {#if logs.length === 0}
@@ -109,8 +157,14 @@
     {#each logs as log}
       {@const structuredBody = parseStructured(log.body)}
       {@const severity = severityFor(log)}
+      {@const key = logKey(log)}
       <li>
-        <button type="button" class="log-row" on:click={() => (selectedLog = log)}>
+        <button
+          type="button"
+          class="log-row"
+          class:new-item={highlightKeys.has(key)}
+          on:click={() => (selectedLog = log)}
+        >
           <span class="timestamp">{formatTimestamp(log.timestamp)}</span>
           <span class="severity" style={`color:${severity.color}`}>{severity.label}</span>
           <span class="message">{extractMessage(log.body, structuredBody)}</span>
@@ -270,6 +324,26 @@
   .log-row:hover {
     border-color: #2563eb;
     box-shadow: 0 2px 8px rgba(37, 99, 235, 0.12);
+  }
+
+  .log-row.new-item {
+    background: #fff7ed;
+    border-color: #f59e0b;
+    box-shadow: 0 0 0 1px rgba(245, 158, 11, 0.2);
+    animation: highlight-fade 3s ease-out forwards;
+  }
+
+  @keyframes highlight-fade {
+    0% {
+      background: #fff7ed;
+      border-color: #f59e0b;
+      box-shadow: 0 0 0 1px rgba(245, 158, 11, 0.2);
+    }
+    100% {
+      background: white;
+      border-color: rgba(148, 163, 184, 0.2);
+      box-shadow: none;
+    }
   }
 
   .timestamp {

@@ -25,6 +25,16 @@
   }
 
   const maxDisplayMs = 60000;
+  const sourcePalette = [
+    '#0ea5e9',
+    '#22c55e',
+    '#f97316',
+    '#ef4444',
+    '#8b5cf6',
+    '#14b8a6',
+    '#eab308',
+    '#6366f1'
+  ];
 
   function durationMs(span: any) {
     return Math.max(0, Math.round(span.duration / 1_000_000));
@@ -50,11 +60,54 @@
   $: rangeMs = Math.max(1, endMs - startMs);
 
   function barStyle(span: any) {
+    const color = colorForSource(spanSource(span));
     const left = ((toMs(span.startTime) - startMs) / rangeMs) * 100;
     const rawWidth = (Math.max(0, toMs(span.endTime) - toMs(span.startTime)) / rangeMs) * 100;
     const cappedWidth = Math.min(rawWidth, (maxDisplayMs / rangeMs) * 100);
     const width = cappedWidth > 0 ? cappedWidth : rawWidth;
-    return `left:${left}%;width:${Math.max(0.5, width)}%`;
+    return `left:${left}%;width:${Math.max(0.5, width)}%;background:${color}`;
+  }
+
+  function spanSource(span: any) {
+    return span?.source || span?.service || 'origine sconosciuta';
+  }
+
+  function colorForSource(value: string) {
+    let hash = 0;
+    for (let i = 0; i < value.length; i += 1) {
+      hash = (hash << 5) - hash + value.charCodeAt(i);
+      hash |= 0;
+    }
+    return sourcePalette[Math.abs(hash) % sourcePalette.length];
+  }
+
+  function shortId(id?: string) {
+    if (!id) return '-';
+    return id.length > 10 ? `${id.slice(0, 6)}...${id.slice(-4)}` : id;
+  }
+
+  function spanKindInfo(span: any) {
+    const raw = span?.spanKind ?? span?.kind;
+    if (raw === null || raw === undefined || raw === '') {
+      return null;
+    }
+    if (typeof raw === 'number') {
+      const map: Record<number, { label: string; short: string }> = {
+        1: { label: 'Internal', short: 'I' },
+        2: { label: 'Server', short: 'S' },
+        3: { label: 'Client', short: 'CL' },
+        4: { label: 'Producer', short: 'P' },
+        5: { label: 'Consumer', short: 'C' }
+      };
+      return map[raw] ?? { label: `Kind ${raw}`, short: 'K' };
+    }
+    const normalized = String(raw).toUpperCase();
+    if (normalized.includes('PRODUCER')) return { label: 'Producer', short: 'P' };
+    if (normalized.includes('CONSUMER')) return { label: 'Consumer', short: 'C' };
+    if (normalized.includes('SERVER')) return { label: 'Server', short: 'S' };
+    if (normalized.includes('CLIENT')) return { label: 'Client', short: 'CL' };
+    if (normalized.includes('INTERNAL')) return { label: 'Internal', short: 'I' };
+    return { label: normalized, short: normalized.slice(0, 2) };
   }
 </script>
 
@@ -79,9 +132,18 @@
       </div>
       <div class="span-grid">
         {#each spans as span}
+          {@const source = spanSource(span)}
+          {@const kind = spanKindInfo(span)}
+          {@const color = colorForSource(source)}
           <div class="span-row">
             <div class="meta">
-              <span class="name">{span.name || 'Span'}</span>
+              <div class="meta-title">
+                <span class="source-dot" style={`background:${color}`}></span>
+                <span class="name">{span.name || 'Span'}</span>
+                {#if kind}
+                  <span class="kind-badge" title={kind.label}>{kind.short}</span>
+                {/if}
+              </div>
               <span class="service">{span.service || 'servizio sconosciuto'}</span>
             </div>
             <div class="bar-track">
@@ -178,6 +240,19 @@
     gap: 4px;
   }
 
+  .meta-title {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .source-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 999px;
+    flex-shrink: 0;
+  }
+
   .name {
     font-size: 12px;
     font-weight: 600;
@@ -187,9 +262,29 @@
     white-space: nowrap;
   }
 
+  .kind-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 18px;
+    padding: 2px 6px;
+    border-radius: 999px;
+    background: #e2e8f0;
+    color: #0f172a;
+    font-size: 9px;
+    font-weight: 700;
+    text-transform: uppercase;
+  }
+
   .service {
     font-size: 11px;
     color: #64748b;
+  }
+
+  .details {
+    font-size: 10px;
+    color: #94a3b8;
+    font-weight: 600;
   }
 
   .bar-track {
@@ -210,7 +305,6 @@
     position: absolute;
     top: 3px;
     height: 12px;
-    background: linear-gradient(90deg, #2563eb, #38bdf8);
     border-radius: 999px;
   }
 

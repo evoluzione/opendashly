@@ -9,8 +9,8 @@ import (
 	"time"
 
 	"github.com/ClickHouse/clickhouse-go/v2/lib/driver"
-	"opentelemetry-dashboard/backend/internal/query/builders"
-	"opentelemetry-dashboard/backend/internal/storage"
+	"opendashly/backend/internal/query/builders"
+	"opendashly/backend/internal/storage"
 )
 
 // Service handles query execution.

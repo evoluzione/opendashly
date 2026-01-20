@@ -2,10 +2,11 @@ package handlers
 
 import (
 	"encoding/json"
+	"log"
 	"net/http"
 	"time"
 
-	"opentelemetry-dashboard/backend/internal/auth"
+	"opendashly/backend/internal/auth"
 )
 
 type AuthHandler struct {
@@ -58,11 +59,13 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := h.Repo.UpdateLastLogin(r.Context(), user.ID, time.Now().UTC()); err != nil {
+		log.Printf("auth.login: update last login failed user=%s err=%v", user.ID, err)
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
 	token, err := auth.GenerateToken(h.Secret, user.ID, user.Role, h.SessionTTL)
 	if err != nil {
+		log.Printf("auth.login: generate token failed user=%s err=%v", user.ID, err)
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
@@ -97,20 +100,24 @@ func (h *AuthHandler) ChangePassword(w http.ResponseWriter, r *http.Request) {
 	}
 	newHash, err := auth.HashPassword(req.NewPassword)
 	if err != nil {
+		log.Printf("auth.change_password: hash failed user=%s err=%v", user.ID, err)
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
 	if err := h.Repo.UpdatePassword(r.Context(), user.ID, newHash, false); err != nil {
+		log.Printf("auth.change_password: update password failed user=%s err=%v", user.ID, err)
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
 	updated, err := h.Repo.GetByID(r.Context(), user.ID)
 	if err != nil {
+		log.Printf("auth.change_password: reload user failed user=%s err=%v", user.ID, err)
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
 	token, err := auth.GenerateToken(h.Secret, updated.ID, updated.Role, h.SessionTTL)
 	if err != nil {
+		log.Printf("auth.change_password: generate token failed user=%s err=%v", updated.ID, err)
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
@@ -126,6 +133,7 @@ func (h *AuthHandler) Session(w http.ResponseWriter, r *http.Request) {
 	}
 	user, err := h.Repo.GetByID(r.Context(), userID)
 	if err != nil {
+		log.Printf("auth.session: user lookup failed user=%s err=%v", userID, err)
 		w.WriteHeader(http.StatusUnauthorized)
 		return
 	}
@@ -168,6 +176,7 @@ func clearSessionCookie(w http.ResponseWriter, name string, secure bool) {
 func writeJSON(w http.ResponseWriter, payload any) {
 	w.Header().Set("Content-Type", "application/json")
 	if err := json.NewEncoder(w).Encode(payload); err != nil {
+		log.Printf("auth.write_json: encode failed err=%v", err)
 		w.WriteHeader(http.StatusInternalServerError)
 	}
 }

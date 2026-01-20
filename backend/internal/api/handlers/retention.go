@@ -4,8 +4,8 @@ import (
 	"encoding/json"
 	"net/http"
 
-	"opentelemetry-dashboard/backend/internal/auth"
-	"opentelemetry-dashboard/backend/internal/retention"
+	"opendashly/backend/internal/auth"
+	"opendashly/backend/internal/retention"
 )
 
 type RetentionHandler struct {

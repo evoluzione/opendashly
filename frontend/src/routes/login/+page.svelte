@@ -38,7 +38,7 @@
           </svg>
         </div>
         <div class="brand-text">
-          <h1>OpenTelemetry</h1>
+          <h1>Opendashly</h1>
           <span>Dashboard</span>
         </div>
       </div>
