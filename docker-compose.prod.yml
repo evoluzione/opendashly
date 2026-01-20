@@ -1,0 +1,52 @@
+services:
+  app:
+    image: ghcr.io/evoluzione/opendashly:latest
+    ports:
+      - "8080:8080"
+      - "5173:5173"
+    environment:
+      - CLICKHOUSE_ADDR=clickhouse:9000
+      - CLICKHOUSE_USER=otel
+      - CLICKHOUSE_PASSWORD=${CLICKHOUSE_PASSWORD}
+      - AUTH_MODE=jwt
+      - AUTH_SECRET=${AUTH_SECRET}
+      - CLEANUP_INTERVAL_MINUTES=1440
+    depends_on:
+      clickhouse:
+        condition: service_healthy
+    restart: unless-stopped
+
+  clickhouse:
+    image: clickhouse/clickhouse-server:24.8
+    ports:
+      - "8123:8123"
+      - "9000:9000"
+    environment:
+      - CLICKHOUSE_DB=telemetry
+      - CLICKHOUSE_USER=otel
+      - CLICKHOUSE_PASSWORD=${CLICKHOUSE_PASSWORD}
+      - CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT=1
+    volumes:
+      - clickhouse_data:/var/lib/clickhouse
+    healthcheck:
+      test: ["CMD", "clickhouse-client", "--query", "SELECT 1"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:0.99.0
+    command: ["--config=/etc/otelcol/config.yaml"]
+    ports:
+      - "4317:4317"
+      - "4318:4318"
+    volumes:
+      - ./collector-config.yaml:/etc/otelcol/config.yaml
+    depends_on:
+      clickhouse:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  clickhouse_data:

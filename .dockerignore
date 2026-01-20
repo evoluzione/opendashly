@@ -1,0 +1,8 @@
+.git
+.github
+**/node_modules
+**/test-results
+**/playwright-report
+**/.svelte-kit
+frontend/build
+backend/tests

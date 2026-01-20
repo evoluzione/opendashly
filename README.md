@@ -9,7 +9,7 @@
 [![Go Version](https://img.shields.io/badge/Go-1.22+-00ADD8?style=flat&logo=go)](https://golang.org)
 [![SvelteKit](https://img.shields.io/badge/SvelteKit-4.2-FF3E00?style=flat&logo=svelte)](https://kit.svelte.dev)
 
-[Features](#-features) • [Quick Start](#-quick-start) • [Architecture](#-architecture)
+ [Quick Start](#-quick-start) • [Architecture](#architecture) • [Production Deployment](#-docker-deployment) • [Monitoring](#-monitoring)
 
 </div>
 
@@ -27,60 +27,6 @@
 - **🎛️ Data Retention**: Configurable retention policies with automatic cleanup
 - **🔍 Trace Correlation**: Seamlessly navigate from logs to traces and spans
 - **🐳 Docker Ready**: Full stack deployable with a single command
-
----
-
-## ✨ Features
-
-### Core Capabilities
-
-#### 📝 **Logs Management**
-- Full-text search with filter syntax support
-- Severity-level filtering (DEBUG, INFO, WARN, ERROR, FATAL)
-- Service and attribute-based filtering
-- Trace ID correlation for distributed tracing
-- Real-time log streaming
-
-#### 🔗 **Distributed Tracing**
-- Trace timeline visualization with span relationships
-- Service dependency mapping
-- Duration analysis and latency tracking
-- Span attribute inspection
-- Error and status tracking
-
-#### 📊 **Metrics Visualization**
-- Time-series charts with uPlot (high-performance rendering)
-- Gauge and counter metric support
-- Custom time range selection
-- Multi-metric comparison
-- Service-level aggregations
-
-### Advanced Features
-
-#### 🛡️ **Authentication & Authorization**
-- JWT-based session management
-- Role-based access control (Admin, User)
-- Secure password hashing with bcrypt
-- Mandatory password change on first login
-- Session persistence with HTTP-only cookies
-
-#### 🗄️ **Data Retention & Cleanup**
-- Configurable retention periods per signal type (logs, traces, metrics)
-- Automatic background cleanup (default: 24-hour interval)
-- Manual cleanup with service filtering
-- Cleanup job audit trail
-- Admin-only retention management
-
-#### 💾 **Query Management**
-- Save and reuse complex queries
-- Shareable query templates
-- Query history tracking
-- Multi-signal queries (logs + traces + metrics)
-
-#### 🔎 **Search Modes**
-- **Automatic**: pick a quick range and refresh results periodically
-- **Manual**: set start/end date and time explicitly
-- **Smart**: write a natural-language prompt and generate the query automatically
 
 ---
 
@@ -146,6 +92,7 @@ Or configure your application to send telemetry to `http://localhost:4318` (HTTP
 
 ---
 
+<a id="architecture"></a>
 ## 🏗️ Architecture
 
 ### Data Flow
@@ -206,60 +153,56 @@ Or configure your application to send telemetry to `http://localhost:4318` (HTTP
 │   └── tests/               # Unit & E2E tests
 ├── collector-config.yaml     # OTLP Collector configuration
 ├── docker-compose.yml        # Multi-container orchestration
+├── docker-compose.prod.yml   # Production compose (single app image)
+├── Dockerfile                # Combined backend+frontend image build
+├── docker/                   # Runtime helpers
+│   └── entrypoint.sh         # Starts backend + frontend
+├── .github/workflows/        # CI pipelines
+│   └── ci-docker.yml         # Tests + image build/push
 └── README.md                 # You are here
 ```
 
 ---
 
-## 🔧 Configuration
+## 🚀 Docker Deployment
 
-### Collector Configuration
+### Prerequisites
 
-The OTLP Collector is configured via `collector-config.yaml`. Key sections:
+- Docker 20.10+ and Docker Compose 2.0+
+- Host sizing (single node): 2 vCPU and 4 GB RAM minimum; 4 vCPU and 8 GB RAM recommended for moderate workloads
+- Storage: SSD recommended; allocate at least 20 GB free space for ClickHouse data
+- A strong `AUTH_SECRET` value (32+ random characters)
+- A secure `CLICKHOUSE_PASSWORD`
 
-```yaml
-receivers:
-  otlp:
-    protocols:
-      grpc:
-        endpoint: 0.0.0.0:4317
-      http:
-        endpoint: 0.0.0.0:4318
+### Setup Guide
 
-exporters:
-  clickhouse:
-    endpoint: tcp://clickhouse:9000
-    database: telemetry
-    ttl_days: 7  # Default retention
-    timeout: 10s
+1) Copy `docker-compose.prod.yml` and `collector-config.yaml` to the target host.
 
-service:
-  pipelines:
-    traces:
-      receivers: [otlp]
-      exporters: [clickhouse]
-    metrics:
-      receivers: [otlp]
-      exporters: [clickhouse]
-    logs:
-      receivers: [otlp]
-      exporters: [clickhouse]
+2) Create a `.env` file alongside `docker-compose.prod.yml`:
+
+```bash
+AUTH_SECRET=replace-with-32+char-random
+CLICKHOUSE_PASSWORD=replace-with-strong-password
 ```
 
-### Data Retention
+3) Start the stack:
 
-Configure retention policies via the admin UI (`/admin/retention`)
+```bash
+docker compose -f docker-compose.prod.yml up -d
+```
 
-**Retention Features:**
-- Default 7-day retention for all signal types
-- Configurable per signal type (logs, traces, metrics)
-- Automatic cleanup every 24 hours (configurable)
-- Manual cleanup with service filtering
-- Audit trail for all cleanup operations
+4) Verify services:
 
----
+```bash
+curl http://localhost:8080/healthz
+curl http://localhost:8123/ping
+```
 
-## 🚀 Production Deployment
+5) Open the UI and log in:
+
+- Frontend: http://localhost:5173
+- Default credentials: `admin` / `admin`
+- You will be prompted to change the password on first login.
 
 ### Security Checklist
 
@@ -272,42 +215,6 @@ Configure retention policies via the admin UI (`/admin/retention`)
 - [ ] Enable rate limiting for API endpoints
 - [ ] Set up log retention policies
 - [ ] Configure backup strategy for ClickHouse
-
-### Recommended Production Setup
-
-```yaml
-# docker-compose.prod.yml
-services:
-  backend:
-    environment:
-      - AUTH_SECRET=${AUTH_SECRET}  # From .env file
-      - CLICKHOUSE_ADDR=clickhouse:9000
-      - AUTH_MODE=jwt
-      - CLEANUP_INTERVAL_MINUTES=1440
-    restart: unless-stopped
-
-  clickhouse:
-    environment:
-      - CLICKHOUSE_USER=telemetry
-      - CLICKHOUSE_PASSWORD=${CLICKHOUSE_PASSWORD}
-    volumes:
-      - clickhouse_data:/var/lib/clickhouse
-    restart: unless-stopped
-```
-
-### Performance Tuning
-
-#### ClickHouse Optimization
-- Adjust `max_memory_usage` based on available RAM
-- Configure `max_threads` for query parallelization
-- Use materialized views for common aggregations
-- Enable compression for cold storage
-
-#### Backend Optimization
-- Increase connection pool size for high load
-- Enable HTTP/2 for multiplexing
-- Configure request timeouts appropriately
-- Use caching for frequent queries
 
 ---
 
@@ -347,13 +254,6 @@ Built with these excellent open-source projects:
 - [SvelteKit](https://kit.svelte.dev) - Frontend framework
 - [uPlot](https://github.com/leeoniya/uPlot) - High-performance charting
 - [Chi](https://github.com/go-chi/chi) - Lightweight Go router
-
----
-
-## 📧 Support
-
-- **Issues**: [GitHub Issues](https://github.com/yourusername/opendashly/issues)
-- **Discussions**: [GitHub Discussions](https://github.com/yourusername/opendashly/discussions)
 
 ---
 
