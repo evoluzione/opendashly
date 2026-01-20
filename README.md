@@ -40,6 +40,8 @@
 
 ### 1. Start All Services
 
+If you want custom secrets or a non-default ClickHouse password, copy `.env.example` to `.env` and edit it first.
+
 ```bash
 docker compose up --build
 ```
@@ -157,6 +159,7 @@ Or configure your application to send telemetry to `http://localhost:4318` (HTTP
 ├── Dockerfile                # Combined backend+frontend image build
 ├── docker/                   # Runtime helpers
 │   └── entrypoint.sh         # Starts backend + frontend
+├── .env.example              # Environment variable template
 ├── .github/workflows/        # CI pipelines
 │   └── ci-docker.yml         # Tests + image build/push
 └── README.md                 # You are here
@@ -183,6 +186,7 @@ Or configure your application to send telemetry to `http://localhost:4318` (HTTP
 ```bash
 AUTH_SECRET=replace-with-32+char-random
 CLICKHOUSE_PASSWORD=replace-with-strong-password
+CORS_ALLOWED_ORIGINS=http://your-public-host:5173
 ```
 
 3) Start the stack:
