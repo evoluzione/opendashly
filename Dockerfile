@@ -20,11 +20,15 @@ FROM node:20-alpine
 
 WORKDIR /app
 COPY --from=backend-build /out/backend /app/backend
+WORKDIR /app/frontend
+COPY frontend/package.json frontend/package-lock.json ./
+RUN npm ci --omit=dev
 COPY --from=frontend-build /src/frontend/build /app/frontend/build
 COPY docker/entrypoint.sh /app/entrypoint.sh
 RUN chmod +x /app/entrypoint.sh
 
 ENV API_LISTEN_ADDR=:8080
+ENV NODE_ENV=production
 ENV PORT=5173
 ENV HOST=0.0.0.0
 
