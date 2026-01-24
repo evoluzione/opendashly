@@ -6,6 +6,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 	"opendashly/backend/internal/api/handlers"
+	"opendashly/backend/internal/metrics"
 	"opendashly/backend/internal/query"
 	"opendashly/backend/internal/status"
 )
@@ -16,6 +17,7 @@ type RouterConfig struct {
 	TraceSpansService *query.TraceSpansService
 	SavedRepo         *query.SavedQueryRepo
 	StatusService     *status.Service
+	DashboardService  *metrics.Service
 	AuthHandler       *handlers.AuthHandler
 	UsersHandler      *handlers.UsersHandler
 	ServicesHandler   *handlers.ServicesHandler
@@ -45,6 +47,7 @@ func NewRouter(cfg RouterConfig) http.Handler {
 	statusHandler := &handlers.StatusHandler{Service: cfg.StatusService}
 	savedHandler := &handlers.SavedQueriesHandler{Repo: cfg.SavedRepo, Runner: cfg.QueryService}
 	smartQuery := &handlers.SmartQueryHandler{}
+	dashboardHandler := &handlers.DashboardHandler{Service: cfg.DashboardService}
 
 	r.Post("/api/query/run", queryHandler.ServeHTTP)
 	r.Post("/api/query/smart", smartQuery.ServeHTTP)
@@ -56,6 +59,7 @@ func NewRouter(cfg RouterConfig) http.Handler {
 	r.Get("/api/traces/{traceId}/related", traceRelated.ServeHTTP)
 	r.Get("/api/traces/{traceId}/spans", traceSpans.ServeHTTP)
 	r.Get("/api/status/summary", statusHandler.ServeHTTP)
+	r.Post("/api/dashboard/metrics", dashboardHandler.ServeHTTP)
 
 	if cfg.AuthHandler != nil {
 		r.Post("/api/auth/login", cfg.AuthHandler.Login)

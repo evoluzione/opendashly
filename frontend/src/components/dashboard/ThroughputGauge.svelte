@@ -1,0 +1,124 @@
+<script lang="ts">
+  import type { ThroughputSummary } from '../../services/dashboard';
+
+  export let data: ThroughputSummary | null = null;
+
+  function formatNumber(num: number): string {
+    if (num >= 1000000) return (num / 1000000).toFixed(1) + 'M';
+    if (num >= 1000) return (num / 1000).toFixed(1) + 'k';
+    return num.toFixed(1);
+  }
+
+  $: reqPerMin = data?.requestsPerMin ?? 0;
+  $: errPerMin = data?.errorsPerMin ?? 0;
+  $: totalReq = data?.totalRequests ?? 0;
+</script>
+
+<div class="gauge-card">
+  <div class="gauge-header">
+    <span class="gauge-title">Throughput</span>
+  </div>
+
+  <div class="main-stat">
+    <span class="value">{formatNumber(reqPerMin)}</span>
+    <span class="unit">req/min</span>
+  </div>
+
+  <div class="secondary-stats">
+    <div class="stat">
+      <span class="stat-value">{formatNumber(errPerMin)}</span>
+      <span class="stat-label">err/min</span>
+    </div>
+    <div class="divider"></div>
+    <div class="stat">
+      <span class="stat-value">{totalReq.toLocaleString()}</span>
+      <span class="stat-label">totale</span>
+    </div>
+  </div>
+</div>
+
+<style>
+  .gauge-card {
+    background: white;
+    border-radius: 16px;
+    padding: 20px;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05), 0 4px 12px rgba(0, 0, 0, 0.03);
+    border: 1px solid rgba(15, 23, 42, 0.06);
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+
+  .gauge-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+
+  .gauge-title {
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: #64748b;
+  }
+
+  .main-stat {
+    text-align: center;
+    padding: 24px 0;
+  }
+
+  .main-stat .value {
+    display: block;
+    font-size: 36px;
+    font-weight: 700;
+    color: #2563eb;
+    line-height: 1.1;
+  }
+
+  .main-stat .unit {
+    display: block;
+    font-size: 12px;
+    font-weight: 600;
+    color: #64748b;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin-top: 4px;
+  }
+
+  .secondary-stats {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 16px;
+    padding-top: 16px;
+    border-top: 1px solid #f1f5f9;
+  }
+
+  .stat {
+    text-align: center;
+  }
+
+  .stat-value {
+    display: block;
+    font-size: 16px;
+    font-weight: 700;
+    color: #0f172a;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .stat-label {
+    display: block;
+    font-size: 10px;
+    color: #94a3b8;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin-top: 2px;
+  }
+
+  .divider {
+    width: 1px;
+    height: 32px;
+    background: #e2e8f0;
+  }
+</style>

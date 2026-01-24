@@ -20,10 +20,17 @@
     return numberFormat.format(value);
   }
 
+  function hasRecentData(): boolean {
+    if (!statusSummary) return false;
+    const { logs, traces, metrics } = statusSummary.counts;
+    return logs.last60m > 0 || traces.last60m > 0 || metrics.last60m > 0;
+  }
+
   function statusLabel() {
-    if (!statusSummary && statusError) return 'Sistema non disponibile';
+    if (!statusSummary && statusError) return 'Disattivo';
     if (!statusSummary) return 'Stato in aggiornamento';
-    return statusSummary.ok ? 'Sistema attivo' : 'Sistema con problemi';
+    if (!statusSummary.ok) return 'Disattivo';
+    return hasRecentData() ? 'Attivo' : 'Inattivo';
   }
 
   async function loadStatus() {
@@ -82,6 +89,14 @@
   <div class="nav-section">
     <span class="nav-label">Telemetria</span>
     <nav>
+      <button class:selected={activeTab === 'metriche'} on:click={() => onSelect('metriche')}>
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <line x1="18" y1="20" x2="18" y2="10"/>
+          <line x1="12" y1="20" x2="12" y2="4"/>
+          <line x1="6" y1="20" x2="6" y2="14"/>
+        </svg>
+        <span>Metriche</span>
+      </button>
       <button class:selected={activeTab === 'logs'} on:click={() => onSelect('logs')}>
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
@@ -90,14 +105,6 @@
           <line x1="16" y1="17" x2="8" y2="17"/>
         </svg>
         <span>Log</span>
-      </button>
-      <button class:selected={activeTab === 'metriche'} on:click={() => onSelect('metriche')}>
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <line x1="18" y1="20" x2="18" y2="10"/>
-          <line x1="12" y1="20" x2="12" y2="4"/>
-          <line x1="6" y1="20" x2="6" y2="14"/>
-        </svg>
-        <span>Metriche</span>
       </button>
       <button class:selected={activeTab === 'tracce'} on:click={() => onSelect('tracce')}>
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -144,9 +151,10 @@
     >
       <span
         class="dot"
-        class:ok={statusSummary?.ok}
-        class:error={!statusSummary?.ok && statusSummary !== null}
-        class:idle={!statusSummary}
+        class:active={statusSummary?.ok && hasRecentData()}
+        class:inactive={statusSummary?.ok && !hasRecentData()}
+        class:error={(!statusSummary && statusError) || (statusSummary && !statusSummary.ok)}
+        class:idle={!statusSummary && !statusError}
       ></span>
       <span>{statusLabel()}</span>
       <div
@@ -380,9 +388,14 @@
     animation: pulse 2s ease-in-out infinite;
   }
 
-  .dot.ok {
+  .dot.active {
     background: #22c55e;
     box-shadow: 0 0 8px rgba(34, 197, 94, 0.6);
+  }
+
+  .dot.inactive {
+    background: #f59e0b;
+    box-shadow: 0 0 8px rgba(245, 158, 11, 0.6);
   }
 
   .dot.error {

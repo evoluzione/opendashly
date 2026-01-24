@@ -10,6 +10,7 @@ import (
 	"opendashly/backend/internal/api/handlers"
 	"opendashly/backend/internal/auth"
 	"opendashly/backend/internal/config"
+	"opendashly/backend/internal/metrics"
 	"opendashly/backend/internal/query"
 	"opendashly/backend/internal/retention"
 	"opendashly/backend/internal/status"
@@ -34,6 +35,7 @@ func main() {
 	relatedService := &query.RelatedService{Storage: client}
 	traceSpansService := &query.TraceSpansService{Storage: client}
 	statusService := &status.Service{Storage: client}
+	dashboardService := &metrics.Service{Storage: client}
 	savedRepo := query.NewSavedQueryRepo()
 	authRepo := &auth.Repo{Conn: client.Conn}
 	if err := seedDefaultAdmin(ctx, authRepo); err != nil {
@@ -73,16 +75,17 @@ func main() {
 	})
 
 	handler := api.NewRouter(api.RouterConfig{
-		QueryService:      queryService,
-		RelatedService:    relatedService,
-		TraceSpansService: traceSpansService,
-		StatusService:     statusService,
-		SavedRepo:         savedRepo,
-		AuthHandler:       authHandler,
-		UsersHandler:      usersHandler,
-		ServicesHandler:   servicesHandler,
-		RetentionHandler:  retentionHandler,
-		AuthMiddleware:    authMiddleware,
+		QueryService:       queryService,
+		RelatedService:     relatedService,
+		TraceSpansService:  traceSpansService,
+		StatusService:      statusService,
+		DashboardService:   dashboardService,
+		SavedRepo:          savedRepo,
+		AuthHandler:        authHandler,
+		UsersHandler:       usersHandler,
+		ServicesHandler:    servicesHandler,
+		RetentionHandler:   retentionHandler,
+		AuthMiddleware:     authMiddleware,
 		CORSAllowedOrigins: cfg.CORSAllowedOrigins,
 	})
 	log.Printf("listening on %s", cfg.ListenAddr)
