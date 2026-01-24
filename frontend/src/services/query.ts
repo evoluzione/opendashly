@@ -45,7 +45,7 @@ export function runQuery(request: QueryRequest): Promise<QueryRunResult> {
   });
 }
 
-export function generateSmartQuery(payload: { prompt: string }): Promise<SmartQueryResponse> {
+export function generateSmartQuery(payload: { prompt: string; contextType: 'logs' | 'metrics' | 'traces' | 'auto' }): Promise<SmartQueryResponse> {
   return apiRequest<SmartQueryResponse>('/api/query/smart', {
     method: 'POST',
     body: JSON.stringify(payload)

@@ -5,13 +5,17 @@ import (
 	"net/http"
 	"time"
 
+	"opendashly/backend/internal/ai"
 	"opendashly/backend/internal/query"
 )
 
-type SmartQueryHandler struct{}
+type SmartQueryHandler struct {
+	AIService *ai.Service
+}
 
 type smartQueryRequest struct {
-	Prompt string `json:"prompt"`
+	Prompt      string `json:"prompt"`
+	ContextType string `json:"contextType"` // "logs" or "metrics"
 }
 
 func (h *SmartQueryHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -20,7 +24,25 @@ func (h *SmartQueryHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
-	response, err := query.BuildSmartQuery(req.Prompt, time.Now())
+
+	// Fetch dynamic settings
+	// tenantID hardcoded for now
+	settings, err := h.AIService.GetSettings(r.Context(), "default")
+	if err != nil {
+		// Log error but maybe proceed?
+		// If DB fails, we might fall back to config?
+		// For now fail safe -> proceed with empty settings (disabled)
+		settings = &ai.Settings{Enabled: false}
+	}
+
+	// If disabled, return error or empty?
+	// User Requirement: "l'amministratore deve poter attivare la ricerca smart che di default è disattiva"
+	if !settings.Enabled || settings.APIKey == "" {
+		http.Error(w, "Smart search is disabled or missing configuration", http.StatusForbidden)
+		return
+	}
+
+	response, err := query.BuildSmartQuery(req.Prompt, req.ContextType, settings, time.Now())
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return

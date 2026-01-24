@@ -1,48 +1,146 @@
 <script lang="ts">
-  import { createEventDispatcher, onMount } from 'svelte';
-  import { servicesState } from '../lib/stores/query';
-  import { generateSmartQuery } from '../services/query';
-  import type { QueryRequest } from '../services/query';
+  import { createEventDispatcher, onMount } from "svelte";
+  import {
+    servicesState,
+    selectService,
+    selectLogLevel,
+  } from "../lib/stores/query";
+  import { generateSmartQuery } from "../services/query";
+  import type { QueryRequest } from "../services/query";
+  import { getAISettings } from "../services/settings";
 
   const dispatch = createEventDispatcher();
 
-  type SearchMode = 'auto' | 'manual' | 'smart';
+  type SearchMode = "auto" | "manual" | "smart";
 
-  let searchMode: SearchMode = 'auto';
-  let fromInput = '';
-  let toInput = '';
+  export let activeTab: "logs" | "metriche" | "tracce";
+
+  interface TabState {
+    searchMode: SearchMode;
+    fromInput: string;
+    toInput: string;
+    autoRangeMinutes: number | null;
+    autoRefreshSeconds: number | null;
+    smartPrompt: string;
+    smartError: string;
+    smartRequest: QueryRequest | null;
+  }
+
+  const defaultState: TabState = {
+    searchMode: "auto",
+    fromInput: "",
+    toInput: "",
+    autoRangeMinutes: 5,
+    autoRefreshSeconds: 10,
+    smartPrompt: "",
+    smartError: "",
+    smartRequest: null,
+  };
+
+  let tabStates: Record<string, TabState> = {
+    logs: { ...defaultState },
+    metriche: { ...defaultState },
+    tracce: { ...defaultState },
+  };
+
+  let searchMode: SearchMode = "auto";
+  let fromInput = "";
+  let toInput = "";
   let autoRangeMinutes: number | null = 5;
   let autoRefreshSeconds: number | null = 10;
-  let smartPrompt = '';
-  let smartError = '';
-  let smartLoading = false;
+  let smartPrompt = "";
+  let smartError = "";
   let smartRequest: QueryRequest | null = null;
 
+  // Track previous tab to save state before switching
+  let previousTab = activeTab;
+
+  // React to activeTab changes
+  $: if (activeTab !== previousTab) {
+    saveState(previousTab);
+    loadState(activeTab);
+    previousTab = activeTab;
+  }
+
+  function saveState(tab: string) {
+    tabStates[tab] = {
+      searchMode,
+      fromInput,
+      toInput,
+      autoRangeMinutes,
+      autoRefreshSeconds,
+      smartPrompt,
+      smartError,
+      smartRequest,
+    };
+  }
+
+  function loadState(tab: string) {
+    const state = tabStates[tab] || { ...defaultState };
+    searchMode = state.searchMode;
+    fromInput = state.fromInput;
+    toInput = state.toInput;
+    autoRangeMinutes = state.autoRangeMinutes;
+    autoRefreshSeconds = state.autoRefreshSeconds;
+    smartPrompt = state.smartPrompt;
+    smartError = state.smartError;
+    smartRequest = state.smartRequest;
+  }
+
+  let smartLoading = false;
+  let smartEnabled = false;
+
+  // Manual filter fields
+  let filterTraceId = "";
+
+  // Separate SQL field
+  let generatedSql = "";
+
+  // Dirty tracking for conditional button enabling
+  let promptDirty = true;
+  let sqlDirty = false;
+
+  function handlePromptChange() {
+    promptDirty = true;
+  }
+
+  function handleSqlChange() {
+    sqlDirty = true;
+  }
+
+  function handlePromptKeydown(event: KeyboardEvent) {
+    if (event.key === "Enter" && !event.shiftKey) {
+      event.preventDefault();
+      if (!smartLoading && promptDirty) {
+        generateSql();
+      }
+    }
+  }
+
   const quickRanges = [
-    { label: 'Ultimi 5 minuti', minutes: 5 },
-    { label: 'Ultimi 10 minuti', minutes: 10 },
-    { label: 'Ultimi 30 minuti', minutes: 30 },
-    { label: 'Ultima ora', minutes: 60 },
-    { label: 'Tutto', minutes: null }
+    { label: "Ultimi 5 minuti", minutes: 5 },
+    { label: "Ultimi 10 minuti", minutes: 10 },
+    { label: "Ultimi 30 minuti", minutes: 30 },
+    { label: "Ultima ora", minutes: 60 },
+    { label: "Tutto", minutes: null },
   ];
   const autoRefreshOptions = [
-    { label: '5 s', seconds: 5 },
-    { label: '10 s', seconds: 10 },
-    { label: '60 s', seconds: 60 },
-    { label: '5 minuti', seconds: 300 }
+    { label: "5 s", seconds: 5 },
+    { label: "10 s", seconds: 10 },
+    { label: "60 s", seconds: 60 },
+    { label: "5 minuti", seconds: 300 },
   ];
 
-
   function formatDateTimeLocal(date: Date) {
-    const pad = (value: number) => String(value).padStart(2, '0');
+    const pad = (value: number) => String(value).padStart(2, "0");
     return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
   }
 
   function applyQuickRange(minutes: number | null) {
     const now = new Date();
     if (minutes === null) {
-      fromInput = '';
-      toInput = '';
+      fromInput = "";
+      toInput = "";
       return;
     }
     const fromDate = new Date(now.getTime() - minutes * 60 * 1000);
@@ -51,9 +149,9 @@
   }
 
   function formatAutoRefreshLabel(seconds: number | null) {
-    if (!seconds) return 'disattivato';
-    if (seconds === 60) return '1 minuto';
-    if (seconds === 300) return '5 minuti';
+    if (!seconds) return "disattivato";
+    if (seconds === 60) return "1 minuto";
+    if (seconds === 300) return "5 minuti";
     return `${seconds} secondi`;
   }
 
@@ -64,42 +162,77 @@
   }
 
   function toIso(value: string) {
-    return value ? new Date(value).toISOString() : '';
+    return value ? new Date(value).toISOString() : "";
   }
 
-  onMount(() => {
+  onMount(async () => {
     applyQuickRange(autoRangeMinutes);
-    if (searchMode === 'auto') {
+    if (searchMode === "auto") {
       submit();
     }
+    try {
+      const settings = await getAISettings();
+      smartEnabled = settings.enabled;
+    } catch (e) {
+      console.error("failed to load ai settings", e);
+    }
   });
+
+  // Auto-submit when global filters change (if in auto/manual mode)
+  // We track the previous values to avoid initial double-fetch if needed
+  let lastService = $servicesState.selectedService;
+  let lastLogLevel = $servicesState.selectedLogLevel;
+
+  $: {
+    if (
+      ($servicesState.selectedService !== lastService ||
+        $servicesState.selectedLogLevel !== lastLogLevel) &&
+      searchMode === "auto"
+    ) {
+      lastService = $servicesState.selectedService;
+      lastLogLevel = $servicesState.selectedLogLevel;
+      submit();
+    }
+  }
 
   function handleModeChange(nextMode: SearchMode) {
     if (searchMode === nextMode) return;
     searchMode = nextMode;
-    smartError = '';
-    if (searchMode === 'auto') {
+    smartError = "";
+    if (searchMode === "auto") {
       applyQuickRange(autoRangeMinutes);
       submit();
     }
-    dispatch('modeChange', { mode: searchMode });
+    dispatch("modeChange", { mode: searchMode });
   }
 
   async function generateSql() {
-    smartError = '';
+    smartError = "";
     smartRequest = null;
     const prompt = smartPrompt.trim();
     if (!prompt) {
-      smartError = 'Inserisci una richiesta in linguaggio naturale.';
+      smartError = "Inserisci una richiesta in linguaggio naturale.";
       return;
     }
     smartLoading = true;
+
+    let contextType = "auto";
+    if (activeTab === "logs") contextType = "logs";
+    if (activeTab === "metriche") contextType = "metrics";
+    if (activeTab === "tracce") contextType = "traces";
+
     try {
-      const response = await generateSmartQuery({ prompt });
-      smartPrompt = response.sql;
+      const response = await generateSmartQuery({
+        prompt,
+        contextType: contextType as "logs" | "metrics" | "traces" | "auto",
+      });
+      generatedSql = response.sql;
       smartRequest = response.request;
+      promptDirty = false;
+      sqlDirty = true; // Mark SQL as ready for execution
     } catch (err) {
-      smartError = err instanceof Error ? err.message : 'Impossibile generare la query.';
+      smartError =
+        err instanceof Error ? err.message : "Impossibile generare la query.";
     } finally {
       smartLoading = false;
     }
@@ -108,46 +241,66 @@
   function submit() {
     const limit = 100;
     const selectedService = $servicesState.selectedService;
+    const selectedLogLevel = $servicesState.selectedLogLevel;
     const serviceFilter =
-      selectedService && selectedService !== 'Tutti' ? { 'service.name': selectedService } : {};
-    if (searchMode === 'smart') {
-      if (!smartRequest) {
+      selectedService && selectedService !== "Tutti"
+        ? { "service.name": selectedService }
+        : {};
+
+    // Add manual filters
+    const manualFilters: Record<string, string> = { ...serviceFilter };
+    if (selectedLogLevel && selectedLogLevel !== "Tutti") {
+      manualFilters["severity"] = selectedLogLevel;
+    }
+    if (filterTraceId) manualFilters["trace_id"] = filterTraceId;
+
+    if (searchMode === "smart") {
+      if (!generatedSql) {
         return;
       }
-      dispatch('run', {
+      // Reset global filters to avoid conflict/confusion
+      selectService("Tutti");
+      selectLogLevel("Tutti");
+
+      dispatch("run", {
         request: {
           ...smartRequest,
-          filters: { ...(smartRequest.filters ?? {}), ...serviceFilter },
+          sql: generatedSql,
+          // Since we reset globals, we don't pass manualFilters derived from them
+          // Assuming smartRequest.filters contains what AI thinks is needed
+          filters: { ...(smartRequest?.filters ?? {}) },
           page: 1,
-          limit
+          limit,
         },
         autoRefreshSeconds: null,
-        autoRefreshRangeMinutes: null
+        autoRefreshRangeMinutes: null,
       });
+      sqlDirty = false;
       return;
     }
 
-    const rangeMinutes = searchMode === 'auto' ? autoRangeMinutes : null;
-    const refreshSeconds = searchMode === 'auto' ? autoRefreshSeconds ?? 10 : 0;
-    if (searchMode === 'auto') {
+    const rangeMinutes = searchMode === "auto" ? autoRangeMinutes : null;
+    const refreshSeconds =
+      searchMode === "auto" ? (autoRefreshSeconds ?? 10) : 0;
+    if (searchMode === "auto") {
       applyQuickRange(autoRangeMinutes);
     }
-    const zeroTime = '0001-01-01T00:00:00Z';
+    const zeroTime = "0001-01-01T00:00:00Z";
     const from = rangeMinutes === null ? zeroTime : toIso(fromInput);
     const to = rangeMinutes === null ? zeroTime : toIso(toInput);
     if (!from || !to) {
       return;
     }
-    dispatch('run', {
+    dispatch("run", {
       request: {
-        signals: ['logs', 'traces', 'metrics'],
+        signals: ["logs", "traces", "metrics"],
         timeRange: { from, to },
-        filters: serviceFilter,
+        filters: manualFilters,
         page: 1,
-        limit
+        limit,
       },
       autoRefreshSeconds: refreshSeconds || null,
-      autoRefreshRangeMinutes: rangeMinutes
+      autoRefreshRangeMinutes: rangeMinutes,
     });
   }
 </script>
@@ -158,29 +311,31 @@
     <div class="mode-buttons">
       <button
         type="button"
-        class:active={searchMode === 'auto'}
-        on:click={() => handleModeChange('auto')}
+        class:active={searchMode === "auto"}
+        on:click={() => handleModeChange("auto")}
       >
         Automatica
       </button>
       <button
         type="button"
-        class:active={searchMode === 'manual'}
-        on:click={() => handleModeChange('manual')}
+        class:active={searchMode === "manual"}
+        on:click={() => handleModeChange("manual")}
       >
         Manuale
       </button>
-      <button
-        type="button"
-        class:active={searchMode === 'smart'}
-        on:click={() => handleModeChange('smart')}
-      >
-        Smart
-      </button>
+      {#if smartEnabled}
+        <button
+          type="button"
+          class:active={searchMode === "smart"}
+          on:click={() => handleModeChange("smart")}
+        >
+          Smart
+        </button>
+      {/if}
     </div>
   </fieldset>
 
-  {#if searchMode === 'auto'}
+  {#if searchMode === "auto"}
     <fieldset class="quick-range">
       <legend>Intervallo automatico</legend>
       <div class="quick-range-buttons">
@@ -211,49 +366,107 @@
         </select>
       </div>
       <p class="helper">
-        Aggiornamento automatico ogni {formatAutoRefreshLabel(autoRefreshSeconds ?? 10)}.
+        Aggiornamento automatico ogni {formatAutoRefreshLabel(
+          autoRefreshSeconds ?? 10,
+        )}.
       </p>
     </fieldset>
-  {:else if searchMode === 'manual'}
-    <div class="manual-range">
-      <div>
+  {:else if searchMode === "manual"}
+    <div class="manual-filters">
+      <div class="filter-field">
         <label for="query-from">Da</label>
         <input id="query-from" type="datetime-local" bind:value={fromInput} />
       </div>
-      <div>
+      <div class="filter-field">
         <label for="query-to">A</label>
         <input id="query-to" type="datetime-local" bind:value={toInput} />
+      </div>
+      <div class="filter-field">
+        <label for="filter-traceid">Trace ID</label>
+        <input
+          id="filter-traceid"
+          type="text"
+          placeholder="abc123..."
+          bind:value={filterTraceId}
+        />
       </div>
     </div>
   {:else}
     <div class="smart-box">
-      <label for="smart-prompt">Prompt in linguaggio naturale</label>
-      <textarea
-        id="smart-prompt"
-        rows="4"
-        bind:value={smartPrompt}
-        placeholder="Es: Mostrami gli errori del servizio checkout negli ultimi 10 minuti"
-      ></textarea>
+      <div class="smart-field">
+        <label for="smart-prompt">Prompt in linguaggio naturale</label>
+        <textarea
+          id="smart-prompt"
+          rows="3"
+          bind:value={smartPrompt}
+          on:input={handlePromptChange}
+          on:keydown={handlePromptKeydown}
+          placeholder="Es: Mostrami gli errori del servizio checkout negli ultimi 10 minuti"
+        ></textarea>
+      </div>
+
       <div class="smart-actions">
-        <button type="button" on:click={generateSql} disabled={smartLoading}>
-          {smartLoading ? 'Genero...' : 'Genera'}
+        <button
+          type="button"
+          class="btn-generate"
+          on:click={generateSql}
+          disabled={smartLoading || !promptDirty}
+        >
+          <svg
+            width="16"
+            height="16"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+          >
+            <path
+              d="M12 3l1.5 4.5L18 9l-4.5 1.5L12 15l-1.5-4.5L6 9l4.5-1.5L12 3z"
+            />
+            <path d="M19 13l1 3 3 1-3 1-1 3-1-3-3-1 3-1 1-3z" />
+          </svg>
+          {smartLoading ? "Generazione..." : "Genera Query"}
         </button>
         {#if smartError}
           <span class="error">{smartError}</span>
         {/if}
       </div>
-      {#if smartRequest}
-        <p class="helper">Query SQL generata e pronta per l'esecuzione.</p>
+
+      {#if generatedSql}
+        <div class="smart-field">
+          <label for="smart-sql">Query SQL Generata</label>
+          <textarea
+            id="smart-sql"
+            rows="5"
+            bind:value={generatedSql}
+            on:input={handleSqlChange}
+            class="sql-editor"
+          ></textarea>
+          <p class="helper">Puoi modificare la query prima di eseguirla.</p>
+        </div>
       {/if}
     </div>
   {/if}
 
-  {#if searchMode !== 'auto'}
+  {#if searchMode !== "auto"}
     <button
+      class="btn-execute"
       on:click={submit}
-      disabled={searchMode !== 'smart' ? !fromInput || !toInput : !smartRequest}
+      disabled={searchMode !== "smart"
+        ? !fromInput || !toInput
+        : !generatedSql || !sqlDirty}
     >
-      Esegui query
+      <svg
+        width="16"
+        height="16"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+      >
+        <polygon points="5 3 19 12 5 21 5 3" />
+      </svg>
+      Esegui Query
     </button>
   {/if}
 </div>
@@ -309,7 +522,7 @@
 
   .quick-range-buttons {
     display: flex;
-    flex-wrap: wrap;
+    flex-direction: column;
     gap: 8px;
   }
 
@@ -321,7 +534,7 @@
     display: flex;
     align-items: center;
     gap: 12px;
-    margin-top: 12px;
+    margin-top: 24px;
   }
 
   .auto-refresh label {
@@ -331,6 +544,18 @@
   .auto-refresh select {
     width: auto;
     min-width: 120px;
+  }
+
+  .manual-filters {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+
+  .filter-field {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
   }
 
   .manual-range {
@@ -413,13 +638,79 @@
   .smart-box {
     display: flex;
     flex-direction: column;
-    gap: 10px;
+    gap: 16px;
+  }
+
+  .smart-field {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .sql-editor {
+    font-family: "Fira Code", "Consolas", "Monaco", monospace;
+    font-size: 12px;
+    background: #1e293b;
+    color: #e2e8f0;
+    border: 1px solid #334155;
+    border-radius: 10px;
+  }
+
+  .sql-editor:focus {
+    border-color: #6366f1;
+    box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.2);
+  }
+
+  .smart-context-picker {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .context-options {
+    display: flex;
+    gap: 16px;
+  }
+
+  .radio-label {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 13px;
+    cursor: pointer;
+    color: #475569;
   }
 
   .smart-actions {
     display: flex;
     align-items: center;
     gap: 12px;
+  }
+
+  .btn-generate {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 16px;
+    font-size: 13px;
+    font-weight: 600;
+    border: none;
+    border-radius: 8px;
+    background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+    color: white;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    box-shadow: 0 2px 8px rgba(16, 185, 129, 0.3);
+  }
+
+  .btn-generate:hover:not([disabled]) {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(16, 185, 129, 0.4);
+  }
+
+  .btn-generate[disabled] {
+    opacity: 0.5;
+    cursor: not-allowed;
   }
 
   .smart-actions .error {
@@ -429,9 +720,38 @@
   }
 
   .helper {
-    margin: 0;
+    margin-top: 8px;
     font-size: 12px;
     color: #64748b;
+  }
+
+  .btn-execute {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    margin-top: 8px;
+    padding: 14px 20px;
+    font-size: 14px;
+    font-weight: 600;
+    border: none;
+    border-radius: 10px;
+    background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+    color: white;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3);
+  }
+
+  .btn-execute:hover:not([disabled]) {
+    transform: translateY(-1px);
+    box-shadow: 0 6px 16px rgba(99, 102, 241, 0.4);
+  }
+
+  .btn-execute[disabled] {
+    opacity: 0.5;
+    cursor: not-allowed;
+    transform: none;
   }
 
   .query-form > button {

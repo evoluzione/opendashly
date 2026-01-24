@@ -43,7 +43,7 @@ func serviceFilter(serviceName string) string {
 func BuildLatencyDistributionQuery(from, to time.Time, serviceName string) string {
 	return fmt.Sprintf(`
 		SELECT
-			multiIf(
+			CAST(multiIf(
 				Duration/1000000 <= 100, 0,
 				Duration/1000000 <= 250, 100,
 				Duration/1000000 <= 500, 250,
@@ -52,8 +52,8 @@ func BuildLatencyDistributionQuery(from, to time.Time, serviceName string) strin
 				Duration/1000000 <= 5000, 2000,
 				Duration/1000000 <= 10000, 5000,
 				10000
-			) AS bucket_start,
-			multiIf(
+			) AS Int32) AS bucket_start,
+			CAST(multiIf(
 				Duration/1000000 <= 100, 100,
 				Duration/1000000 <= 250, 250,
 				Duration/1000000 <= 500, 500,
@@ -62,7 +62,7 @@ func BuildLatencyDistributionQuery(from, to time.Time, serviceName string) strin
 				Duration/1000000 <= 5000, 5000,
 				Duration/1000000 <= 10000, 10000,
 				-1
-			) AS bucket_end,
+			) AS Int32) AS bucket_end,
 			count() AS cnt
 		FROM telemetry.otel_traces
 		WHERE Timestamp >= '%s' AND Timestamp <= '%s'
@@ -107,7 +107,7 @@ func BuildErrorHotspotsQuery(from, to time.Time, serviceName string, limit int) 
 		WHERE Timestamp >= '%s' AND Timestamp <= '%s'
 			%s
 		GROUP BY endpoint, service
-		HAVING total_count >= 5
+		HAVING total_count >= 5 AND error_count > 0
 		ORDER BY error_rate DESC, error_count DESC
 		LIMIT %d
 	`, formatTime(from), formatTime(to), serviceFilter(serviceName), limit)

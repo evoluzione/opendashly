@@ -28,7 +28,7 @@
 
   function statusLabel() {
     if (!statusSummary && statusError) return 'Disattivo';
-    if (!statusSummary) return 'Stato in aggiornamento';
+    if (!statusSummary) return 'Inattivo';
     if (!statusSummary.ok) return 'Disattivo';
     return hasRecentData() ? 'Attivo' : 'Inattivo';
   }
@@ -134,6 +134,14 @@
             <polyline points="12 6 12 12 16 14"/>
           </svg>
           <span>Conservazione e pulizia</span>
+        </a>
+        <a href="/settings/ai" class="nav-link">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M12 3l1.5 4.5L18 9l-4.5 1.5L12 15l-1.5-4.5L6 9l4.5-1.5L12 3z"/>
+            <path d="M19 13l1 3 3 1-3 1-1 3-1-3-3-1 3-1 1-3z"/>
+            <path d="M5 17l1 2 2 1-2 1-1 2-1-2-2-1 2-1 1-2z"/>
+          </svg>
+          <span>Impostazioni AI</span>
         </a>
       </nav>
     </div>

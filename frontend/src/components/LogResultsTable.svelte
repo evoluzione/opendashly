@@ -1,7 +1,7 @@
 <script lang="ts">
-  import { createEventDispatcher, onDestroy } from 'svelte';
-  import CorrelationPanel from './CorrelationPanel.svelte';
-  import TraceSpanTimeline from './TraceSpanTimeline.svelte';
+  import { createEventDispatcher, onDestroy } from "svelte";
+  import CorrelationPanel from "./CorrelationPanel.svelte";
+  import TraceSpanTimeline from "./TraceSpanTimeline.svelte";
 
   export let logs: any[] = [];
   export let pagination: { page: number; totalPages: number } | null = null;
@@ -14,39 +14,43 @@
   let highlightTimers = new Map<string, ReturnType<typeof setTimeout>>();
   let initialized = false;
 
-  const severityStyles: Record<string, { label: string; color: string }> = {
-    fatal: { label: 'Fatale', color: '#b91c1c' },
-    error: { label: 'Errore', color: '#b91c1c' },
-    warn: { label: 'Avviso', color: '#b45309' },
-    warning: { label: 'Avviso', color: '#b45309' },
-    info: { label: 'Info', color: '#1d4ed8' },
-    debug: { label: 'Debug', color: '#475569' }
+  const severityStyles: Record<
+    string,
+    { label: string; color: string; bg?: string }
+  > = {
+    fatal: { label: "FATAL", color: "#ef4444", bg: "#fee2e2" },
+    error: { label: "ERROR", color: "#ef4444", bg: "#fee2e2" },
+    warn: { label: "WARN", color: "#f59e0b", bg: "#fef3c7" },
+    warning: { label: "WARN", color: "#f59e0b", bg: "#fef3c7" },
+    info: { label: "INFO", color: "#3b82f6", bg: "#dbeafe" },
+    debug: { label: "DEBUG", color: "#a855f7", bg: "#f3e8ff" },
+    trace: { label: "TRACE", color: "#64748b", bg: "#f1f5f9" },
   };
 
   function changePage(nextPage: number) {
-    dispatch('pageChange', { page: nextPage });
+    dispatch("pageChange", { page: nextPage });
   }
 
   function formatTimestamp(value: string | number | Date) {
-    if (!value) return '-';
+    if (!value) return "-";
     const date = value instanceof Date ? value : new Date(value);
-    return new Intl.DateTimeFormat('it-IT', {
-      dateStyle: 'short',
-      timeStyle: 'medium'
+    return new Intl.DateTimeFormat("it-IT", {
+      dateStyle: "short",
+      timeStyle: "medium",
     }).format(date);
   }
 
   function shortId(id?: string) {
-    if (!id) return '';
+    if (!id) return "";
     return id.length > 12 ? `${id.slice(0, 8)}...${id.slice(-4)}` : id;
   }
 
   function parseStructured(value: any) {
     if (!value) return null;
-    if (typeof value === 'object') return value;
-    if (typeof value !== 'string') return null;
+    if (typeof value === "object") return value;
+    if (typeof value !== "string") return null;
     const trimmed = value.trim();
-    if (!trimmed.startsWith('{') && !trimmed.startsWith('[')) return null;
+    if (!trimmed.startsWith("{") && !trimmed.startsWith("[")) return null;
     try {
       return JSON.parse(trimmed);
     } catch {
@@ -55,10 +59,13 @@
   }
 
   function logKey(entry: any) {
-    const timestamp = entry?.timestamp ?? '';
-    const traceId = entry?.traceId ?? '';
-    const spanId = entry?.spanId ?? '';
-    const body = typeof entry?.body === 'string' ? entry.body : JSON.stringify(entry?.body ?? '');
+    const timestamp = entry?.timestamp ?? "";
+    const traceId = entry?.traceId ?? "";
+    const spanId = entry?.spanId ?? "";
+    const body =
+      typeof entry?.body === "string"
+        ? entry.body
+        : JSON.stringify(entry?.body ?? "");
     return `${timestamp}|${traceId}|${spanId}|${body}`;
   }
 
@@ -79,33 +86,50 @@
   }
 
   function extractMessage(body: any, structured: any) {
-    if (structured && typeof structured === 'object') {
-      const candidate = structured.message || structured.msg || structured.event || structured.body;
-      if (candidate && typeof candidate === 'string') return candidate;
+    if (structured && typeof structured === "object") {
+      const candidate =
+        structured.message ||
+        structured.msg ||
+        structured.event ||
+        structured.body;
+      if (candidate && typeof candidate === "string") return candidate;
     }
-    if (typeof body === 'string') return body;
-    if (body && typeof body === 'object') return JSON.stringify(body);
-    return '-';
+    if (typeof body === "string") return body;
+    if (body && typeof body === "object") return JSON.stringify(body);
+    return "-";
   }
 
   function formatValue(value: any) {
-    if (value === null || value === undefined) return '';
-    if (typeof value === 'string') return value;
-    if (typeof value === 'number' || typeof value === 'boolean') return String(value);
+    if (value === null || value === undefined) return "";
+    if (typeof value === "string") return value;
+    if (typeof value === "number" || typeof value === "boolean")
+      return String(value);
     return JSON.stringify(value);
   }
 
   function buildTags(log: any) {
-    const merged = { ...(log.resourceAttributes ?? {}), ...(log.logAttributes ?? {}) };
-    const preferredKeys = ['service.name', 'service.version', 'host.name', 'deployment.environment'];
+    const merged = {
+      ...(log.resourceAttributes ?? {}),
+      ...(log.logAttributes ?? {}),
+    };
+    const preferredKeys = [
+      "service.name",
+      "service.version",
+      "host.name",
+      "deployment.environment",
+    ];
     const orderedKeys = preferredKeys.filter((key) => key in merged);
-    const extraKeys = Object.keys(merged).filter((key) => !orderedKeys.includes(key));
+    const extraKeys = Object.keys(merged).filter(
+      (key) => !orderedKeys.includes(key),
+    );
     const keys = [...orderedKeys, ...extraKeys].slice(0, 6);
-    return keys.map((key) => ({ key, value: formatValue(merged[key]) })).filter((tag) => tag.value);
+    return keys
+      .map((key) => ({ key, value: formatValue(merged[key]) }))
+      .filter((tag) => tag.value);
   }
 
   function severityFor(log: any) {
-    const key = log?.severity ? String(log.severity).toLowerCase() : 'info';
+    const key = log?.severity ? String(log.severity).toLowerCase() : "info";
     return severityStyles[key] ?? severityStyles.info;
   }
 
@@ -123,7 +147,7 @@
   }
 
   function handleBackdropKeydown(event: KeyboardEvent, onClose: () => void) {
-    if (event.key === 'Enter' || event.key === ' ' || event.key === 'Escape') {
+    if (event.key === "Enter" || event.key === " " || event.key === "Escape") {
       event.preventDefault();
       onClose();
     }
@@ -166,8 +190,11 @@
           on:click={() => (selectedLog = log)}
         >
           <span class="timestamp">{formatTimestamp(log.timestamp)}</span>
-          <span class="severity" style={`color:${severity.color}`}>{severity.label}</span>
-          <span class="message">{extractMessage(log.body, structuredBody)}</span>
+          <span class="severity" style={`color:${severity.color}`}
+            >{severity.label}</span
+          >
+          <span class="message">{extractMessage(log.body, structuredBody)}</span
+          >
           {#if log.traceId}
             <span class="trace">Traccia {shortId(log.traceId)}</span>
           {/if}
@@ -190,7 +217,9 @@
     <button
       type="button"
       on:click={() => changePage(pagination.page + 1)}
-      disabled={pagination.totalPages > 0 ? pagination.page >= pagination.totalPages : logs.length === 0}
+      disabled={pagination.totalPages > 0
+        ? pagination.page >= pagination.totalPages
+        : logs.length === 0}
     >
       Successiva
     </button>
@@ -214,10 +243,12 @@
           <p class="kicker">Dettagli log</p>
           <h3>{formatTimestamp(selectedLog.timestamp)}</h3>
         </div>
-        <button type="button" class="close" on:click={closeLogModal}>Chiudi</button>
+        <button type="button" class="close" on:click={closeLogModal}
+          >Chiudi</button
+        >
       </header>
       <div class="meta">
-        <span class="pill">Severita: {selectedLog.severity || 'info'}</span>
+        <span class="pill">Severita: {selectedLog.severity || "info"}</span>
         {#if selectedLog.traceId}
           <button
             type="button"
@@ -238,7 +269,9 @@
       {#if tags.length > 0}
         <div class="tags">
           {#each tags as tag}
-            <span class="tag"><span class="tag-key">{tag.key}</span>{tag.value}</span>
+            <span class="tag"
+              ><span class="tag-key">{tag.key}</span>{tag.value}</span
+            >
           {/each}
         </div>
       {/if}
@@ -275,13 +308,20 @@
     on:click={closeTraceModal}
     on:keydown={(event) => handleBackdropKeydown(event, closeTraceModal)}
   >
-    <div class="modal trace-modal" role="dialog" aria-modal="true" on:click|stopPropagation>
+    <div
+      class="modal trace-modal"
+      role="dialog"
+      aria-modal="true"
+      on:click|stopPropagation
+    >
       <header>
         <div>
           <p class="kicker">Dettagli traccia</p>
           <h3>{selectedTraceId}</h3>
         </div>
-        <button type="button" class="close" on:click={closeTraceModal}>Chiudi</button>
+        <button type="button" class="close" on:click={closeTraceModal}
+          >Chiudi</button
+        >
       </header>
       <TraceSpanTimeline traceId={selectedTraceId} />
       <CorrelationPanel traceId={selectedTraceId} />
@@ -318,7 +358,9 @@
     background: white;
     cursor: pointer;
     text-align: left;
-    transition: border 0.15s ease, box-shadow 0.15s ease;
+    transition:
+      border 0.15s ease,
+      box-shadow 0.15s ease;
   }
 
   .log-row:hover {
@@ -356,7 +398,12 @@
     font-size: 11px;
     font-weight: 700;
     text-transform: uppercase;
-    letter-spacing: 0.08em;
+    letter-spacing: 0.05em;
+    padding: 4px 8px;
+    border-radius: 6px;
+    display: inline-block;
+    text-align: center;
+    width: fit-content;
   }
 
   .message {

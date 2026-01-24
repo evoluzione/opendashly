@@ -15,6 +15,7 @@ type QueryState = {
 type ServiceState = {
   services: string[];
   selectedService: string;
+  selectedLogLevel: string;
   loading: boolean;
   error: string | null;
 };
@@ -33,11 +34,16 @@ export const queryState = writable<QueryState>(initial);
 const servicesInitial: ServiceState = {
   services: [],
   selectedService: 'Tutti',
+  selectedLogLevel: 'Tutti',
   loading: false,
   error: null
 };
 
 export const servicesState = writable<ServiceState>(servicesInitial);
+
+export function selectLogLevel(value: string) {
+  servicesState.update((state) => ({ ...state, selectedLogLevel: value }));
+}
 
 let refreshTimer: ReturnType<typeof setInterval> | null = null;
 

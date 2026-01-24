@@ -1,5 +1,6 @@
 <script lang="ts">
   import type { ThroughputSummary } from '../../services/dashboard';
+  import InfoTooltip from '../common/InfoTooltip.svelte';
 
   export let data: ThroughputSummary | null = null;
 
@@ -16,7 +17,10 @@
 
 <div class="gauge-card">
   <div class="gauge-header">
-    <span class="gauge-title">Throughput</span>
+    <span class="gauge-title">
+      Throughput
+      <InfoTooltip text="Numero di richieste elaborate al minuto. Indica il carico di lavoro del sistema e la sua capacità di gestire le richieste." position="bottom" />
+    </span>
   </div>
 
   <div class="main-stat">

@@ -8,9 +8,10 @@ import (
 	"sort"
 	"time"
 
-	"github.com/ClickHouse/clickhouse-go/v2/lib/driver"
 	"opendashly/backend/internal/query/builders"
 	"opendashly/backend/internal/storage"
+
+	"github.com/ClickHouse/clickhouse-go/v2/lib/driver"
 )
 
 // Service handles query execution.
@@ -40,6 +41,7 @@ func (s *Service) Run(ctx context.Context, req QueryRequest) (*QueryRunResult, e
 	logsQuery := builders.BuildLogsQuery(req.Filters, req.TimeRange.From, req.TimeRange.To, limit, offset)
 	tracesQuery := builders.BuildTracesQuery(req.Filters, req.TimeRange.From, req.TimeRange.To, limit, offset)
 	metricsQuery := builders.BuildMetricsQuery(req.Filters, req.TimeRange.From, req.TimeRange.To, limit, offset)
+	log.Printf("DEBUG: executing logsQuery: %s", logsQuery)
 	log.Printf("query.service.run built queries: logs=%q traces=%q metrics=%q", logsQuery, tracesQuery, metricsQuery)
 
 	var logs []LogEntry
@@ -150,12 +152,12 @@ type LogEntry struct {
 }
 
 type TraceEntry struct {
-	TraceID   string    `json:"traceId"`
-	Name      string    `json:"name"`
-	Service   string    `json:"service,omitempty"`
-	SpanCount uint64    `json:"spanCount,omitempty"`
-	LastSeen  time.Time `json:"lastSeen,omitempty"`
-	DurationMs int64    `json:"durationMs,omitempty"`
+	TraceID    string    `json:"traceId"`
+	Name       string    `json:"name"`
+	Service    string    `json:"service,omitempty"`
+	SpanCount  uint64    `json:"spanCount,omitempty"`
+	LastSeen   time.Time `json:"lastSeen,omitempty"`
+	DurationMs int64     `json:"durationMs,omitempty"`
 }
 
 type MetricPoint struct {

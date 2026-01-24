@@ -1,4 +1,6 @@
 <script lang="ts">
+  import InfoTooltip from '../common/InfoTooltip.svelte';
+
   export let errorRate: number = 0;
   export let totalErrors: number = 0;
   export let totalRequests: number = 0;
@@ -26,7 +28,10 @@
 
 <div class="gauge-card">
   <div class="gauge-header">
-    <span class="gauge-title">Error Rate</span>
+    <span class="gauge-title">
+      Error Rate
+      <InfoTooltip text="Percentuale di richieste che hanno generato errori. Obiettivo ideale: < 1%. Valori superiori al 5% richiedono attenzione." position="bottom" />
+    </span>
   </div>
 
   <div class="gauge-container">

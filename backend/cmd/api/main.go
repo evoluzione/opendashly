@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"time"
 
+	"opendashly/backend/internal/ai"
 	"opendashly/backend/internal/api"
 	"opendashly/backend/internal/api/handlers"
 	"opendashly/backend/internal/auth"
@@ -52,6 +53,9 @@ func main() {
 		Service: cleanupService,
 	}
 
+	aiRepo := &ai.Repo{Conn: client.Conn}
+	aiService := &ai.Service{Repo: aiRepo}
+
 	scheduler := retention.NewScheduler(cleanupService, cfg.CleanupIntervalMinutes)
 	go scheduler.Start(context.Background())
 
@@ -65,21 +69,23 @@ func main() {
 	usersHandler := &handlers.UsersHandler{Repo: authRepo}
 	servicesHandler := &handlers.ServicesHandler{Service: queryService}
 	authMiddleware := auth.Middleware(auth.MiddlewareOptions{
-		Mode:           cfg.AuthMode,
-		CookieName:     cfg.AuthCookieName,
-		JWTSecret:      []byte(cfg.AuthSecret),
-		Repo:           authRepo,
-		TenantID:       "default",
-		AllowlistPaths: []string{"/healthz", "/api/auth/login"},
+		Mode:            cfg.AuthMode,
+		CookieName:      cfg.AuthCookieName,
+		JWTSecret:       []byte(cfg.AuthSecret),
+		Repo:            authRepo,
+		TenantID:        "default",
+		AllowlistPaths:  []string{"/healthz", "/api/auth/login"},
 		SessionDuration: 24 * time.Hour,
 	})
 
 	handler := api.NewRouter(api.RouterConfig{
+		Config:             cfg,
 		QueryService:       queryService,
 		RelatedService:     relatedService,
 		TraceSpansService:  traceSpansService,
 		StatusService:      statusService,
 		DashboardService:   dashboardService,
+		AIService:          aiService,
 		SavedRepo:          savedRepo,
 		AuthHandler:        authHandler,
 		UsersHandler:       usersHandler,

@@ -5,7 +5,7 @@ import (
 	"time"
 )
 
-func buildOtelClauses(timeColumn string, filters map[string]string, from, to time.Time, serviceColumn, traceColumn string, attributeColumns []string) []string {
+func buildOtelClauses(timeColumn string, filters map[string]string, from, to time.Time, serviceColumn, traceColumn, severityColumn string, attributeColumns []string) []string {
 	clauses := []string{}
 	if !from.IsZero() {
 		clauses = append(clauses, timeColumn+" >= "+formatDateTime64(from))
@@ -24,6 +24,10 @@ func buildOtelClauses(timeColumn string, filters map[string]string, from, to tim
 		case "trace_id":
 			if traceColumn != "" {
 				clauses = append(clauses, traceColumn+" = '"+escapedValue+"'")
+			}
+		case "severity":
+			if severityColumn != "" && v != "Tutti" {
+				clauses = append(clauses, "upper("+severityColumn+") = '"+strings.ToUpper(escapedValue)+"'")
 			}
 		default:
 			if len(attributeColumns) == 0 {

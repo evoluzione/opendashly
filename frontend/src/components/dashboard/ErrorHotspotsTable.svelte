@@ -1,5 +1,6 @@
 <script lang="ts">
   import type { ErrorHotspot } from '../../services/dashboard';
+  import InfoTooltip from '../common/InfoTooltip.svelte';
 
   export let data: ErrorHotspot[] = [];
 
@@ -13,7 +14,10 @@
 
 <div class="table-card">
   <div class="table-header">
-    <span class="table-title">Hotspot Errori</span>
+    <span class="table-title">
+      Hotspot Errori
+      <InfoTooltip text="Endpoint con il più alto tasso di errore. Mostra quali API generano più problemi e richiedono attenzione prioritaria." />
+    </span>
     <span class="table-subtitle">Top 20 per error rate</span>
   </div>
 
@@ -34,8 +38,8 @@
         <tbody>
           {#each data as row}
             <tr>
-              <td class="col-endpoint" title={row.endpoint}>
-                <span class="endpoint-name">{row.endpoint}</span>
+              <td class="col-endpoint">
+                <span class="endpoint-name" title={row.endpoint}>{row.endpoint}</span>
               </td>
               <td class="col-service">
                 <span class="service-badge">{row.service}</span>
@@ -70,6 +74,7 @@
     padding: 20px;
     box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05), 0 4px 12px rgba(0, 0, 0, 0.03);
     border: 1px solid rgba(15, 23, 42, 0.06);
+    min-width: 0;
   }
 
   .table-header {
@@ -105,6 +110,7 @@
     width: 100%;
     border-collapse: collapse;
     font-size: 13px;
+    table-layout: fixed;
   }
 
   th {
@@ -134,7 +140,8 @@
   }
 
   .col-endpoint {
-    max-width: 300px;
+    width: 40%;
+    max-width: 0;
   }
 
   .endpoint-name {
@@ -162,9 +169,10 @@
 
   .col-count {
     text-align: right;
-    min-width: 60px;
+    width: 12%;
     font-variant-numeric: tabular-nums;
     color: #64748b;
+    font-size: 11px;
   }
 
   .col-count.error-count {
@@ -173,7 +181,7 @@
   }
 
   .col-rate {
-    min-width: 140px;
+    width: 20%;
   }
 
   .rate-cell {
@@ -199,8 +207,9 @@
   .rate-value {
     font-weight: 600;
     font-variant-numeric: tabular-nums;
-    min-width: 50px;
+    min-width: 40px;
     text-align: right;
+    font-size: 11px;
   }
 
   th.col-count,

@@ -8,8 +8,9 @@
 [![ClickHouse](https://img.shields.io/badge/ClickHouse-24-FFCC01?style=flat&logo=clickhouse)](https://clickhouse.com)
 [![Go Version](https://img.shields.io/badge/Go-1.22+-00ADD8?style=flat&logo=go)](https://golang.org)
 [![SvelteKit](https://img.shields.io/badge/SvelteKit-4.2-FF3E00?style=flat&logo=svelte)](https://kit.svelte.dev)
+[![OpenAI](https://img.shields.io/badge/OpenAI-GPT--3.5/4-412991?style=flat&logo=openai)](https://openai.com)
 
- [Quick Start](#-quick-start) • [Architecture](#architecture) • [Production Deployment](#-docker-deployment) • [Monitoring](#-monitoring)
+ [Quick Start](#-quick-start) • [AI Features](#ai) • [Architecture](#architecture) • [Production Deployment](#-docker-deployment) • [Monitoring](#-monitoring)
 
 </div>
 
@@ -22,6 +23,7 @@
 ### Why Opendashly?
 
 - **🚀 High Performance**: ClickHouse-powered storage handles millions of events per second
+- **🤖 AI Smart Queries**: Natural language to SQL query generation with OpenAI
 - **🔐 Enterprise Auth**: JWT-based authentication with role-based access control
 - **📈 Real-time Visualization**: Interactive charts and timelines with sub-second queries
 - **🎛️ Data Retention**: Configurable retention policies with automatic cleanup
@@ -91,6 +93,38 @@ curl -X POST http://localhost:4318/v1/logs \
 ```
 
 Or configure your application to send telemetry to `http://localhost:4318` (HTTP) or `grpc://localhost:4317` (gRPC).
+
+---
+
+<a id="ai"></a>
+## 🤖 AI-Powered Query Generation
+
+Opendashly integrates with **OpenAI** to enable natural language query generation for exploring your observability data.
+
+### Features
+
+- **Natural Language to SQL**: Describe what you want in plain language (Italian or English), and the AI generates optimized ClickHouse SQL queries
+- **Schema-Aware**: The AI understands your telemetry schema (logs, metrics, traces) and generates appropriate queries
+- **Context Detection**: Automatically detects whether you're asking about logs, metrics, or traces
+- **Secure Storage**: API keys are encrypted and stored per-tenant
+
+### Configuration
+
+1. **Via Settings UI**: Navigate to Settings → AI Configuration in the dashboard
+2. **Enable AI**: Toggle the AI feature on
+3. **Enter API Key**: Provide your OpenAI API key
+4. **Select Model**: Choose between `gpt-3.5-turbo` (default, faster) or `gpt-4` (more accurate)
+
+### Usage Examples
+
+In the query form, type natural language prompts like:
+
+| Prompt | Generated Query |
+|--------|-----------------|
+| `"mostrami i log degli ultimi 5 minuti"` | Logs from last 5 minutes |
+| `"errori del servizio auth-service nell'ultima ora"` | Error logs for auth-service, last hour |
+| `"tracce più lente degli ultimi 15 minuti"` | Slowest traces from last 15 minutes |
+| `"metriche CPU per il servizio api"` | CPU metrics for api service |
 
 ---
 

@@ -1,5 +1,6 @@
 <script lang="ts">
   import type { ApdexScore } from '../../services/dashboard';
+  import InfoTooltip from '../common/InfoTooltip.svelte';
 
   export let data: ApdexScore | null = null;
 
@@ -29,7 +30,10 @@
 
 <div class="gauge-card">
   <div class="gauge-header">
-    <span class="gauge-title">APDEX</span>
+    <span class="gauge-title">
+      APDEX
+      <InfoTooltip text="Application Performance Index: misura la soddisfazione degli utenti. Valori tra 0 e 1, dove 1 = tutti soddisfatti. Soglia T: tempo di risposta accettabile." position="bottom" align="left" />
+    </span>
     <span class="gauge-subtitle">T={data?.threshold ?? 2000}ms</span>
   </div>
 

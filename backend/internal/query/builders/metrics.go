@@ -10,7 +10,7 @@ import (
 func BuildMetricsQuery(filters map[string]string, from, to time.Time, limit, offset int) string {
 	sumBase := "SELECT MetricName AS name, MetricUnit AS unit, TimeUnix AS timestamp, Value AS value FROM telemetry.otel_metrics_sum"
 	gaugeBase := "SELECT MetricName AS name, MetricUnit AS unit, TimeUnix AS timestamp, Value AS value FROM telemetry.otel_metrics_gauge"
-	clauses := buildOtelClauses("TimeUnix", filters, from, to, "ServiceName", "", []string{"ResourceAttributes", "Attributes"})
+	clauses := buildOtelClauses("TimeUnix", filters, from, to, "ServiceName", "", "", []string{"ResourceAttributes", "Attributes"})
 	sumQuery := sumBase
 	gaugeQuery := gaugeBase
 	if len(clauses) > 0 {

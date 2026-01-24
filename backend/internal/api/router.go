@@ -3,26 +3,31 @@ package api
 import (
 	"net/http"
 
-	"github.com/go-chi/chi/v5"
-	"github.com/go-chi/chi/v5/middleware"
+	"opendashly/backend/internal/ai"
 	"opendashly/backend/internal/api/handlers"
+	"opendashly/backend/internal/config"
 	"opendashly/backend/internal/metrics"
 	"opendashly/backend/internal/query"
 	"opendashly/backend/internal/status"
+
+	"github.com/go-chi/chi/v5"
+	"github.com/go-chi/chi/v5/middleware"
 )
 
 type RouterConfig struct {
-	QueryService      *query.Service
-	RelatedService    *query.RelatedService
-	TraceSpansService *query.TraceSpansService
-	SavedRepo         *query.SavedQueryRepo
-	StatusService     *status.Service
-	DashboardService  *metrics.Service
-	AuthHandler       *handlers.AuthHandler
-	UsersHandler      *handlers.UsersHandler
-	ServicesHandler   *handlers.ServicesHandler
-	RetentionHandler  *handlers.RetentionHandler
-	AuthMiddleware    func(http.Handler) http.Handler
+	Config             *config.Config
+	QueryService       *query.Service
+	RelatedService     *query.RelatedService
+	TraceSpansService  *query.TraceSpansService
+	SavedRepo          *query.SavedQueryRepo
+	StatusService      *status.Service
+	DashboardService   *metrics.Service
+	AIService          *ai.Service
+	AuthHandler        *handlers.AuthHandler
+	UsersHandler       *handlers.UsersHandler
+	ServicesHandler    *handlers.ServicesHandler
+	RetentionHandler   *handlers.RetentionHandler
+	AuthMiddleware     func(http.Handler) http.Handler
 	CORSAllowedOrigins []string
 }
 
@@ -46,8 +51,9 @@ func NewRouter(cfg RouterConfig) http.Handler {
 	traceSpans := &handlers.TraceSpansHandler{Service: cfg.TraceSpansService}
 	statusHandler := &handlers.StatusHandler{Service: cfg.StatusService}
 	savedHandler := &handlers.SavedQueriesHandler{Repo: cfg.SavedRepo, Runner: cfg.QueryService}
-	smartQuery := &handlers.SmartQueryHandler{}
+	smartQuery := &handlers.SmartQueryHandler{AIService: cfg.AIService}
 	dashboardHandler := &handlers.DashboardHandler{Service: cfg.DashboardService}
+	aiHandler := &handlers.AISettingsHandler{Service: cfg.AIService}
 
 	r.Post("/api/query/run", queryHandler.ServeHTTP)
 	r.Post("/api/query/smart", smartQuery.ServeHTTP)
@@ -60,6 +66,10 @@ func NewRouter(cfg RouterConfig) http.Handler {
 	r.Get("/api/traces/{traceId}/spans", traceSpans.ServeHTTP)
 	r.Get("/api/status/summary", statusHandler.ServeHTTP)
 	r.Post("/api/dashboard/metrics", dashboardHandler.ServeHTTP)
+
+	// Admin Settings
+	r.Get("/api/admin/ai/settings", aiHandler.Get)
+	r.Put("/api/admin/ai/settings", aiHandler.Update)
 
 	if cfg.AuthHandler != nil {
 		r.Post("/api/auth/login", cfg.AuthHandler.Login)

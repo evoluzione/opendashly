@@ -1,6 +1,6 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
-  import { fetchTraceSpans } from '../services/traces';
+  import { onMount } from "svelte";
+  import { fetchTraceSpans } from "../services/traces";
 
   export let traceId: string;
 
@@ -14,7 +14,8 @@
     try {
       spans = await fetchTraceSpans(traceId);
     } catch (err) {
-      error = err instanceof Error ? err.message : 'Impossibile caricare gli span';
+      error =
+        err instanceof Error ? err.message : "Impossibile caricare gli span";
     } finally {
       loading = false;
     }
@@ -26,14 +27,14 @@
 
   const maxDisplayMs = 60000;
   const sourcePalette = [
-    '#0ea5e9',
-    '#22c55e',
-    '#f97316',
-    '#ef4444',
-    '#8b5cf6',
-    '#14b8a6',
-    '#eab308',
-    '#6366f1'
+    "#0ea5e9",
+    "#22c55e",
+    "#f97316",
+    "#ef4444",
+    "#8b5cf6",
+    "#14b8a6",
+    "#eab308",
+    "#6366f1",
   ];
 
   function durationMs(span: any) {
@@ -41,35 +42,44 @@
   }
 
   function formatDuration(ms: number) {
-    if (ms > maxDisplayMs) return '> 60 s';
+    if (ms > maxDisplayMs) return "> 60 s";
     if (ms < 1000) return `${ms} ms`;
     return `${(ms / 1000).toFixed(2)} s`;
   }
 
   function offsetMs(span: any) {
-    return Math.max(0, Math.round((toMs(span.startTime) - startMs)));
+    return Math.max(0, Math.round(toMs(span.startTime) - startMs));
   }
 
   $: rangeSpans =
-    spans.filter((span) => durationMs(span) > 0 && durationMs(span) <= maxDisplayMs).length > 0
-      ? spans.filter((span) => durationMs(span) > 0 && durationMs(span) <= maxDisplayMs)
+    spans.filter(
+      (span) => durationMs(span) > 0 && durationMs(span) <= maxDisplayMs,
+    ).length > 0
+      ? spans.filter(
+          (span) => durationMs(span) > 0 && durationMs(span) <= maxDisplayMs,
+        )
       : spans;
 
-  $: startMs = rangeSpans.length ? Math.min(...rangeSpans.map((span) => toMs(span.startTime))) : 0;
-  $: endMs = rangeSpans.length ? Math.max(...rangeSpans.map((span) => toMs(span.endTime))) : 0;
+  $: startMs = rangeSpans.length
+    ? Math.min(...rangeSpans.map((span) => toMs(span.startTime)))
+    : 0;
+  $: endMs = rangeSpans.length
+    ? Math.max(...rangeSpans.map((span) => toMs(span.endTime)))
+    : 0;
   $: rangeMs = Math.max(1, endMs - startMs);
 
   function barStyle(span: any) {
     const color = colorForSource(spanSource(span));
     const left = ((toMs(span.startTime) - startMs) / rangeMs) * 100;
-    const rawWidth = (Math.max(0, toMs(span.endTime) - toMs(span.startTime)) / rangeMs) * 100;
+    const rawWidth =
+      (Math.max(0, toMs(span.endTime) - toMs(span.startTime)) / rangeMs) * 100;
     const cappedWidth = Math.min(rawWidth, (maxDisplayMs / rangeMs) * 100);
     const width = cappedWidth > 0 ? cappedWidth : rawWidth;
     return `left:${left}%;width:${Math.max(0.5, width)}%;background:${color}`;
   }
 
   function spanSource(span: any) {
-    return span?.source || span?.service || 'origine sconosciuta';
+    return span?.source || span?.service || "origine sconosciuta";
   }
 
   function colorForSource(value: string) {
@@ -82,31 +92,34 @@
   }
 
   function shortId(id?: string) {
-    if (!id) return '-';
+    if (!id) return "-";
     return id.length > 10 ? `${id.slice(0, 6)}...${id.slice(-4)}` : id;
   }
 
   function spanKindInfo(span: any) {
     const raw = span?.spanKind ?? span?.kind;
-    if (raw === null || raw === undefined || raw === '') {
+    if (raw === null || raw === undefined || raw === "") {
       return null;
     }
-    if (typeof raw === 'number') {
+    if (typeof raw === "number") {
       const map: Record<number, { label: string; short: string }> = {
-        1: { label: 'Internal', short: 'I' },
-        2: { label: 'Server', short: 'S' },
-        3: { label: 'Client', short: 'CL' },
-        4: { label: 'Producer', short: 'P' },
-        5: { label: 'Consumer', short: 'C' }
+        1: { label: "Internal", short: "I" },
+        2: { label: "Server", short: "S" },
+        3: { label: "Client", short: "CL" },
+        4: { label: "Producer", short: "P" },
+        5: { label: "Consumer", short: "C" },
       };
-      return map[raw] ?? { label: `Kind ${raw}`, short: 'K' };
+      return map[raw] ?? { label: `Kind ${raw}`, short: "K" };
     }
     const normalized = String(raw).toUpperCase();
-    if (normalized.includes('PRODUCER')) return { label: 'Producer', short: 'P' };
-    if (normalized.includes('CONSUMER')) return { label: 'Consumer', short: 'C' };
-    if (normalized.includes('SERVER')) return { label: 'Server', short: 'S' };
-    if (normalized.includes('CLIENT')) return { label: 'Client', short: 'CL' };
-    if (normalized.includes('INTERNAL')) return { label: 'Internal', short: 'I' };
+    if (normalized.includes("PRODUCER"))
+      return { label: "Producer", short: "P" };
+    if (normalized.includes("CONSUMER"))
+      return { label: "Consumer", short: "C" };
+    if (normalized.includes("SERVER")) return { label: "Server", short: "S" };
+    if (normalized.includes("CLIENT")) return { label: "Client", short: "CL" };
+    if (normalized.includes("INTERNAL"))
+      return { label: "Internal", short: "I" };
     return { label: normalized, short: normalized.slice(0, 2) };
   }
 </script>
@@ -139,15 +152,22 @@
             <div class="meta">
               <div class="meta-title">
                 <span class="source-dot" style={`background:${color}`}></span>
-                <span class="name">{span.name || 'Span'}</span>
+                <span class="name">{span.name || "Span"}</span>
                 {#if kind}
-                  <span class="kind-badge" title={kind.label}>{kind.short}</span>
+                  <span class="kind-badge" title={kind.label}>{kind.short}</span
+                  >
                 {/if}
               </div>
-              <span class="service">{span.service || 'servizio sconosciuto'}</span>
+              <span class="service"
+                >{span.service || "servizio sconosciuto"}</span
+              >
             </div>
             <div class="bar-track">
-              <div class="bar" style={barStyle(span)} title={formatDuration(durationMs(span))}></div>
+              <div
+                class="bar"
+                style={barStyle(span)}
+                title={formatDuration(durationMs(span))}
+              ></div>
               <span class="bar-label">{formatDuration(offsetMs(span))}</span>
             </div>
             <div class="duration">{formatDuration(durationMs(span))}</div>
@@ -163,6 +183,7 @@
     display: flex;
     flex-direction: column;
     gap: 12px;
+    margin-bottom: 24px;
   }
 
   header {

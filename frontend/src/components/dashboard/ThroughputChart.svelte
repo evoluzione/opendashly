@@ -3,6 +3,7 @@
   import uPlot from 'uplot';
   import 'uplot/dist/uPlot.min.css';
   import type { ThroughputPoint } from '../../services/dashboard';
+  import InfoTooltip from '../common/InfoTooltip.svelte';
 
   export let data: ThroughputPoint[] = [];
 
@@ -111,7 +112,10 @@
 
 <div class="chart-card" bind:this={containerEl}>
   <div class="chart-header">
-    <span class="chart-title">Throughput nel Tempo</span>
+    <span class="chart-title">
+      Throughput nel Tempo
+      <InfoTooltip text="Andamento delle richieste e degli errori nel tempo. Utile per identificare picchi di carico e correlazioni tra traffico ed errori." />
+    </span>
     <span class="chart-subtitle">Richieste ed errori nel tempo</span>
   </div>
 

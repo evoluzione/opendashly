@@ -1,5 +1,6 @@
 <script lang="ts">
   import type { LatencyBucket } from '../../services/dashboard';
+  import InfoTooltip from '../common/InfoTooltip.svelte';
 
   export let data: LatencyBucket[] = [];
 
@@ -22,7 +23,10 @@
 
 <div class="chart-card">
   <div class="chart-header">
-    <span class="chart-title">Distribuzione Latenza</span>
+    <span class="chart-title">
+      Distribuzione Latenza
+      <InfoTooltip text="Distribuzione dei tempi di risposta. Mostra quante richieste rientrano in ogni intervallo di latenza. I colori vanno dal verde (veloce) al rosso (lento)." />
+    </span>
     <span class="chart-subtitle">Istogramma delle latenze</span>
   </div>
 

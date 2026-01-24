@@ -14,6 +14,32 @@ type Service struct {
 	Storage *storage.Client
 }
 
+// toInt converts various numeric types to int for ClickHouse compatibility
+func toInt(v any) int {
+	switch n := v.(type) {
+	case int:
+		return n
+	case int8:
+		return int(n)
+	case int16:
+		return int(n)
+	case int32:
+		return int(n)
+	case int64:
+		return int(n)
+	case uint8:
+		return int(n)
+	case uint16:
+		return int(n)
+	case uint32:
+		return int(n)
+	case uint64:
+		return int(n)
+	default:
+		return 0
+	}
+}
+
 // GetDashboard retrieves all dashboard metrics.
 func (s *Service) GetDashboard(ctx context.Context, req DashboardRequest) (*DashboardResponse, error) {
 	if s.Storage == nil {
@@ -90,7 +116,7 @@ func (s *Service) getLatencyDistribution(ctx context.Context, req DashboardReque
 	var total int64
 
 	for rows.Next() {
-		var bucketStart, bucketEnd int64
+		var bucketStart, bucketEnd int32
 		var count uint64
 		if err := rows.Scan(&bucketStart, &bucketEnd, &count); err != nil {
 			return nil, fmt.Errorf("scan: %w", err)
