@@ -85,6 +85,7 @@ func BuildSlowestEndpointsQuery(from, to time.Time, serviceName string, limit in
 			count() AS cnt
 		FROM telemetry.otel_traces
 		WHERE Timestamp >= '%s' AND Timestamp <= '%s'
+			AND (toString(SpanKind) = 'SERVER' OR toString(SpanKind) = '1')
 			%s
 		GROUP BY endpoint, service
 		HAVING cnt >= 5
@@ -105,6 +106,7 @@ func BuildErrorHotspotsQuery(from, to time.Time, serviceName string, limit int) 
 			if(count() > 0, (countIf(toString(StatusCode) = 'Error' OR toString(StatusCode) = '2') / count()) * 100, 0) AS error_rate
 		FROM telemetry.otel_traces
 		WHERE Timestamp >= '%s' AND Timestamp <= '%s'
+			AND (toString(SpanKind) = 'SERVER' OR toString(SpanKind) = '1')
 			%s
 		GROUP BY endpoint, service
 		HAVING total_count >= 5 AND error_count > 0

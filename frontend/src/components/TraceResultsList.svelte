@@ -1,7 +1,7 @@
 <script lang="ts">
-  import { createEventDispatcher, onDestroy } from 'svelte';
-  import CorrelationPanel from './CorrelationPanel.svelte';
-  import TraceSpanTimeline from './TraceSpanTimeline.svelte';
+  import { createEventDispatcher, onDestroy } from "svelte";
+  import CorrelationPanel from "./CorrelationPanel.svelte";
+  import TraceSpanTimeline from "./TraceSpanTimeline.svelte";
 
   export let traces: any[] = [];
   export let pagination: { page: number; totalPages: number } | null = null;
@@ -11,46 +11,48 @@
   let knownKeys = new Set<string>();
   let highlightKeys = new Set<string>();
   let highlightTimers = new Map<string, ReturnType<typeof setTimeout>>();
+  let activeTab: "spans" | "logs" = "spans";
   let initialized = false;
 
   function changePage(nextPage: number) {
-    dispatch('pageChange', { page: nextPage });
+    dispatch("pageChange", { page: nextPage });
   }
 
   function closeModal() {
     selectedTrace = null;
+    activeTab = "spans";
   }
 
   function handleBackdropKeydown(event: KeyboardEvent) {
-    if (event.key === 'Enter' || event.key === ' ' || event.key === 'Escape') {
+    if (event.key === "Enter" || event.key === " " || event.key === "Escape") {
       event.preventDefault();
       closeModal();
     }
   }
 
   function formatTimestamp(value: string | number | Date) {
-    if (!value) return '-';
+    if (!value) return "-";
     const date = value instanceof Date ? value : new Date(value);
-    return new Intl.DateTimeFormat('it-IT', {
-      dateStyle: 'short',
-      timeStyle: 'medium'
+    return new Intl.DateTimeFormat("it-IT", {
+      dateStyle: "short",
+      timeStyle: "medium",
     }).format(date);
   }
 
   function shortId(id?: string) {
-    if (!id) return '';
+    if (!id) return "";
     return id.length > 12 ? `${id.slice(0, 8)}...${id.slice(-4)}` : id;
   }
 
   function formatDuration(value?: number) {
-    if (!value || value <= 0) return '0 ms';
+    if (!value || value <= 0) return "0 ms";
     if (value < 1000) return `${Math.round(value)} ms`;
     if (value < 60000) return `${(value / 1000).toFixed(2)} s`;
     return `${(value / 60000).toFixed(2)} min`;
   }
 
   function traceKey(entry: any) {
-    return entry?.traceId ?? '';
+    return entry?.traceId ?? "";
   }
 
   function markHighlight(key: string) {
@@ -103,8 +105,10 @@
           class:new-item={highlightKeys.has(key)}
           on:click={() => (selectedTrace = trace)}
         >
-          <span class="name">{trace.name || 'Traccia senza nome'}</span>
-          <span class="service">{trace.service || 'Servizio non specificato'}</span>
+          <span class="name">{trace.name || "Traccia senza nome"}</span>
+          <span class="service"
+            >{trace.service || "Servizio non specificato"}</span
+          >
           <span class="last-seen">{formatTimestamp(trace.lastSeen)}</span>
           <span class="count">Span {trace.spanCount ?? 0}</span>
           <span class="duration">{formatDuration(trace.durationMs)}</span>
@@ -127,7 +131,9 @@
     <button
       type="button"
       on:click={() => changePage(pagination.page + 1)}
-      disabled={pagination.totalPages > 0 ? pagination.page >= pagination.totalPages : traces.length === 0}
+      disabled={pagination.totalPages > 0
+        ? pagination.page >= pagination.totalPages
+        : traces.length === 0}
     >
       Successiva
     </button>
@@ -147,19 +153,43 @@
       <header>
         <div>
           <p class="kicker">Dettagli traccia</p>
-          <h3>{selectedTrace.name || 'Traccia senza nome'}</h3>
+          <h3>{selectedTrace.name || "Traccia senza nome"}</h3>
         </div>
-        <button type="button" class="close" on:click={closeModal}>Chiudi</button>
+        <button type="button" class="close" on:click={closeModal}>Chiudi</button
+        >
       </header>
       <div class="meta">
         <span class="pill">ID traccia {selectedTrace.traceId}</span>
-        <span class="pill">Servizio {selectedTrace.service || '-'}</span>
+        <span class="pill">Servizio {selectedTrace.service || "-"}</span>
         <span class="pill">Span {selectedTrace.spanCount ?? 0}</span>
-        <span class="pill">Ultimo span {formatTimestamp(selectedTrace.lastSeen)}</span>
+        <span class="pill"
+          >Ultimo span {formatTimestamp(selectedTrace.lastSeen)}</span
+        >
       </div>
+      <div class="tabs">
+        <button
+          class="tab"
+          class:active={activeTab === "spans"}
+          on:click={() => (activeTab = "spans")}
+        >
+          Span
+        </button>
+        <button
+          class="tab"
+          class:active={activeTab === "logs"}
+          on:click={() => (activeTab = "logs")}
+        >
+          Logs
+        </button>
+      </div>
+
       <div class="details-panel">
-        <TraceSpanTimeline traceId={selectedTrace.traceId} />
-        <CorrelationPanel traceId={selectedTrace.traceId} />
+        <div class:hidden={activeTab !== "spans"}>
+          <TraceSpanTimeline traceId={selectedTrace.traceId} />
+        </div>
+        <div class:hidden={activeTab !== "logs"}>
+          <CorrelationPanel traceId={selectedTrace.traceId} />
+        </div>
       </div>
     </div>
   </div>
@@ -194,7 +224,9 @@
     background: white;
     cursor: pointer;
     text-align: left;
-    transition: border 0.15s ease, box-shadow 0.15s ease;
+    transition:
+      border 0.15s ease,
+      box-shadow 0.15s ease;
   }
 
   .trace-row:hover {
@@ -289,7 +321,8 @@
   }
 
   .modal {
-    width: min(1100px, 96vw);
+    width: min(1600px, 98vw);
+    height: 90vh;
     max-height: 90vh;
     overflow: auto;
     background: white;
@@ -347,10 +380,56 @@
     font-weight: 600;
   }
 
+  .details-panel {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .details-panel > div {
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+  }
+
   .details-panel :global(.panel) {
     padding: 0;
     border: none;
     box-shadow: none;
+    height: 100%;
+  }
+
+  .tabs {
+    display: flex;
+    gap: 8px;
+    border-bottom: 1px solid #e2e8f0;
+    margin-bottom: 0;
+  }
+
+  .tab {
+    padding: 10px 16px;
+    background: none;
+    border: none;
+    border-bottom: 2px solid transparent;
+    font-size: 13px;
+    font-weight: 600;
+    color: #64748b;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+
+  .tab:hover {
+    color: #0f172a;
+  }
+
+  .tab.active {
+    color: #2563eb;
+    border-bottom-color: #2563eb;
+  }
+
+  .hidden {
+    display: none !important;
   }
 
   @media (max-width: 720px) {

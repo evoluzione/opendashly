@@ -1,8 +1,8 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
-  import { fetchRelated } from '../services/traces';
-  import LogResultsTable from './LogResultsTable.svelte';
-  import MetricChart from './MetricChart.svelte';
+  import { onMount } from "svelte";
+  import { fetchRelated } from "../services/traces";
+  import LogResultsTable from "./LogResultsTable.svelte";
+  import MetricChart from "./MetricChart.svelte";
 
   export let traceId: string;
   let related: { logs: any[]; metrics: any[] } | null = null;
@@ -12,7 +12,10 @@
     try {
       related = await fetchRelated(traceId);
     } catch (err) {
-      error = err instanceof Error ? err.message : 'Impossibile caricare la telemetria correlata';
+      error =
+        err instanceof Error
+          ? err.message
+          : "Impossibile caricare la telemetria correlata";
     }
   });
 </script>
@@ -21,7 +24,7 @@
   <header>
     <div>
       <h3>Telemetry correlata</h3>
-      <p>Log e metriche legate alla traccia selezionata.</p>
+      <p>Log legati alla traccia selezionata.</p>
     </div>
   </header>
   {#if error}
@@ -33,10 +36,6 @@
       <div class="block">
         <h4>Log</h4>
         <LogResultsTable logs={related.logs} />
-      </div>
-      <div class="block">
-        <h4>Metriche</h4>
-        <MetricChart series={related.metrics} />
       </div>
     </div>
   {/if}

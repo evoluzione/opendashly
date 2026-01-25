@@ -6,9 +6,10 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/ClickHouse/clickhouse-go/v2/lib/driver"
 	"opendashly/backend/internal/query/builders"
 	"opendashly/backend/internal/storage"
+
+	"github.com/ClickHouse/clickhouse-go/v2/lib/driver"
 )
 
 // TraceSpansService fetches spans for a trace.
@@ -18,17 +19,18 @@ type TraceSpansService struct {
 
 // TraceSpanEntry represents a span row for the timeline.
 type TraceSpanEntry struct {
-	TraceID      string    `json:"traceId"`
-	SpanID       string    `json:"spanId"`
-	ParentSpanID string    `json:"parentSpanId,omitempty"`
-	Name         string    `json:"name"`
-	Service      string    `json:"service,omitempty"`
-	Source       string    `json:"source,omitempty"`
-	StartTime    time.Time `json:"startTime"`
-	EndTime      time.Time `json:"endTime"`
-	Duration     int64     `json:"duration"`
-	Status       string    `json:"status,omitempty"`
-	SpanKind     *int      `json:"spanKind,omitempty"`
+	TraceID      string            `json:"traceId"`
+	SpanID       string            `json:"spanId"`
+	ParentSpanID string            `json:"parentSpanId,omitempty"`
+	Name         string            `json:"name"`
+	Service      string            `json:"service,omitempty"`
+	Source       string            `json:"source,omitempty"`
+	StartTime    time.Time         `json:"startTime"`
+	EndTime      time.Time         `json:"endTime"`
+	Duration     int64             `json:"duration"`
+	Status       string            `json:"status,omitempty"`
+	SpanKind     *int              `json:"spanKind,omitempty"`
+	Attributes   map[string]string `json:"attributes,omitempty"`
 }
 
 // Spans returns spans for a trace.
@@ -42,7 +44,7 @@ func (s *TraceSpansService) Spans(ctx context.Context, traceID string) ([]TraceS
 
 func buildTraceSpansQuery(traceID string) string {
 	escapedTraceID := builders.EscapeTraceID(traceID)
-	return "SELECT TraceId AS traceId, SpanId AS spanId, ParentSpanId AS parentSpanId, SpanName AS name, ServiceName AS serviceName, ServiceName AS source, Timestamp AS startTime, Duration AS duration, toString(ifNull(StatusCode, 0)) AS status, toInt32OrNull(SpanKind) AS spanKind FROM telemetry.otel_traces WHERE TraceId = '" + escapedTraceID + "' ORDER BY Timestamp ASC"
+	return "SELECT TraceId AS traceId, SpanId AS spanId, ParentSpanId AS parentSpanId, SpanName AS name, ServiceName AS serviceName, ServiceName AS source, Timestamp AS startTime, Duration AS duration, toString(ifNull(StatusCode, 0)) AS status, toInt32OrNull(SpanKind) AS spanKind, CAST(SpanAttributes, 'Map(String, String)') AS attributes FROM telemetry.otel_traces WHERE TraceId = '" + escapedTraceID + "' ORDER BY Timestamp ASC"
 }
 
 func fetchTraceSpans(ctx context.Context, conn driver.Conn, query string) ([]TraceSpanEntry, error) {
@@ -57,7 +59,7 @@ func fetchTraceSpans(ctx context.Context, conn driver.Conn, query string) ([]Tra
 		var duration int64
 		var statusValue string
 		var spanKindValue sql.NullInt32
-		if err := rows.Scan(&row.TraceID, &row.SpanID, &row.ParentSpanID, &row.Name, &row.Service, &row.Source, &row.StartTime, &duration, &statusValue, &spanKindValue); err != nil {
+		if err := rows.Scan(&row.TraceID, &row.SpanID, &row.ParentSpanID, &row.Name, &row.Service, &row.Source, &row.StartTime, &duration, &statusValue, &spanKindValue, &row.Attributes); err != nil {
 			return nil, fmt.Errorf("scan trace spans: %w", err)
 		}
 		if duration < 0 {

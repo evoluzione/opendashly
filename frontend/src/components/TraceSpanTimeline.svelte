@@ -96,31 +96,251 @@
     return id.length > 10 ? `${id.slice(0, 6)}...${id.slice(-4)}` : id;
   }
 
-  function spanKindInfo(span: any) {
+  // Common short DB names that indicate database spans
+  const knownDbNames = new Set([
+    "delivery",
+    "media",
+    "postgres",
+    "mysql",
+    "mongodb",
+    "redis",
+    "elasticsearch",
+    "cassandra",
+    "clickhouse",
+    "sqlite",
+    "mariadb",
+    "oracle",
+    "sqlserver",
+    "dynamodb",
+    "cosmosdb",
+    "neo4j",
+    "cockroachdb",
+  ]);
+
+  function isDbSpan(span: any): boolean {
+    const name = span?.name?.toLowerCase() ?? "";
+    // Check if name is a short single word that matches known DB names
+    if (knownDbNames.has(name)) return true;
+    // Check for db.* attributes in span attributes
+    if (span?.attributes) {
+      const attrs = span.attributes;
+      if (attrs["db.system"] || attrs["db.name"] || attrs["db.type"])
+        return true;
+    }
+    return false;
+  }
+
+  interface SpanKindResult {
+    label: string;
+    short: string;
+    color: string;
+    icon: string;
+  }
+
+  const knownTechnologies = new Set([
+    "postgres",
+    "postgresql",
+    "mysql",
+    "mariadb",
+    "redis",
+    "mongodb",
+    "mongo",
+    "elasticsearch",
+    "elastic",
+    "cassandra",
+    "clickhouse",
+    "sqlite",
+    "oracle",
+    "sqlserver",
+    "mssql",
+    "dynamodb",
+    "cosmosdb",
+    "neo4j",
+    "cockroachdb",
+    "cockroach",
+  ]);
+
+  function getDbInfo(
+    span: any,
+  ): { system: string; name: string; operation: string } | null {
+    const attrs = span.attributes || {};
+
+    // Get db.system from attributes
+    let system = attrs["db.system"] || attrs["db.type"] || "";
+    let name = attrs["db.name"] || "";
+    let operation =
+      attrs["db.operation"] || attrs["db.statement"]?.split(" ")[0] || "";
+
+    // Fallback: Check if span service indicates the system
+    if (!system && span.service) {
+      const svc = span.service.toLowerCase();
+      for (const tech of knownTechnologies) {
+        if (svc.includes(tech)) {
+          system = tech;
+          break;
+        }
+      }
+    }
+
+    // Fallback: Check if span name indicates the system ONLY if it is a known technology
+    if (!system && span.name) {
+      const spanNameLower = span.name.toLowerCase();
+      if (knownTechnologies.has(spanNameLower)) {
+        system = span.name;
+      }
+    }
+
+    // Fallback logic for operation if missing
+    if (!operation && span.name) {
+      // Common SQL/DB verbs
+      const firstWord = span.name.split(" ")[0].toUpperCase();
+      if (
+        [
+          "SELECT",
+          "INSERT",
+          "UPDATE",
+          "DELETE",
+          "GET",
+          "SET",
+          "FIND",
+          "QUERY",
+          "COMMIT",
+          "ROLLBACK",
+        ].includes(firstWord)
+      ) {
+        operation = firstWord;
+      }
+    }
+
+    // If we only have name/system but it's identical to span.name, it's not adding info.
+    // But we return what we found, formatting handles the display.
+    if (!system && !name && !operation) return null;
+    return { system, name, operation };
+  }
+
+  function formatDbSystem(system: string): string {
+    const systemMap: Record<string, string> = {
+      postgresql: "PostgreSQL",
+      postgres: "PostgreSQL",
+      mysql: "MySQL",
+      mariadb: "MariaDB",
+      redis: "Redis",
+      mongodb: "MongoDB",
+      elasticsearch: "Elastic",
+      cassandra: "Cassandra",
+      clickhouse: "ClickHouse",
+      sqlite: "SQLite",
+      oracle: "Oracle",
+      sqlserver: "SQL Server",
+      dynamodb: "DynamoDB",
+      cosmosdb: "CosmosDB",
+      neo4j: "Neo4j",
+      cockroachdb: "CockroachDB",
+    };
+    return systemMap[system.toLowerCase()] || system;
+  }
+
+  function spanKindInfo(span: any): SpanKindResult | null {
+    // Check for DB span first
+    if (isDbSpan(span)) {
+      const dbInfo = getDbInfo(span);
+      let shortLabel = "DB";
+      let fullLabel = "Database Query";
+
+      if (dbInfo) {
+        const parts: string[] = [];
+        let systemLabel = "";
+
+        if (dbInfo.system) {
+          systemLabel = formatDbSystem(dbInfo.system);
+          parts.push(systemLabel);
+        }
+        if (dbInfo.name && dbInfo.name !== dbInfo.system) {
+          parts.push(dbInfo.name);
+        }
+        if (dbInfo.operation) {
+          parts.push(dbInfo.operation.toUpperCase());
+        }
+
+        if (parts.length > 0) {
+          fullLabel = parts.join(" • ");
+        }
+
+        // Logic for short label (Badge)
+        if (dbInfo.operation) {
+          // Priority to operation: "Postgres SEL" or just "SELECT" if system is generic/unknown
+          if (
+            systemLabel &&
+            knownTechnologies.has(dbInfo.system.toLowerCase())
+          ) {
+            const opShort = dbInfo.operation.slice(0, 3).toUpperCase();
+            shortLabel = `${systemLabel} ${opShort}`;
+          } else {
+            shortLabel = dbInfo.operation.toUpperCase();
+          }
+        } else if (
+          systemLabel &&
+          knownTechnologies.has(dbInfo.system.toLowerCase())
+        ) {
+          // Show system only if it is a known technology (e.g. Postgres)
+          shortLabel = systemLabel;
+        } else {
+          // Fallback to "DB" if we don't have operation and system is not a known tech
+          // (avoids showing "Delivery" if that's just the span name)
+          shortLabel = "DB";
+        }
+      }
+
+      return {
+        label: fullLabel,
+        short: shortLabel,
+        color: "#0891b2",
+        icon: "🗄️",
+      };
+    }
+
     const raw = span?.spanKind ?? span?.kind;
     if (raw === null || raw === undefined || raw === "") {
       return null;
     }
+
+    // Color mapping for ActivityKind:
+    // Internal (0) = gray, Server (1) = green, Client (2) = blue, Producer (3) = purple, Consumer (4) = orange
     if (typeof raw === "number") {
-      const map: Record<number, { label: string; short: string }> = {
-        1: { label: "Internal", short: "I" },
-        2: { label: "Server", short: "S" },
-        3: { label: "Client", short: "CL" },
-        4: { label: "Producer", short: "P" },
-        5: { label: "Consumer", short: "C" },
+      const map: Record<number, SpanKindResult> = {
+        0: { label: "Internal", short: "I", color: "#64748b", icon: "⚙️" },
+        1: { label: "Server", short: "S", color: "#16a34a", icon: "🌐" },
+        2: { label: "Client", short: "CL", color: "#2563eb", icon: "📤" },
+        3: { label: "Producer", short: "P", color: "#9333ea", icon: "📨" },
+        4: { label: "Consumer", short: "C", color: "#ea580c", icon: "📩" },
       };
-      return map[raw] ?? { label: `Kind ${raw}`, short: "K" };
+      return (
+        map[raw] ?? {
+          label: `Kind ${raw}`,
+          short: "K",
+          color: "#94a3b8",
+          icon: "❓",
+        }
+      );
     }
+
     const normalized = String(raw).toUpperCase();
     if (normalized.includes("PRODUCER"))
-      return { label: "Producer", short: "P" };
+      return { label: "Producer", short: "P", color: "#9333ea", icon: "📨" };
     if (normalized.includes("CONSUMER"))
-      return { label: "Consumer", short: "C" };
-    if (normalized.includes("SERVER")) return { label: "Server", short: "S" };
-    if (normalized.includes("CLIENT")) return { label: "Client", short: "CL" };
+      return { label: "Consumer", short: "C", color: "#ea580c", icon: "📩" };
+    if (normalized.includes("SERVER"))
+      return { label: "Server", short: "S", color: "#16a34a", icon: "🌐" };
+    if (normalized.includes("CLIENT"))
+      return { label: "Client", short: "CL", color: "#2563eb", icon: "📤" };
     if (normalized.includes("INTERNAL"))
-      return { label: "Internal", short: "I" };
-    return { label: normalized, short: normalized.slice(0, 2) };
+      return { label: "Internal", short: "I", color: "#64748b", icon: "⚙️" };
+    return {
+      label: normalized,
+      short: normalized.slice(0, 2),
+      color: "#94a3b8",
+      icon: "❓",
+    };
   }
 </script>
 
@@ -154,7 +374,11 @@
                 <span class="source-dot" style={`background:${color}`}></span>
                 <span class="name">{span.name || "Span"}</span>
                 {#if kind}
-                  <span class="kind-badge" title={kind.label}>{kind.short}</span
+                  <span
+                    class="kind-badge"
+                    title={kind.label}
+                    style={`background:${kind.color}20;color:${kind.color};border-color:${kind.color}40`}
+                    >{kind.icon} {kind.short}</span
                   >
                 {/if}
               </div>
@@ -184,6 +408,7 @@
     flex-direction: column;
     gap: 12px;
     margin-bottom: 24px;
+    height: 100%;
   }
 
   header {
@@ -221,7 +446,8 @@
     display: flex;
     flex-direction: column;
     gap: 10px;
-    max-height: 320px;
+    flex: 1;
+    min-height: 0;
     overflow-y: auto;
     padding-right: 6px;
     border: 1px solid rgba(148, 163, 184, 0.2);
@@ -287,25 +513,20 @@
     display: inline-flex;
     align-items: center;
     justify-content: center;
+    gap: 2px;
     min-width: 18px;
     padding: 2px 6px;
     border-radius: 999px;
-    background: #e2e8f0;
-    color: #0f172a;
+    border: 1px solid;
     font-size: 9px;
     font-weight: 700;
     text-transform: uppercase;
+    white-space: nowrap;
   }
 
   .service {
     font-size: 11px;
     color: #64748b;
-  }
-
-  .details {
-    font-size: 10px;
-    color: #94a3b8;
-    font-weight: 600;
   }
 
   .bar-track {
