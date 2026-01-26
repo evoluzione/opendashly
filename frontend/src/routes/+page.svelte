@@ -26,8 +26,7 @@
   import ThroughputChart from "../components/dashboard/ThroughputChart.svelte";
   import SlowestEndpointsTable from "../components/dashboard/SlowestEndpointsTable.svelte";
   import ErrorHotspotsTable from "../components/dashboard/ErrorHotspotsTable.svelte";
-
-  export let params: Record<string, string> = {};
+  import DashboardServiceFilter from "../components/DashboardServiceFilter.svelte";
 
   let activeTab: "logs" | "metriche" | "tracce" = "metriche";
   let metricsLoaded = false;
@@ -115,31 +114,34 @@
         </p>
       </div>
       {#if activeTab === "metriche"}
-        <div class="refresh-controls">
-          {#if lastRefresh}
-            <span class="last-refresh"
-              >Ultimo aggiornamento: {formatLastRefresh(lastRefresh)}</span
+        <div class="metrics-controls">
+          <div class="refresh-controls">
+            {#if lastRefresh}
+              <span class="last-refresh"
+                >Ultimo aggiornamento: {formatLastRefresh(lastRefresh)}</span
+              >
+            {/if}
+            <button
+              class="refresh-btn"
+              on:click={handleRefresh}
+              disabled={$dashboardState.loading}
             >
-          {/if}
-          <button
-            class="refresh-btn"
-            on:click={handleRefresh}
-            disabled={$dashboardState.loading}
-          >
-            <svg
-              class="refresh-icon"
-              class:spinning={$dashboardState.loading}
-              viewBox="0 0 20 20"
-              fill="currentColor"
-            >
-              <path
-                fill-rule="evenodd"
-                d="M15.312 11.424a5.5 5.5 0 01-9.201 2.466l-.312-.311h2.433a.75.75 0 000-1.5H3.989a.75.75 0 00-.75.75v4.242a.75.75 0 001.5 0v-2.43l.31.31a7 7 0 0011.712-3.138.75.75 0 00-1.449-.389zm1.23-7.424a.75.75 0 00-.75.75v2.43l-.31-.31A7 7 0 003.77 9.89a.75.75 0 101.45.388 5.5 5.5 0 019.201-2.466l.312.311h-2.433a.75.75 0 000 1.5h4.243a.75.75 0 00.75-.75V4.75a.75.75 0 00-.75-.75z"
-                clip-rule="evenodd"
-              />
-            </svg>
-            Aggiorna
-          </button>
+              <svg
+                class="refresh-icon"
+                class:spinning={$dashboardState.loading}
+                viewBox="0 0 20 20"
+                fill="currentColor"
+              >
+                <path
+                  fill-rule="evenodd"
+                  d="M15.312 11.424a5.5 5.5 0 01-9.201 2.466l-.312-.311h2.433a.75.75 0 000-1.5H3.989a.75.75 0 00-.75.75v4.242a.75.75 0 001.5 0v-2.43l.31.31a7 7 0 0011.712-3.138.75.75 0 00-1.449-.389zm1.23-7.424a.75.75 0 00-.75.75v2.43l-.31-.31A7 7 0 003.77 9.89a.75.75 0 101.45.388 5.5 5.5 0 019.201-2.466l.312.311h-2.433a.75.75 0 000 1.5h4.243a.75.75 0 00.75-.75V4.75a.75.75 0 00-.75-.75z"
+                  clip-rule="evenodd"
+                />
+              </svg>
+              Aggiorna
+            </button>
+          </div>
+          <DashboardServiceFilter />
         </div>
       {:else}
         <div class="header-filters">
@@ -359,6 +361,13 @@
     padding: 8px 16px;
     background: rgba(37, 99, 235, 0.05);
     border-radius: 8px;
+  }
+
+  .metrics-controls {
+    display: flex;
+    align-items: flex-end;
+    gap: 20px;
+    flex-wrap: wrap;
   }
 
   .refresh-controls {

@@ -96,32 +96,8 @@
     return id.length > 10 ? `${id.slice(0, 6)}...${id.slice(-4)}` : id;
   }
 
-  // Common short DB names that indicate database spans
-  const knownDbNames = new Set([
-    "delivery",
-    "media",
-    "postgres",
-    "mysql",
-    "mongodb",
-    "redis",
-    "elasticsearch",
-    "cassandra",
-    "clickhouse",
-    "sqlite",
-    "mariadb",
-    "oracle",
-    "sqlserver",
-    "dynamodb",
-    "cosmosdb",
-    "neo4j",
-    "cockroachdb",
-  ]);
-
   function isDbSpan(span: any): boolean {
     const name = span?.name?.toLowerCase() ?? "";
-    // Check if name is a short single word that matches known DB names
-    if (knownDbNames.has(name)) return true;
-    // Check for db.* attributes in span attributes
     if (span?.attributes) {
       const attrs = span.attributes;
       if (attrs["db.system"] || attrs["db.name"] || attrs["db.type"])

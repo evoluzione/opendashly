@@ -8,6 +8,7 @@ type DashboardState = {
   data: DashboardResponse | null;
   lastRequest: DashboardRequest | null;
   autoRefreshSeconds: number | null;
+  selectedService: string | null;
 };
 
 const initial: DashboardState = {
@@ -15,7 +16,8 @@ const initial: DashboardState = {
   error: null,
   data: null,
   lastRequest: null,
-  autoRefreshSeconds: null
+  autoRefreshSeconds: null,
+  selectedService: null
 };
 
 export const dashboardState = writable<DashboardState>(initial);
@@ -101,3 +103,20 @@ export function resetDashboard() {
   resetRefreshTimer();
   dashboardState.set(initial);
 }
+
+export function selectDashboardService(serviceName: string | null) {
+  dashboardState.update((state) => ({
+    ...state,
+    selectedService: serviceName
+  }));
+
+  // Ricarica la dashboard con il nuovo filtro servizio
+  const currentState = get(dashboardState);
+  if (currentState.lastRequest) {
+    void loadDashboard({
+      ...currentState.lastRequest,
+      serviceName: serviceName || undefined
+    });
+  }
+}
+

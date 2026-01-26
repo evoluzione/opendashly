@@ -234,10 +234,10 @@
     role="button"
     tabindex="0"
     aria-label="Chiudi dettagli log"
-    on:click={closeLogModal}
+    on:click|self={closeLogModal}
     on:keydown={(event) => handleBackdropKeydown(event, closeLogModal)}
   >
-    <div class="modal" role="dialog" aria-modal="true" on:click|stopPropagation>
+    <div class="modal" role="dialog" aria-modal="true">
       <header>
         <div>
           <p class="kicker">Dettagli log</p>
@@ -285,13 +285,43 @@
         {#if selectedLog.resourceAttributes && Object.keys(selectedLog.resourceAttributes).length > 0}
           <div>
             <h4>Attributi risorsa</h4>
-            <pre>{JSON.stringify(selectedLog.resourceAttributes, null, 2)}</pre>
+            <table class="attributes-table">
+              <thead>
+                <tr>
+                  <th>Chiave</th>
+                  <th>Valore</th>
+                </tr>
+              </thead>
+              <tbody>
+                {#each Object.entries(selectedLog.resourceAttributes) as [key, value]}
+                  <tr>
+                    <td class="attr-key">{key}</td>
+                    <td class="attr-value">{formatValue(value)}</td>
+                  </tr>
+                {/each}
+              </tbody>
+            </table>
           </div>
         {/if}
         {#if selectedLog.logAttributes && Object.keys(selectedLog.logAttributes).length > 0}
           <div>
             <h4>Attributi log</h4>
-            <pre>{JSON.stringify(selectedLog.logAttributes, null, 2)}</pre>
+            <table class="attributes-table">
+              <thead>
+                <tr>
+                  <th>Chiave</th>
+                  <th>Valore</th>
+                </tr>
+              </thead>
+              <tbody>
+                {#each Object.entries(selectedLog.logAttributes) as [key, value]}
+                  <tr>
+                    <td class="attr-key">{key}</td>
+                    <td class="attr-value">{formatValue(value)}</td>
+                  </tr>
+                {/each}
+              </tbody>
+            </table>
           </div>
         {/if}
       </div>
@@ -305,15 +335,10 @@
     role="button"
     tabindex="0"
     aria-label="Chiudi dettagli traccia"
-    on:click={closeTraceModal}
+    on:click|self={closeTraceModal}
     on:keydown={(event) => handleBackdropKeydown(event, closeTraceModal)}
   >
-    <div
-      class="modal trace-modal"
-      role="dialog"
-      aria-modal="true"
-      on:click|stopPropagation
-    >
+    <div class="modal trace-modal" role="dialog" aria-modal="true">
       <header>
         <div>
           <p class="kicker">Dettagli traccia</p>
@@ -595,6 +620,61 @@
     font-size: 12px;
     overflow-x: auto;
     white-space: pre-wrap;
+    word-break: break-word;
+  }
+
+  .attributes-table {
+    width: 100%;
+    border-collapse: collapse;
+    border-radius: 10px;
+    overflow: hidden;
+    border: 1px solid #e2e8f0;
+    background: white;
+  }
+
+  .attributes-table thead {
+    background: #f8fafc;
+  }
+
+  .attributes-table th {
+    text-align: left;
+    padding: 10px 14px;
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: #64748b;
+    border-bottom: 2px solid #e2e8f0;
+  }
+
+  .attributes-table tbody tr {
+    border-bottom: 1px solid #f1f5f9;
+    transition: background 0.15s ease;
+  }
+
+  .attributes-table tbody tr:last-child {
+    border-bottom: none;
+  }
+
+  .attributes-table tbody tr:hover {
+    background: #f8fafc;
+  }
+
+  .attributes-table td {
+    padding: 10px 14px;
+    font-size: 13px;
+  }
+
+  .attr-key {
+    font-weight: 600;
+    color: #475569;
+    font-family: "Courier New", monospace;
+    width: 35%;
+    vertical-align: top;
+  }
+
+  .attr-value {
+    color: #0f172a;
     word-break: break-word;
   }
 
