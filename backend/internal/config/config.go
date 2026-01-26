@@ -18,6 +18,7 @@ type Config struct {
 	AuthCookieName         string
 	CleanupIntervalMinutes int
 	CORSAllowedOrigins     []string
+	DebugQuery             bool
 }
 
 // Load reads configuration from environment variables.
@@ -32,6 +33,7 @@ func Load() (*Config, error) {
 		AuthCookieName:         os.Getenv("AUTH_COOKIE_NAME"),
 		CleanupIntervalMinutes: getEnvInt("CLEANUP_INTERVAL_MINUTES", 1440),
 		CORSAllowedOrigins:     getEnvCSV("CORS_ALLOWED_ORIGINS", []string{"http://localhost:5173"}),
+		DebugQuery:             os.Getenv("VITE_DEBUG_QUERY") == "true",
 	}
 	if cfg.ClickHouseAddr == "" {
 		return nil, fmt.Errorf("CLICKHOUSE_ADDR is required")

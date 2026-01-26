@@ -17,6 +17,7 @@ import (
 // Service handles query execution.
 type Service struct {
 	Storage *storage.Client
+	Debug   bool
 }
 
 // Run executes an ad-hoc query and returns results.
@@ -31,7 +32,9 @@ func (s *Service) Run(ctx context.Context, req QueryRequest) (*QueryRunResult, e
 	}
 	offset := (page - 1) * limit
 
-	log.Printf("query.service.run start: page=%d limit=%d offset=%d filters=%d", page, limit, offset, len(req.Filters))
+	if s.Debug {
+		log.Printf("query.service.run start: page=%d limit=%d offset=%d filters=%d", page, limit, offset, len(req.Filters))
+	}
 	if s.Storage == nil {
 		log.Printf("query.service.run skipped: storage not configured")
 		return emptyResult(page, limit), nil
@@ -41,8 +44,10 @@ func (s *Service) Run(ctx context.Context, req QueryRequest) (*QueryRunResult, e
 	logsQuery := builders.BuildLogsQuery(req.Filters, req.TimeRange.From, req.TimeRange.To, limit, offset)
 	tracesQuery := builders.BuildTracesQuery(req.Filters, req.TimeRange.From, req.TimeRange.To, limit, offset)
 	metricsQuery := builders.BuildMetricsQuery(req.Filters, req.TimeRange.From, req.TimeRange.To, limit, offset)
-	log.Printf("DEBUG: executing logsQuery: %s", logsQuery)
-	log.Printf("query.service.run built queries: logs=%q traces=%q metrics=%q", logsQuery, tracesQuery, metricsQuery)
+	if s.Debug {
+		log.Printf("DEBUG: executing logsQuery: %s", logsQuery)
+		log.Printf("query.service.run built queries: logs=%q traces=%q metrics=%q", logsQuery, tracesQuery, metricsQuery)
+	}
 
 	var logs []LogEntry
 	var traces []TraceEntry
@@ -86,7 +91,9 @@ func (s *Service) Run(ctx context.Context, req QueryRequest) (*QueryRunResult, e
 		TraceCount:  len(traces),
 		MetricCount: len(metrics),
 	}
-	log.Printf("query.service.run complete: runId=%s logs=%d traces=%d metrics=%d", result.RunID, result.Summary.LogCount, result.Summary.TraceCount, result.Summary.MetricCount)
+	if s.Debug {
+		log.Printf("query.service.run complete: runId=%s logs=%d traces=%d metrics=%d", result.RunID, result.Summary.LogCount, result.Summary.TraceCount, result.Summary.MetricCount)
+	}
 	return result, nil
 }
 

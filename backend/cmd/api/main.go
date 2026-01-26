@@ -32,7 +32,7 @@ func main() {
 		log.Fatal(err)
 	}
 
-	queryService := &query.Service{Storage: client}
+	queryService := &query.Service{Storage: client, Debug: cfg.DebugQuery}
 	relatedService := &query.RelatedService{Storage: client}
 	traceSpansService := &query.TraceSpansService{Storage: client}
 	statusService := &status.Service{Storage: client}

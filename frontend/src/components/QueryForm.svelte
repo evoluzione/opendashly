@@ -118,17 +118,11 @@
   }
 
   const quickRanges = [
-    { label: "Ultimi 5 minuti", minutes: 5 },
+    { label: "Ultimi 5 minuti", minutes: 5, defaultRefresh: 1 },
     { label: "Ultimi 10 minuti", minutes: 10 },
     { label: "Ultimi 30 minuti", minutes: 30 },
     { label: "Ultima ora", minutes: 60 },
     { label: "Tutto", minutes: null },
-  ];
-  const autoRefreshOptions = [
-    { label: "5 s", seconds: 5 },
-    { label: "10 s", seconds: 10 },
-    { label: "60 s", seconds: 60 },
-    { label: "5 minuti", seconds: 300 },
   ];
 
   function formatDateTimeLocal(date: Date) {
@@ -136,7 +130,7 @@
     return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
   }
 
-  function applyQuickRange(minutes: number | null) {
+  function applyQuickRange(minutes: number | null, defaultRefresh?: number) {
     const now = new Date();
     if (minutes === null) {
       fromInput = "";
@@ -146,18 +140,18 @@
     const fromDate = new Date(now.getTime() - minutes * 60 * 1000);
     fromInput = formatDateTimeLocal(fromDate);
     toInput = formatDateTimeLocal(now);
+
+    if (defaultRefresh) {
+      autoRefreshSeconds = defaultRefresh;
+    }
   }
 
-  function formatAutoRefreshLabel(seconds: number | null) {
-    if (!seconds) return "disattivato";
-    if (seconds === 60) return "1 minuto";
-    if (seconds === 300) return "5 minuti";
-    return `${seconds} secondi`;
-  }
-
-  function handleAutoRefreshChange(event: Event) {
-    const target = event.target as HTMLSelectElement;
-    autoRefreshSeconds = Number(target.value);
+  function togglePlayPause() {
+    if (autoRefreshSeconds) {
+      autoRefreshSeconds = null;
+    } else {
+      autoRefreshSeconds = 1;
+    }
     submit();
   }
 
@@ -345,7 +339,7 @@
             class:active={autoRangeMinutes === range.minutes}
             on:click={() => {
               autoRangeMinutes = range.minutes;
-              applyQuickRange(range.minutes);
+              applyQuickRange(range.minutes, range.defaultRefresh);
               submit();
             }}
           >
@@ -354,22 +348,53 @@
         {/each}
       </div>
       <div class="auto-refresh">
-        <label for="auto-refresh">Aggiornamento</label>
-        <select
-          id="auto-refresh"
-          value={autoRefreshSeconds ?? 10}
-          on:change={handleAutoRefreshChange}
+        <label for="play-pause">Aggiornamento Live</label>
+        <button
+          id="play-pause"
+          type="button"
+          class="btn-icon"
+          class:active={!!autoRefreshSeconds}
+          on:click={togglePlayPause}
+          title={autoRefreshSeconds
+            ? "Pausa aggiornamento automatico"
+            : "Attiva aggiornamento Live"}
         >
-          {#each autoRefreshOptions as option}
-            <option value={option.seconds}>{option.label}</option>
-          {/each}
-        </select>
+          {#if autoRefreshSeconds}
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              width="16"
+              height="16"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              ><rect x="6" y="4" width="4" height="16"></rect><rect
+                x="14"
+                y="4"
+                width="4"
+                height="16"
+              ></rect></svg
+            >
+            <span>Live</span>
+          {:else}
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              width="16"
+              height="16"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              ><polygon points="5 3 19 12 5 21 5 3"></polygon></svg
+            >
+            <span>Play</span>
+          {/if}
+        </button>
       </div>
-      <p class="helper">
-        Aggiornamento automatico ogni {formatAutoRefreshLabel(
-          autoRefreshSeconds ?? 10,
-        )}.
-      </p>
     </fieldset>
   {:else if searchMode === "manual"}
     <div class="manual-filters">
@@ -526,10 +551,6 @@
     gap: 8px;
   }
 
-  .quick-range .helper {
-    margin-top: 8px;
-  }
-
   .auto-refresh {
     display: flex;
     align-items: center;
@@ -539,11 +560,6 @@
 
   .auto-refresh label {
     margin-bottom: 0;
-  }
-
-  .auto-refresh select {
-    width: auto;
-    min-width: 120px;
   }
 
   .manual-filters {
@@ -556,11 +572,6 @@
     display: flex;
     flex-direction: column;
     gap: 6px;
-  }
-
-  .manual-range {
-    display: grid;
-    gap: 12px;
   }
 
   .quick-range-buttons button {
@@ -597,26 +608,37 @@
     margin-bottom: 6px;
   }
 
-  input,
-  select {
-    width: 100%;
-    padding: 12px 14px;
-    font-size: 14px;
-    border: 1px solid #e2e8f0;
-    border-radius: 10px;
-    background: #f8fafc;
-    color: #0f172a;
-    transition: all 0.2s ease;
-  }
-
-  input:focus,
-  select:focus {
-    outline: none;
-    border-color: #6366f1;
-    box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
+  .btn-icon {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 12px;
+    font-size: 13px;
+    font-weight: 600;
+    color: #475569;
     background: white;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.2s;
   }
 
+  .btn-icon:hover {
+    border-color: #cbd5e1;
+    background: #f8fafc;
+  }
+
+  .btn-icon.active {
+    color: #ef4444;
+    border-color: #fecaca;
+    background: #fef2f2;
+  }
+
+  .btn-icon.active:hover {
+    background: #fee2e2;
+  }
+
+  input,
   textarea {
     width: 100%;
     padding: 12px 14px;
@@ -659,26 +681,6 @@
   .sql-editor:focus {
     border-color: #6366f1;
     box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.2);
-  }
-
-  .smart-context-picker {
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-  }
-
-  .context-options {
-    display: flex;
-    gap: 16px;
-  }
-
-  .radio-label {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    font-size: 13px;
-    cursor: pointer;
-    color: #475569;
   }
 
   .smart-actions {

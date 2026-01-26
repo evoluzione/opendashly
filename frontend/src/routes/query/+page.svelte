@@ -1,34 +1,45 @@
 <script lang="ts">
-  import { onDestroy } from 'svelte';
-  import QueryForm from '../../components/QueryForm.svelte';
-  import LogResultsTable from '../../components/LogResultsTable.svelte';
-  import TraceResultsList from '../../components/TraceResultsList.svelte';
-  import MetricChart from '../../components/MetricChart.svelte';
-  import { queryState, executeQuery, setAutoRefresh, stopAutoRefresh } from '../../lib/stores/query';
-  import { saveQuery } from '../../services/saved_queries';
-  import type { QueryRequest } from '../../services/query';
+  import { onDestroy } from "svelte";
+  import QueryForm from "../../components/QueryForm.svelte";
+  import LogResultsTable from "../../components/LogResultsTable.svelte";
+  import TraceResultsList from "../../components/TraceResultsList.svelte";
+  import MetricChart from "../../components/MetricChart.svelte";
+  import {
+    queryState,
+    executeQuery,
+    setAutoRefresh,
+    stopAutoRefresh,
+  } from "../../lib/stores/query";
+  import { saveQuery } from "../../services/saved_queries";
+  import type { QueryRequest } from "../../services/query";
 
   export let params: Record<string, string> = {};
 
-  let queryName = '';
+  let queryName = "";
   let lastRequest: QueryRequest | null = null;
-  let pageSize = '100';
-  const pageSizeOptions = ['25', '50', '100', '200'];
+  let pageSize = "100";
+  const pageSizeOptions = ["25", "50", "100", "200"];
 
   async function handleRun(event) {
     const limit = Number(pageSize) || 100;
     lastRequest = { ...event.detail.request, limit, page: 1 };
-    setAutoRefresh(event.detail.autoRefreshSeconds ?? null, event.detail.autoRefreshRangeMinutes ?? null);
+    setAutoRefresh(
+      event.detail.autoRefreshSeconds ?? null,
+      event.detail.autoRefreshRangeMinutes ?? null,
+    );
     await executeQuery(lastRequest);
   }
 
   function handleModeChange(event) {
-    if (event.detail.mode !== 'auto') {
+    if (event.detail.mode !== "auto") {
       stopAutoRefresh();
     }
   }
 
-  async function handlePageChange(_signal: 'logs' | 'traces' | 'metrics', nextPage: number) {
+  async function handlePageChange(
+    _signal: "logs" | "traces" | "metrics",
+    nextPage: number,
+  ) {
     if (!lastRequest) return;
     const page = nextPage < 1 ? 1 : nextPage;
     lastRequest = { ...lastRequest, page };
@@ -45,9 +56,9 @@
   async function handleSave() {
     if (!lastRequest) return;
     await saveQuery({
-      name: queryName || 'Query salvata',
-      description: '',
-      request: lastRequest
+      name: queryName || "Query salvata",
+      description: "",
+      request: lastRequest,
     });
   }
 
@@ -66,7 +77,9 @@
   {#if $queryState.loading}
     <p>Caricamento...</p>
   {:else}
-    <p class="empty">Ancora nessun risultato. Esegui una query per vedere la telemetria.</p>
+    <p class="empty">
+      Ancora nessun risultato. Esegui una query per vedere la telemetria.
+    </p>
   {/if}
 {:else}
   {#if $queryState.loading}
@@ -74,7 +87,11 @@
   {/if}
   <div class="page-size">
     <label for="page-size">Risultati per pagina (log e tracce)</label>
-    <select id="page-size" bind:value={pageSize} on:change={handlePageSizeChange}>
+    <select
+      id="page-size"
+      bind:value={pageSize}
+      on:change={handlePageSizeChange}
+    >
       {#each pageSizeOptions as size}
         <option value={size}>{size}</option>
       {/each}
@@ -85,7 +102,7 @@
     <LogResultsTable
       logs={$queryState.result.results.logs}
       pagination={$queryState.result.pagination?.logs ?? null}
-      on:pageChange={(event) => handlePageChange('logs', event.detail.page)}
+      on:pageChange={(event) => handlePageChange("logs", event.detail.page)}
     />
   </section>
   <section>
@@ -93,7 +110,7 @@
     <TraceResultsList
       traces={$queryState.result.results.traces}
       pagination={$queryState.result.pagination?.traces ?? null}
-      on:pageChange={(event) => handlePageChange('traces', event.detail.page)}
+      on:pageChange={(event) => handlePageChange("traces", event.detail.page)}
     />
   </section>
   <section>
@@ -101,7 +118,7 @@
     <MetricChart
       series={$queryState.result.results.metrics}
       pagination={$queryState.result.pagination?.metrics ?? null}
-      on:pageChange={(event) => handlePageChange('metrics', event.detail.page)}
+      on:pageChange={(event) => handlePageChange("metrics", event.detail.page)}
     />
   </section>
   <div class="save">

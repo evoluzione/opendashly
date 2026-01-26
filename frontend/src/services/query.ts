@@ -31,14 +31,16 @@ export type SmartQueryResponse = {
 };
 
 export function runQuery(request: QueryRequest): Promise<QueryRunResult> {
-  console.debug('query.run.request', {
-    signals: request.signals,
-    timeRange: request.timeRange,
-    filters: Object.keys(request.filters ?? {}).length,
-    page: request.page,
-    limit: request.limit,
-    orderBy: request.orderBy
-  });
+  if (import.meta.env.VITE_DEBUG_QUERY === 'true') {
+    console.debug('query.run.request', {
+      signals: request.signals,
+      timeRange: request.timeRange,
+      filters: Object.keys(request.filters ?? {}).length,
+      page: request.page,
+      limit: request.limit,
+      orderBy: request.orderBy
+    });
+  }
   return apiRequest<QueryRunResult>('/api/query/run', {
     method: 'POST',
     body: JSON.stringify(request)

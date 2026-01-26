@@ -119,14 +119,36 @@ function scheduleAutoRefresh() {
     return;
   }
   refreshTimer = setInterval(() => {
-    const latest = get(queryState);
-    if (!latest.lastRequest) {
+    const currentState = get(queryState);
+    if (!currentState.lastRequest) {
       return;
     }
-    const request = latest.autoRefreshRangeMinutes
-      ? buildRollingRangeRequest(latest.lastRequest, latest.autoRefreshRangeMinutes)
-      : latest.lastRequest;
-    void executeQuery(request, { retainResult: true });
+
+    let request = currentState.lastRequest;
+
+    // Incremental polling optimization for "Live" mode (1s)
+    if (currentState.autoRefreshSeconds === 1) {
+      const maxTimestamp = getMaxTimestamp(currentState.result);
+      if (maxTimestamp) {
+        // Fetch only new data from last max timestamp
+        // Add minimal offset to avoid duplicates if precision allows, or rely on merge dedup
+        const fromDate = new Date(new Date(maxTimestamp).getTime() + 1);
+        request = {
+          ...currentState.lastRequest,
+          timeRange: {
+            from: fromDate.toISOString(),
+            to: new Date().toISOString()
+          }
+        };
+      } else if (currentState.autoRefreshRangeMinutes) {
+        // Fallback to rolling if no data yet
+        request = buildRollingRangeRequest(currentState.lastRequest, currentState.autoRefreshRangeMinutes);
+      }
+    } else if (currentState.autoRefreshRangeMinutes) {
+      request = buildRollingRangeRequest(currentState.lastRequest, currentState.autoRefreshRangeMinutes);
+    }
+
+    void executeQuery(request, { retainResult: true, isBackground: true });
   }, currentState.autoRefreshSeconds * 1000);
 }
 
@@ -139,24 +161,60 @@ function buildRollingRangeRequest(request: QueryRequest, minutes: number): Query
   };
 }
 
+function getMaxTimestamp(result: QueryRunResult | null): string | null {
+  if (!result || !result.results) return null;
+  let maxTime = "";
+
+  // Check logs
+  if (result.results.logs) {
+    for (const log of result.results.logs) {
+      if (log.timestamp > maxTime) maxTime = log.timestamp;
+    }
+  }
+
+  // Check traces
+  if (result.results.traces) {
+    for (const trace of result.results.traces) {
+      if (trace.timestamp > maxTime) maxTime = trace.timestamp;
+    }
+  }
+
+  return maxTime || null;
+}
+
+// Debug helper
+function debugLog(message: string, ...args: any[]) {
+  if (import.meta.env.VITE_DEBUG_QUERY === 'true') {
+    console.debug(message, ...args);
+  }
+}
+
 export async function executeQuery(
   request: QueryRequest,
-  options: { retainResult?: boolean } = {}
+  options: { retainResult?: boolean; isBackground?: boolean } = {}
 ) {
-  console.debug('query.execute.start', { retainResult: !!options.retainResult, request });
+  debugLog('query.execute.start', { retainResult: !!options.retainResult, isBackground: !!options.isBackground, request });
   const previousResult = get(queryState).result;
-  queryState.update((state) => ({
-    ...state,
-    loading: true,
-    error: null,
-    result: options.retainResult ? state.result : null,
-    lastRequest: request
-  }));
+
+  // Set loading only if NOT a background refresh
+  if (!options.isBackground) {
+    queryState.update((state) => ({
+      ...state,
+      loading: true,
+      error: null,
+      result: options.retainResult ? state.result : null,
+      lastRequest: request
+    }));
+  } else {
+    // Even in background, we update lastRequest
+    queryState.update((state) => ({ ...state, lastRequest: request }));
+  }
+
   try {
     const response = await runQuery(request);
-    console.debug('query.execute.success', { runId: response.runId, status: response.status });
+    debugLog('query.execute.success', { runId: response.runId, status: response.status });
     const shouldMerge =
-      !!options.retainResult &&
+      (!!options.retainResult || !!options.isBackground) &&
       !!previousResult &&
       (request.page === undefined || request.page === 1);
     const result = shouldMerge ? mergeResult(previousResult, response, request) : response;
@@ -164,12 +222,12 @@ export async function executeQuery(
     scheduleAutoRefresh();
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Errore sconosciuto';
-    console.debug('query.execute.error', { message, error: err });
+    debugLog('query.execute.error', { message, error: err });
     queryState.update((state) => ({
       ...state,
       loading: false,
       error: message,
-      result: options.retainResult ? state.result : null
+      result: options.retainResult || options.isBackground ? state.result : null
     }));
   }
 }
