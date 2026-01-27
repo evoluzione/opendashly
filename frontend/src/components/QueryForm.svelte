@@ -1,5 +1,8 @@
 <script lang="ts">
   import { createEventDispatcher, onMount } from "svelte";
+  import ConfirmModal from "./common/ConfirmModal.svelte";
+  import { page } from "$app/stores";
+  import { goto } from "$app/navigation";
   import {
     servicesState,
     selectService,
@@ -14,6 +17,9 @@
   type SearchMode = "auto" | "manual" | "smart";
 
   export let activeTab: "logs" | "metriche" | "tracce";
+  export let initialTraceId: string | null = null;
+  export let forceMode: SearchMode | null = null;
+  export let autoRun = false;
 
   interface TabState {
     searchMode: SearchMode;
@@ -89,6 +95,11 @@
 
   let smartLoading = false;
   let smartEnabled = false;
+  let lastInitialTraceId = "";
+  let confirmOpen = false;
+  let confirmMessage = "";
+  let confirmAction: "remove-trace" | "clear-dates" | null = null;
+  let suppressUrlSync = true;
 
   // Manual filter fields
   let filterTraceId = "";
@@ -159,9 +170,203 @@
     return value ? new Date(value).toISOString() : "";
   }
 
-  onMount(async () => {
-    applyQuickRange(autoRangeMinutes);
+  function setManualRange(minutes: number) {
+    const now = new Date();
+    const fromDate = new Date(now.getTime() - minutes * 60 * 1000);
+    fromInput = formatDateTimeLocal(fromDate);
+    toInput = formatDateTimeLocal(now);
+  }
+
+  function applyTraceIdOverride(traceId: string) {
+    if (!traceId) return;
+    searchMode = "manual";
+    if (fromInput || toInput) {
+      fromInput = "";
+      toInput = "";
+    }
+    filterTraceId = traceId;
+    if (autoRun) {
+      submit();
+    }
+  }
+
+  function handleDateActivation() {
+    if (!filterTraceId) return;
+    confirmMessage = "Vuoi rimuovere il Trace ID per usare il range date?";
+    confirmAction = "remove-trace";
+    confirmOpen = true;
+  }
+
+  function handleTraceIdActivation() {
+    if (!fromInput && !toInput) return;
+    confirmMessage = "Vuoi svuotare il range date per usare il Trace ID?";
+    confirmAction = "clear-dates";
+    confirmOpen = true;
+  }
+
+  function confirmTraceIdRemoval() {
+    confirmOpen = false;
+    confirmAction = null;
+    filterTraceId = "";
+    if (!fromInput || !toInput) {
+      setManualRange(24 * 60);
+    }
+    clearTraceIdFromUrl();
+  }
+
+  function cancelConfirm() {
+    confirmOpen = false;
+    confirmAction = null;
+  }
+
+  function confirmDateRangeClear() {
+    confirmOpen = false;
+    confirmAction = null;
+    fromInput = "";
+    toInput = "";
+  }
+
+  function handleConfirm() {
+    if (confirmAction === "remove-trace") {
+      confirmTraceIdRemoval();
+      return;
+    }
+    if (confirmAction === "clear-dates") {
+      confirmDateRangeClear();
+    }
+  }
+
+  function clearTraceIdFromUrl() {
+    const url = new URL($page.url);
+    url.searchParams.delete("traceId");
+    url.searchParams.delete("autorun");
+    url.searchParams.delete("mode");
+    if (url.searchParams.get("tab") === "tracce") {
+      url.searchParams.delete("tab");
+    }
+    goto(url.pathname + url.search, { replaceState: true });
+  }
+
+  function applyUrlParams() {
+    const params = $page.url.searchParams;
+    const modeParam = params.get("mode");
+    if (modeParam === "auto" || modeParam === "manual" || modeParam === "smart") {
+      searchMode = modeParam;
+    }
+
+    const rangeParam = params.get("range");
+    if (rangeParam === "all") {
+      autoRangeMinutes = null;
+    } else if (rangeParam) {
+      const parsed = Number(rangeParam);
+      autoRangeMinutes = Number.isFinite(parsed) ? parsed : autoRangeMinutes;
+    }
+
+    const refreshParam = params.get("refresh");
+    if (refreshParam) {
+      const parsed = Number(refreshParam);
+      autoRefreshSeconds = Number.isFinite(parsed) ? parsed : autoRefreshSeconds;
+    }
+
+    const serviceParam = params.get("service");
+    if (serviceParam) {
+      selectService(serviceParam);
+    }
+
+    const severityParam = params.get("severity");
+    if (severityParam) {
+      selectLogLevel(severityParam);
+    }
+
+    const traceParam = params.get("traceId");
+    if (traceParam) {
+      filterTraceId = traceParam;
+      fromInput = "";
+      toInput = "";
+    }
+
+    if (searchMode === "manual" && !traceParam) {
+      const fromParam = params.get("from");
+      const toParam = params.get("to");
+      if (fromParam) fromInput = fromParam;
+      if (toParam) toInput = toParam;
+    }
+
+    if (searchMode === "smart") {
+      const promptParam = params.get("prompt");
+      const sqlParam = params.get("sql");
+      if (promptParam) smartPrompt = promptParam;
+      if (sqlParam) {
+        generatedSql = sqlParam;
+        sqlDirty = true;
+      }
+    }
+  }
+
+  function syncUrlWithState() {
+    if (suppressUrlSync) return;
+    const params = new URLSearchParams();
+    params.set("tab", activeTab);
+    params.set("mode", searchMode);
+
+    const selectedService = $servicesState.selectedService;
+    const selectedLogLevel = $servicesState.selectedLogLevel;
+    if (selectedService && selectedService !== "Tutti") {
+      params.set("service", selectedService);
+    }
+    if (selectedLogLevel && selectedLogLevel !== "Tutti") {
+      params.set("severity", selectedLogLevel);
+    }
+
     if (searchMode === "auto") {
+      params.set("range", autoRangeMinutes === null ? "all" : String(autoRangeMinutes));
+      if (autoRefreshSeconds) {
+        params.set("refresh", String(autoRefreshSeconds));
+      }
+    }
+
+    if (searchMode === "manual") {
+      if (filterTraceId) {
+        params.set("traceId", filterTraceId);
+      } else {
+        if (fromInput) params.set("from", fromInput);
+        if (toInput) params.set("to", toInput);
+      }
+    }
+
+    if (searchMode === "smart") {
+      if (smartPrompt) params.set("prompt", smartPrompt);
+      if (generatedSql) params.set("sql", generatedSql);
+    }
+
+    const current = $page.url.searchParams.toString();
+    const next = params.toString();
+    if (current !== next) {
+      goto(`${$page.url.pathname}?${next}`, { replaceState: true });
+    }
+  }
+
+  onMount(async () => {
+    applyUrlParams();
+    if (forceMode) {
+      searchMode = forceMode;
+    }
+    if (searchMode === "auto") {
+      applyQuickRange(autoRangeMinutes);
+    }
+    suppressUrlSync = false;
+    if (searchMode === "manual" && (!fromInput || !toInput) && !initialTraceId) {
+      setManualRange(24 * 60);
+    }
+    if (initialTraceId) {
+      filterTraceId = initialTraceId;
+      lastInitialTraceId = initialTraceId;
+      fromInput = "";
+      toInput = "";
+    }
+    if (searchMode === "auto") {
+      submit();
+    } else if (autoRun) {
       submit();
     }
     try {
@@ -171,6 +376,13 @@
       console.error("failed to load ai settings", e);
     }
   });
+
+  $: if (initialTraceId && initialTraceId !== lastInitialTraceId) {
+    lastInitialTraceId = initialTraceId;
+    applyTraceIdOverride(initialTraceId);
+  }
+
+  $: syncUrlWithState();
 
   // Auto-submit when global filters change (if in auto/manual mode)
   // We track the previous values to avoid initial double-fetch if needed
@@ -193,6 +405,10 @@
     if (searchMode === nextMode) return;
     searchMode = nextMode;
     smartError = "";
+    if (nextMode !== "manual" && filterTraceId) {
+      filterTraceId = "";
+      clearTraceIdFromUrl();
+    }
     if (searchMode === "auto") {
       applyQuickRange(autoRangeMinutes);
       submit();
@@ -246,7 +462,8 @@
     if (selectedLogLevel && selectedLogLevel !== "Tutti") {
       manualFilters["severity"] = selectedLogLevel;
     }
-    if (filterTraceId) manualFilters["trace_id"] = filterTraceId;
+    const hasTraceId = !!filterTraceId;
+    if (hasTraceId) manualFilters["trace_id"] = filterTraceId;
 
     if (searchMode === "smart") {
       if (!generatedSql) {
@@ -280,8 +497,9 @@
       applyQuickRange(autoRangeMinutes);
     }
     const zeroTime = "0001-01-01T00:00:00Z";
-    const from = rangeMinutes === null ? zeroTime : toIso(fromInput);
-    const to = rangeMinutes === null ? zeroTime : toIso(toInput);
+    const from =
+      hasTraceId || rangeMinutes === null ? zeroTime : toIso(fromInput);
+    const to = hasTraceId || rangeMinutes === null ? zeroTime : toIso(toInput);
     if (!from || !to) {
       return;
     }
@@ -296,6 +514,15 @@
       autoRefreshSeconds: refreshSeconds || null,
       autoRefreshRangeMinutes: rangeMinutes,
     });
+  }
+
+  $: if (searchMode === "manual" && filterTraceId && (fromInput || toInput)) {
+    fromInput = "";
+    toInput = "";
+  }
+
+  $: if (!filterTraceId && $page.url.searchParams.get("traceId")) {
+    clearTraceIdFromUrl();
   }
 </script>
 
@@ -400,11 +627,25 @@
     <div class="manual-filters">
       <div class="filter-field">
         <label for="query-from">Da</label>
-        <input id="query-from" type="datetime-local" bind:value={fromInput} />
+        <input
+          id="query-from"
+          type="datetime-local"
+          bind:value={fromInput}
+          readonly={!!filterTraceId}
+          on:focus={handleDateActivation}
+          on:click={handleDateActivation}
+        />
       </div>
       <div class="filter-field">
         <label for="query-to">A</label>
-        <input id="query-to" type="datetime-local" bind:value={toInput} />
+        <input
+          id="query-to"
+          type="datetime-local"
+          bind:value={toInput}
+          readonly={!!filterTraceId}
+          on:focus={handleDateActivation}
+          on:click={handleDateActivation}
+        />
       </div>
       <div class="filter-field">
         <label for="filter-traceid">Trace ID</label>
@@ -413,8 +654,15 @@
           type="text"
           placeholder="abc123..."
           bind:value={filterTraceId}
+          on:focus={handleTraceIdActivation}
+          on:click={handleTraceIdActivation}
         />
       </div>
+      {#if filterTraceId}
+        <p class="helper">
+          Con Trace ID impostato, il range date viene ignorato.
+        </p>
+      {/if}
     </div>
   {:else}
     <div class="smart-box">
@@ -478,7 +726,7 @@
       class="btn-execute"
       on:click={submit}
       disabled={searchMode !== "smart"
-        ? !fromInput || !toInput
+        ? (!filterTraceId && (!fromInput || !toInput))
         : !generatedSql || !sqlDirty}
     >
       <svg
@@ -495,6 +743,16 @@
     </button>
   {/if}
 </div>
+
+<ConfirmModal
+  open={confirmOpen}
+  title="Rimuovere Trace ID?"
+  message={confirmMessage}
+  confirmLabel={confirmAction === "clear-dates" ? "Svuota range" : "Rimuovi"}
+  cancelLabel="Annulla"
+  on:confirm={handleConfirm}
+  on:cancel={cancelConfirm}
+/>
 
 <style>
   .query-form {

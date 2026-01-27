@@ -16,6 +16,7 @@ type Repository interface {
 	CreateCleanupJob(ctx context.Context, job CleanupJob) error
 	UpdateCleanupJob(ctx context.Context, jobID string, status string, recordsDeleted uint64, errorMsg string) error
 	ListCleanupJobs(ctx context.Context, limit int) ([]CleanupJob, error)
+	CountCleanupJobs(ctx context.Context) (uint64, error)
 }
 
 type Repo struct {
@@ -116,12 +117,16 @@ func (r *Repo) UpdateCleanupJob(ctx context.Context, jobID string, status string
 }
 
 func (r *Repo) ListCleanupJobs(ctx context.Context, limit int) ([]CleanupJob, error) {
-	query := `SELECT job_id, job_type, signal_type, service_name, started_at, completed_at, status, records_deleted, error_message
+	base := `SELECT job_id, job_type, signal_type, service_name, started_at, completed_at, status, records_deleted, error_message
 	          FROM telemetry.cleanup_jobs
-	          ORDER BY started_at DESC
-	          LIMIT ?`
-
-	rows, err := r.Conn.Query(ctx, query, limit)
+	          ORDER BY started_at DESC`
+	var rows driver.Rows
+	var err error
+	if limit > 0 {
+		rows, err = r.Conn.Query(ctx, base+" LIMIT ?", limit)
+	} else {
+		rows, err = r.Conn.Query(ctx, base)
+	}
 	if err != nil {
 		return nil, fmt.Errorf("query cleanup jobs: %w", err)
 	}
@@ -137,6 +142,15 @@ func (r *Repo) ListCleanupJobs(ctx context.Context, limit int) ([]CleanupJob, er
 	}
 
 	return jobs, rows.Err()
+}
+
+func (r *Repo) CountCleanupJobs(ctx context.Context) (uint64, error) {
+	var count uint64
+	err := r.Conn.QueryRow(ctx, "SELECT count() FROM telemetry.cleanup_jobs").Scan(&count)
+	if err != nil {
+		return 0, fmt.Errorf("count cleanup jobs: %w", err)
+	}
+	return count, nil
 }
 
 func newJobID() string {

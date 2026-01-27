@@ -1,18 +1,17 @@
 <script lang="ts">
   import { createEventDispatcher, onDestroy } from "svelte";
-  import CorrelationPanel from "./CorrelationPanel.svelte";
-  import TraceSpanTimeline from "./TraceSpanTimeline.svelte";
+  import { goto } from "$app/navigation";
 
   export let logs: any[] = [];
   export let pagination: { page: number; totalPages: number } | null = null;
 
   const dispatch = createEventDispatcher();
   let selectedLog: any | null = null;
-  let selectedTraceId: string | null = null;
   let knownKeys = new Set<string>();
   let highlightKeys = new Set<string>();
   let highlightTimers = new Map<string, ReturnType<typeof setTimeout>>();
   let initialized = false;
+  let showAttributes = false;
 
   const severityStyles: Record<
     string,
@@ -99,6 +98,55 @@
     return "-";
   }
 
+  function escapeRegex(value: string) {
+    return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  }
+
+  function escapeHtml(value: string) {
+    return value
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#39;");
+  }
+
+  function mergeAttributes(log: any) {
+    return {
+      ...(log?.resourceAttributes ?? {}),
+      ...(log?.logAttributes ?? {}),
+    };
+  }
+
+  function interpolateMessageHtml(
+    message: string,
+    attributes: Record<string, any>,
+  ) {
+    let output = escapeHtml(message);
+    for (const [key, rawValue] of Object.entries(attributes)) {
+      const value = formatValue(rawValue);
+      if (!value) continue;
+      const escapedKey = escapeRegex(key);
+      const patterns = [
+        new RegExp(`\\{\\s*${escapedKey}\\s*\\}`, "g"),
+        new RegExp(`\\$\\{\\s*${escapedKey}\\s*\\}`, "g"),
+        new RegExp(`%\\{\\s*${escapedKey}\\s*\\}`, "g"),
+      ];
+      const replacement = `<strong>${escapeHtml(value)}</strong>`;
+      for (const pattern of patterns) {
+        output = output.replace(pattern, replacement);
+      }
+    }
+    return output;
+  }
+
+  function formatLogMessageHtml(log: any, structured: any) {
+    const base = extractMessage(log?.body, structured);
+    if (!base || base === "-") return base;
+    const attributes = mergeAttributes(log);
+    return interpolateMessageHtml(base, attributes);
+  }
+
   function formatValue(value: any) {
     if (value === null || value === undefined) return "";
     if (typeof value === "string") return value;
@@ -133,17 +181,16 @@
     return severityStyles[key] ?? severityStyles.info;
   }
 
-  function openTraceModal(traceId: string) {
-    selectedLog = null;
-    selectedTraceId = traceId;
-  }
-
   function closeLogModal() {
     selectedLog = null;
   }
 
-  function closeTraceModal() {
-    selectedTraceId = null;
+  function goToTraceSearch(traceId: string) {
+    if (!traceId) return;
+    closeLogModal();
+    goto(
+      `/?traceId=${encodeURIComponent(traceId)}&tab=tracce&mode=manual&autorun=1`,
+    );
   }
 
   function handleBackdropKeydown(event: KeyboardEvent, onClose: () => void) {
@@ -166,6 +213,10 @@
       }
       knownKeys = nextKeys;
     }
+  }
+
+  $: if (selectedLog) {
+    showAttributes = false;
   }
 
   onDestroy(() => {
@@ -193,7 +244,8 @@
           <span class="severity" style={`color:${severity.color}`}
             >{severity.label}</span
           >
-          <span class="message">{extractMessage(log.body, structuredBody)}</span
+          <span class="message"
+            >{@html formatLogMessageHtml(log, structuredBody)}</span
           >
           {#if log.traceId}
             <span class="trace">Traccia {shortId(log.traceId)}</span>
@@ -229,6 +281,7 @@
 {#if selectedLog}
   {@const structuredBody = parseStructured(selectedLog.body)}
   {@const tags = buildTags(selectedLog)}
+  {@const mergedAttributes = mergeAttributes(selectedLog)}
   <div
     class="modal-backdrop"
     role="button"
@@ -253,7 +306,7 @@
           <button
             type="button"
             class="pill link"
-            on:click={() => openTraceModal(selectedLog.traceId)}
+            on:click={() => goToTraceSearch(selectedLog.traceId)}
           >
             Traccia {selectedLog.traceId}
           </button>
@@ -264,7 +317,7 @@
       </div>
       <div class="body">
         <h4>Messaggio</h4>
-        <p>{extractMessage(selectedLog.body, structuredBody)}</p>
+        <p>{@html formatLogMessageHtml(selectedLog, structuredBody)}</p>
       </div>
       {#if tags.length > 0}
         <div class="tags">
@@ -282,8 +335,22 @@
             <pre>{JSON.stringify(structuredBody, null, 2)}</pre>
           </div>
         {/if}
-        {#if selectedLog.resourceAttributes && Object.keys(selectedLog.resourceAttributes).length > 0}
+        {#if Object.keys(mergedAttributes).length > 0}
           <div>
+            <button
+              type="button"
+              class="toggle-attributes"
+              aria-expanded={showAttributes}
+              on:click={() => (showAttributes = !showAttributes)}
+            >
+              {showAttributes ? "Nascondi attributi" : "Mostra attributi"}
+            </button>
+          </div>
+        {/if}
+      </div>
+      {#if showAttributes}
+        {#if selectedLog.resourceAttributes && Object.keys(selectedLog.resourceAttributes).length > 0}
+          <div class="attributes-block">
             <h4>Attributi risorsa</h4>
             <table class="attributes-table">
               <thead>
@@ -304,7 +371,7 @@
           </div>
         {/if}
         {#if selectedLog.logAttributes && Object.keys(selectedLog.logAttributes).length > 0}
-          <div>
+          <div class="attributes-block">
             <h4>Attributi log</h4>
             <table class="attributes-table">
               <thead>
@@ -324,35 +391,11 @@
             </table>
           </div>
         {/if}
-      </div>
+      {/if}
     </div>
   </div>
 {/if}
 
-{#if selectedTraceId}
-  <div
-    class="modal-backdrop"
-    role="button"
-    tabindex="0"
-    aria-label="Chiudi dettagli traccia"
-    on:click|self={closeTraceModal}
-    on:keydown={(event) => handleBackdropKeydown(event, closeTraceModal)}
-  >
-    <div class="modal trace-modal" role="dialog" aria-modal="true">
-      <header>
-        <div>
-          <p class="kicker">Dettagli traccia</p>
-          <h3>{selectedTraceId}</h3>
-        </div>
-        <button type="button" class="close" on:click={closeTraceModal}
-          >Chiudi</button
-        >
-      </header>
-      <TraceSpanTimeline traceId={selectedTraceId} />
-      <CorrelationPanel traceId={selectedTraceId} />
-    </div>
-  </div>
-{/if}
 
 <style>
   .empty {
@@ -609,6 +652,28 @@
   .json-grid {
     display: grid;
     gap: 12px;
+  }
+
+  .toggle-attributes {
+    border: 1px solid #e2e8f0;
+    background: #f8fafc;
+    color: #475569;
+    padding: 8px 12px;
+    border-radius: 8px;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: border 0.15s ease, color 0.15s ease;
+  }
+
+  .toggle-attributes:hover {
+    border-color: #2563eb;
+    color: #2563eb;
+  }
+
+  .attributes-block {
+    display: grid;
+    gap: 8px;
   }
 
   pre {

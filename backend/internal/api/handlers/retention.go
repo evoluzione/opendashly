@@ -3,6 +3,7 @@ package handlers
 import (
 	"encoding/json"
 	"net/http"
+	"strconv"
 
 	"opendashly/backend/internal/auth"
 	"opendashly/backend/internal/retention"
@@ -38,7 +39,8 @@ type cleanupResponse struct {
 }
 
 type cleanupJobsResponse struct {
-	Jobs []cleanupJobItem `json:"jobs"`
+	Jobs  []cleanupJobItem `json:"jobs"`
+	Total uint64           `json:"total"`
 }
 
 type cleanupJobItem struct {
@@ -154,7 +156,22 @@ func (h *RetentionHandler) ListJobs(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	jobs, err := h.Repo.ListCleanupJobs(r.Context(), 50)
+	limit := 10
+	if raw := r.URL.Query().Get("limit"); raw != "" {
+		if parsed, err := strconv.Atoi(raw); err == nil {
+			limit = parsed
+		}
+	}
+	if r.URL.Query().Get("all") == "1" {
+		limit = 0
+	}
+
+	jobs, err := h.Repo.ListCleanupJobs(r.Context(), limit)
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+	total, err := h.Repo.CountCleanupJobs(r.Context())
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		return
@@ -181,5 +198,5 @@ func (h *RetentionHandler) ListJobs(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	writeJSON(w, cleanupJobsResponse{Jobs: items})
+	writeJSON(w, cleanupJobsResponse{Jobs: items, Total: total})
 }

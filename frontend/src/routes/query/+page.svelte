@@ -1,5 +1,7 @@
 <script lang="ts">
-  import { onDestroy } from "svelte";
+  import { onDestroy, onMount } from "svelte";
+  import { page } from "$app/stores";
+  import { goto } from "$app/navigation";
   import QueryForm from "../../components/QueryForm.svelte";
   import LogResultsTable from "../../components/LogResultsTable.svelte";
   import TraceResultsList from "../../components/TraceResultsList.svelte";
@@ -19,6 +21,15 @@
   let lastRequest: QueryRequest | null = null;
   let pageSize = "100";
   const pageSizeOptions = ["25", "50", "100", "200"];
+  const activeTab = "tracce";
+  let traceIdParam: string | null = null;
+  $: traceIdParam = $page.url.searchParams.get("traceId");
+
+  onMount(() => {
+    const params = $page.url.searchParams.toString();
+    const target = params ? `/?${params}` : "/";
+    void goto(target, { replaceState: true });
+  });
 
   async function handleRun(event) {
     const limit = Number(pageSize) || 100;
@@ -67,7 +78,14 @@
   });
 </script>
 
-<QueryForm on:run={handleRun} on:modeChange={handleModeChange} />
+<QueryForm
+  {activeTab}
+  initialTraceId={traceIdParam}
+  forceMode={traceIdParam ? "manual" : null}
+  autoRun={!!traceIdParam}
+  on:run={handleRun}
+  on:modeChange={handleModeChange}
+/>
 
 {#if $queryState.error}
   <p class="error">{$queryState.error}</p>

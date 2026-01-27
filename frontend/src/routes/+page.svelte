@@ -1,5 +1,7 @@
 <script lang="ts">
   import { onMount } from "svelte";
+  import { page } from "$app/stores";
+  import { goto } from "$app/navigation";
   import Sidebar from "../components/Sidebar.svelte";
   import ServiceDropdown from "../components/ServiceDropdown.svelte";
   import LogLevelDropdown from "../components/LogLevelDropdown.svelte";
@@ -31,6 +33,43 @@
   let activeTab: "logs" | "metriche" | "tracce" = "metriche";
   let metricsLoaded = false;
   let dashboardLoaded = false;
+  let initialTraceId: string | null = null;
+  let forceMode: "auto" | "manual" | "smart" | null = null;
+  let autoRun = false;
+  let tabFromUrl = "";
+  let tabFromUrlApplied = false;
+
+  $: {
+    const params = $page.url.searchParams;
+    initialTraceId = params.get("traceId");
+    autoRun = params.get("autorun") === "1";
+    const mode = params.get("mode");
+    forceMode = mode === "auto" || mode === "manual" || mode === "smart"
+      ? mode
+      : null;
+    const tabParam = params.get("tab") ?? "";
+    if (tabParam && tabParam !== tabFromUrl) {
+      tabFromUrl = tabParam;
+      tabFromUrlApplied = false;
+    }
+    if (initialTraceId) {
+      activeTab = "tracce";
+      tabFromUrlApplied = true;
+    } else if (!tabFromUrlApplied) {
+      if (tabParam === "logs" || tabParam === "metriche" || tabParam === "tracce") {
+        activeTab = tabParam;
+        tabFromUrlApplied = true;
+      }
+    }
+  }
+
+  $: {
+    const params = new URLSearchParams($page.url.searchParams);
+    if (params.get("tab") !== activeTab) {
+      params.set("tab", activeTab);
+      void goto(`${$page.url.pathname}?${params.toString()}`, { replaceState: true });
+    }
+  }
 
   onMount(() => {
     // Load dashboard metrics on startup
@@ -233,7 +272,13 @@
     <aside class="filters">
       <div class="panel">
         <h3>Filtri query</h3>
-        <QueryForm {activeTab} on:run={handleRun} />
+        <QueryForm
+          {activeTab}
+          {initialTraceId}
+          {forceMode}
+          {autoRun}
+          on:run={handleRun}
+        />
       </div>
     </aside>
   {/if}

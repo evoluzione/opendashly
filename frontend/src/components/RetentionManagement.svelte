@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte';
+  import ConfirmModal from './common/ConfirmModal.svelte';
   import {
     getRetentionSettings,
     updateRetentionSetting,
@@ -24,6 +25,10 @@
   let selectedSignals: SignalType[] = [];
   let selectedService = '';
   let cleanupLoading = false;
+  let confirmOpen = false;
+  let confirmMessage = '';
+  let showAllJobs = false;
+  let totalJobs = 0;
   const signalLabels: Record<SignalType, string> = {
     logs: 'Log',
     traces: 'Tracce',
@@ -60,10 +65,11 @@
     }
   }
 
-  async function loadJobs() {
+  async function loadJobs(all = false) {
     try {
-      const result = await listCleanupJobs();
+      const result = await listCleanupJobs(all ? undefined : 10, all);
       jobs = result.jobs;
+      totalJobs = result.total ?? result.jobs.length;
     } catch (err) {
       console.error('Failed to load jobs', err);
     }
@@ -112,11 +118,15 @@
       return;
     }
 
-    const confirmMsg = selectedService
+    confirmMessage = selectedService
       ? `Eliminare tutti i dati ${labelList(selectedSignals)} per il servizio "${selectedService}"?`
       : `Eliminare TUTTI i dati ${labelList(selectedSignals)}? Questa azione non può essere annullata!`;
 
-    if (!confirm(confirmMsg)) return;
+    confirmOpen = true;
+  }
+
+  async function confirmCleanup() {
+    confirmOpen = false;
 
     cleanupLoading = true;
     error = '';
@@ -133,12 +143,21 @@
 
       selectedSignals = [];
       selectedService = '';
-      await loadJobs();
+      await loadJobs(showAllJobs);
     } catch (err) {
       error = err instanceof Error ? err.message : 'Impossibile eseguire la pulizia';
     } finally {
       cleanupLoading = false;
     }
+  }
+
+  function cancelCleanup() {
+    confirmOpen = false;
+  }
+
+  async function toggleJobsView() {
+    showAllJobs = !showAllJobs;
+    await loadJobs(showAllJobs);
   }
 
   function toggleSignal(signal: SignalType) {
@@ -151,7 +170,7 @@
 
   onMount(() => {
     void loadSettings();
-    void loadJobs();
+    void loadJobs(false);
     void loadServices();
   });
 </script>
@@ -169,7 +188,8 @@
     <div class="alert success">{successMessage}</div>
   {/if}
 
-  <div class="panel">
+  <div class="panels">
+    <div class="panel">
     <h3>Impostazioni conservazione</h3>
     <p class="help-text">
       I dati piu vecchi del periodo di conservazione verranno eliminati automaticamente ogni 24 ore.
@@ -218,9 +238,9 @@
         </tbody>
       </table>
     {/if}
-  </div>
+    </div>
 
-  <div class="panel">
+    <div class="panel">
     <h3>Pulizia manuale</h3>
     <p class="help-text">
       Elimina manualmente tutti i dati o filtra per servizio specifico.
@@ -276,6 +296,7 @@
         {cleanupLoading ? 'Pulizia in corso...' : 'Esegui pulizia'}
       </button>
     </div>
+    </div>
   </div>
 
   <div class="panel">
@@ -313,14 +334,35 @@
           {/each}
         </tbody>
       </table>
+      {#if totalJobs > 10 || showAllJobs}
+        <button class="btn-small btn-outline toggle-jobs" on:click={toggleJobsView}>
+          {showAllJobs ? 'Mostra ultime 10' : 'Mostra tutte'}
+        </button>
+      {/if}
     {/if}
   </div>
+
+  <ConfirmModal
+    open={confirmOpen}
+    title="Conferma pulizia dati"
+    message={confirmMessage}
+    confirmLabel="Conferma"
+    cancelLabel="Annulla"
+    on:confirm={confirmCleanup}
+    on:cancel={cancelCleanup}
+  />
 </section>
 
 <style>
   .retention-management {
     display: grid;
     gap: 20px;
+  }
+
+  .panels {
+    display: grid;
+    gap: 20px;
+    grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
   }
 
   header h2 {
@@ -440,6 +482,16 @@
 
   .btn-small.btn-primary:hover:not(:disabled) {
     box-shadow: 0 4px 10px rgba(99, 102, 241, 0.3);
+  }
+
+  .btn-small.btn-outline {
+    background: #f8fafc;
+    border-color: #cbd5e1;
+    color: #475569;
+  }
+
+  .toggle-jobs {
+    margin-top: 12px;
   }
 
   .cleanup-form {
