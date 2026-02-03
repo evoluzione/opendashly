@@ -509,7 +509,7 @@
     if (selectedLogLevel && selectedLogLevel !== "Tutti") {
       manualFilters["severity"] = selectedLogLevel;
     }
-    const hasTraceId = !!filterTraceId;
+    const hasTraceId = activeTab === "tracce" && !!filterTraceId;
     if (hasTraceId) manualFilters["trace_id"] = filterTraceId;
 
     if (searchMode === "smart") {
