@@ -163,6 +163,7 @@ type TraceEntry struct {
 	Name       string    `json:"name"`
 	Service    string    `json:"service,omitempty"`
 	SpanCount  uint64    `json:"spanCount,omitempty"`
+	ErrorCount uint64    `json:"errorCount"`
 	LastSeen   time.Time `json:"lastSeen,omitempty"`
 	DurationMs int64     `json:"durationMs,omitempty"`
 }
@@ -214,7 +215,7 @@ func fetchTraces(ctx context.Context, conn driver.Conn, query string) ([]TraceEn
 	results := []TraceEntry{}
 	for rows.Next() {
 		var row TraceEntry
-		if err := rows.Scan(&row.TraceID, &row.Name, &row.Service, &row.SpanCount, &row.LastSeen, &row.DurationMs); err != nil {
+		if err := rows.Scan(&row.TraceID, &row.Name, &row.Service, &row.SpanCount, &row.ErrorCount, &row.LastSeen, &row.DurationMs); err != nil {
 			return nil, fmt.Errorf("scan traces: %w", err)
 		}
 		if row.DurationMs < 0 {

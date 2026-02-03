@@ -68,8 +68,37 @@
     : 0;
   $: rangeMs = Math.max(1, endMs - startMs);
 
+  let hoveredSpan: any = null;
+  let tooltipX = 0;
+  let tooltipY = 0;
+
+  function handleMouseMove(e: MouseEvent, span: any) {
+    hoveredSpan = span;
+    tooltipX = e.clientX + 16;
+    tooltipY = e.clientY + 16;
+
+    // Boundary check (simple) - if too close to right edge, move left
+    if (window.innerWidth - tooltipX < 300) {
+      tooltipX = e.clientX - 316;
+    }
+    // Boundary check - if too close to bottom, move up
+    if (window.innerHeight - tooltipY < 200) {
+      tooltipY = e.clientY - 216;
+    }
+  }
+
+  function handleMouseLeave() {
+    hoveredSpan = null;
+  }
+
   function barStyle(span: any) {
-    const color = colorForSource(spanSource(span));
+    // Error highlighting logic
+    const isError =
+      span.status === "ERROR" ||
+      span.status === "STATUS_CODE_ERROR" ||
+      span.status === "2";
+    const color = isError ? "#ef4444" : colorForSource(spanSource(span));
+
     const left = ((toMs(span.startTime) - startMs) / rangeMs) * 100;
     const rawWidth =
       (Math.max(0, toMs(span.endTime) - toMs(span.startTime)) / rangeMs) * 100;
@@ -366,7 +395,10 @@
               <div
                 class="bar"
                 style={barStyle(span)}
-                title={formatDuration(durationMs(span))}
+                role="tooltip"
+                aria-label={formatDuration(durationMs(span))}
+                on:mousemove={(e) => handleMouseMove(e, span)}
+                on:mouseleave={handleMouseLeave}
               ></div>
               <span class="bar-label">{formatDuration(offsetMs(span))}</span>
             </div>
@@ -376,9 +408,174 @@
       </div>
     </div>
   {/if}
+
+  {#if hoveredSpan}
+    <div class="span-tooltip" style="top: {tooltipY}px; left: {tooltipX}px;">
+      <div class="tooltip-header">
+        <span class="tooltip-title"
+          >{hoveredSpan.name || "Span senza nome"}</span
+        >
+        <span class="tooltip-service"
+          >{hoveredSpan.service || "Servizio sconosciuto"}</span
+        >
+      </div>
+
+      <div class="tooltip-row">
+        <span class="label">Source:</span>
+        <span class="value">{spanSource(hoveredSpan)}</span>
+      </div>
+
+      <div class="tooltip-row">
+        <span class="label">Status:</span>
+        <span
+          class="value"
+          class:error={hoveredSpan.status === "ERROR" ||
+            hoveredSpan.status === "STATUS_CODE_ERROR" ||
+            hoveredSpan.status === "2"}
+        >
+          {hoveredSpan.status || "UNSET"}
+        </span>
+      </div>
+
+      <div class="tooltip-metrics">
+        <div class="metric">
+          <span class="label">Start</span>
+          <span class="value">{formatDuration(offsetMs(hoveredSpan))}</span>
+        </div>
+        <div class="metric">
+          <span class="label">Duration</span>
+          <span class="value">{formatDuration(durationMs(hoveredSpan))}</span>
+        </div>
+      </div>
+
+      {#if hoveredSpan.attributes && Object.keys(hoveredSpan.attributes).length > 0}
+        <div class="tooltip-section">
+          <span class="section-title">Attributes</span>
+          <div class="attributes-list">
+            {#each Object.entries(hoveredSpan.attributes) as [key, value]}
+              <div class="attr-row">
+                <span class="attr-key">{key}:</span>
+                <span class="attr-value">{value}</span>
+              </div>
+            {/each}
+          </div>
+        </div>
+      {/if}
+    </div>
+  {/if}
 </section>
 
 <style>
+  .span-tooltip {
+    position: fixed;
+    z-index: 1000;
+    background: #0f172a;
+    color: white;
+    padding: 12px;
+    border-radius: 8px;
+    font-size: 12px;
+    box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.3);
+    pointer-events: none;
+    max-width: 300px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+  }
+
+  .tooltip-header {
+    display: flex;
+    flex-direction: column;
+    margin-bottom: 8px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  }
+
+  .tooltip-title {
+    font-weight: 700;
+    font-size: 13px;
+    margin-bottom: 2px;
+    color: #f1f5f9;
+  }
+
+  .tooltip-service {
+    font-size: 11px;
+    color: #94a3b8;
+  }
+
+  .tooltip-row {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 4px;
+    gap: 12px;
+  }
+
+  .label {
+    color: #94a3b8;
+  }
+
+  .value {
+    color: #f1f5f9;
+    font-weight: 500;
+  }
+
+  .value.error {
+    color: #ef4444;
+    font-weight: 700;
+  }
+
+  .tooltip-metrics {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+    margin: 8px 0;
+    padding: 8px 0;
+    border-top: 1px solid rgba(255, 255, 255, 0.1);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  }
+
+  .metric {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  .tooltip-section {
+    margin-top: 8px;
+  }
+
+  .section-title {
+    display: block;
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    color: #94a3b8;
+    margin-bottom: 4px;
+  }
+
+  .attributes-list {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    max-height: 200px;
+    overflow-y: hidden; /* Hide overflow to prevent too long lists */
+  }
+
+  .attr-row {
+    display: flex;
+    gap: 6px;
+    font-family: monospace;
+    font-size: 11px;
+    line-height: 1.3;
+    word-break: break-all;
+  }
+
+  .attr-key {
+    color: #60a5fa;
+    flex-shrink: 0;
+  }
+
+  .attr-value {
+    color: #e2e8f0;
+  }
+
   .timeline {
     display: flex;
     flex-direction: column;

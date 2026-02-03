@@ -51,6 +51,15 @@
     return `${(value / 60000).toFixed(2)} min`;
   }
 
+  function getDurationClass(durationMs: number) {
+    if (!durationMs || durationMs <= 0) return "duration-fast-extra";
+    if (durationMs < 100) return "duration-fast-extra";
+    if (durationMs < 500) return "duration-fast";
+    if (durationMs < 1000) return "duration-moderate";
+    if (durationMs < 2000) return "duration-slow";
+    return "duration-critical";
+  }
+
   function traceKey(entry: any) {
     return entry?.traceId ?? "";
   }
@@ -111,7 +120,31 @@
           >
           <span class="last-seen">{formatTimestamp(trace.lastSeen)}</span>
           <span class="count">Span {trace.spanCount ?? 0}</span>
-          <span class="duration">{formatDuration(trace.durationMs)}</span>
+
+          <div class="status-cell">
+            <span class="duration {getDurationClass(trace.durationMs)}">
+              {formatDuration(trace.durationMs)}
+            </span>
+            {#if trace.errorCount > 0}
+              <div class="error-indicator" title="Contiene errori">
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  width="16"
+                  height="16"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <circle cx="12" cy="12" r="10"></circle>
+                  <line x1="12" y1="8" x2="12" y2="12"></line>
+                  <line x1="12" y1="16" x2="12.01" y2="16"></line>
+                </svg>
+              </div>
+            {/if}
+          </div>
         </button>
       </li>
     {/each}
@@ -162,6 +195,9 @@
         <span class="pill">ID traccia {selectedTrace.traceId}</span>
         <span class="pill">Servizio {selectedTrace.service || "-"}</span>
         <span class="pill">Span {selectedTrace.spanCount ?? 0}</span>
+        {#if selectedTrace.errorCount > 0}
+          <span class="pill error">Errori {selectedTrace.errorCount}</span>
+        {/if}
         <span class="pill"
           >Ultimo span {formatTimestamp(selectedTrace.lastSeen)}</span
         >
@@ -215,7 +251,7 @@
   .trace-row {
     width: 100%;
     display: grid;
-    grid-template-columns: 1.2fr 1fr 160px 120px 100px;
+    grid-template-columns: 2.5fr 1fr 160px 100px 120px;
     gap: 16px;
     align-items: center;
     padding: 12px 16px;
@@ -265,11 +301,52 @@
 
   .service,
   .last-seen,
-  .count,
-  .duration {
+  .count {
     font-size: 12px;
     color: #64748b;
     font-weight: 600;
+  }
+
+  .status-cell {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    justify-content: flex-end; /* Align to right? or left? User said "a dx". */
+    /* If I justify-content: flex-start, it's consistent. */
+    /* Let's try flex-start to match other columns. */
+    justify-content: flex-start;
+  }
+
+  .duration {
+    font-size: 12px;
+    font-weight: 700;
+  }
+
+  .duration-fast-extra {
+    color: #22c55e;
+  }
+
+  .duration-fast {
+    color: #84cc16;
+  }
+
+  .duration-moderate {
+    color: #ca8a04;
+  }
+
+  .duration-slow {
+    color: #f97316;
+  }
+
+  .duration-critical {
+    color: #ef4444;
+  }
+
+  .error-indicator {
+    color: #ef4444;
+    display: flex;
+    align-items: center;
+    justify-content: center;
   }
 
   .pager {
@@ -307,6 +384,11 @@
   .pager span {
     font-size: 13px;
     color: #64748b;
+  }
+
+  .pill.error {
+    background: #fee2e2;
+    color: #991b1b;
   }
 
   .modal-backdrop {

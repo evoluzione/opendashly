@@ -27,7 +27,12 @@ func buildOtelClauses(timeColumn string, filters map[string]string, from, to tim
 			}
 		case "severity":
 			if severityColumn != "" && v != "Tutti" {
-				clauses = append(clauses, "upper("+severityColumn+") = '"+strings.ToUpper(escapedValue)+"'")
+				// Special handling for StatusCode which identifies errors
+				if strings.EqualFold(v, "Error") {
+					clauses = append(clauses, "("+severityColumn+" = 'Error' OR "+severityColumn+" = 'STATUS_CODE_ERROR' OR toString("+severityColumn+") = '2')")
+				} else {
+					clauses = append(clauses, "upper("+severityColumn+") = '"+strings.ToUpper(escapedValue)+"'")
+				}
 			}
 		default:
 			if len(attributeColumns) == 0 {
