@@ -1,11 +1,11 @@
 <script lang="ts">
-  import { goto } from '$app/navigation';
-  import Sidebar from '../../components/Sidebar.svelte';
+  import { goto } from "$app/navigation";
+  import Sidebar from "../../components/Sidebar.svelte";
 
   export let params: Record<string, string> = {};
 
-  function handleSelect() {
-    void goto('/');
+  function handleSelect(tab: string) {
+    void goto(`/?tab=${tab}&autorun=1`);
   }
 </script>
 

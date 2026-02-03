@@ -1,3 +1,7 @@
+<script context="module" lang="ts">
+  let persistedStates: any = null;
+</script>
+
 <script lang="ts">
   import { createEventDispatcher, onMount } from "svelte";
   import ConfirmModal from "./common/ConfirmModal.svelte";
@@ -48,11 +52,13 @@
     advancedFilters: [],
   };
 
-  let tabStates: Record<string, TabState> = {
+  let tabStates: Record<string, TabState> = persistedStates || {
     logs: { ...defaultState },
     metriche: { ...defaultState },
     tracce: { ...defaultState },
   };
+  // Sincronizza il riferimento persistente
+  persistedStates = tabStates;
 
   let searchMode: SearchMode = "auto";
   let fromInput = "";
@@ -65,13 +71,22 @@
   let advancedFilters: FilterItem[] = [];
 
   // Track previous tab to save state before switching
-  let previousTab = activeTab;
+  let previousTab = "";
 
   // React to activeTab changes
-  $: if (activeTab !== previousTab) {
-    saveState(previousTab);
+  $: if (activeTab && activeTab !== previousTab) {
+    const oldTab = previousTab;
+    if (oldTab) saveState(oldTab);
     loadState(activeTab);
     previousTab = activeTab;
+
+    // Sincronizza il riferimento persistente
+    persistedStates = tabStates;
+
+    // Esegui submit automatico solo se non è il caricamento iniziale (gestito da onMount)
+    if (oldTab && searchMode === "auto") {
+      submit();
+    }
   }
 
   function saveState(tab: string) {
@@ -185,7 +200,13 @@
   }
 
   function toIso(value: string) {
-    return value ? new Date(value).toISOString() : "";
+    if (!value) return "";
+    try {
+      const d = new Date(value);
+      return isNaN(d.getTime()) ? "" : d.toISOString();
+    } catch {
+      return "";
+    }
   }
 
   function setManualRange(minutes: number) {
@@ -374,14 +395,11 @@
   }
 
   onMount(async () => {
+    loadState(activeTab);
     applyUrlParams();
     if (forceMode) {
       searchMode = forceMode;
     }
-    if (searchMode === "auto") {
-      applyQuickRange(autoRangeMinutes);
-    }
-    suppressUrlSync = false;
 
     if (initialTraceId) {
       filterTraceId = initialTraceId;
@@ -389,11 +407,15 @@
       fromInput = "";
       toInput = "";
     }
-    if (searchMode === "auto") {
-      submit();
-    } else if (autoRun) {
-      submit();
-    }
+
+    // Caricamento differito per stabilità degli store e della navigazione
+    setTimeout(() => {
+      suppressUrlSync = false;
+      if (searchMode === "auto" || autoRun) {
+        submit();
+      }
+    }, 100);
+
     try {
       const settings = await getAISettings();
       smartEnabled = settings.enabled;
@@ -521,50 +543,20 @@
     if (searchMode === "auto") {
       applyQuickRange(autoRangeMinutes);
     }
-    const zeroTime = "0001-01-01T00:00:00Z";
-
-    // If we have advanced filters or trace ID, we can optionally ignore the date range (limit to last 24h or similar if needed,
-    // but for now let's just respect what the user puts).
-    // If Manual Mode AND no dates set BUT we have advanced filters -> Default to All Time (zeroTime)?
-    // Or should we force dates?
-    // User complaint says "If I put ONLY advanced filters".
-    // Usually DB queries need some time range or limit.
-    // If user explicitly clears dates in manual mode, they might want "All Time".
-
-    // Let's rely on what is set.
-    // If Manual:
-    //   if TraceID -> zeroTime (Backend usually handles traceId lookup efficiently without time)
-    //   else if dates set -> use dates
-    //   else if advanced filters -> default to zeroTime (All Data) OR maybe last 24h?
-    //   Let's check if the user wanted "All Data".
-
-    // The current logic was:
-    // const from = hasTraceId || rangeMinutes === null ? zeroTime : toIso(fromInput);
-
+    const zeroTime = "1970-01-01T00:00:00Z";
     let from = zeroTime;
-    let to = zeroTime;
+    let to = new Date().toISOString();
 
     if (searchMode === "auto") {
       if (rangeMinutes !== null) {
-        // Not "All"
-        // applyQuickRange has already set fromInput/toInput but submit was using calculated validTo/validFrom in a different way or
-        // relying on applyQuickRange updating `fromInput`?
-        // `applyQuickRange` updates `fromInput` string. `toIso` uses it.
-        // Wait, `applyQuickRange` calls `formatDateTimeLocal`.
-        from = toIso(fromInput);
-        to = toIso(toInput);
+        from = toIso(fromInput) || from;
+        to = toIso(toInput) || to;
       }
-      // If rangeMinutes is null (All), from/to remain zeroTime.
     } else {
-      // Manual
-      if (hasTraceId) {
-        // zeroTime is fine
-      } else {
+      if (!hasTraceId) {
         if (fromInput && toInput) {
-          from = toIso(fromInput);
-          to = toIso(toInput);
-        } else {
-          // No dates. If advanced filters exist, we allow it (meaning All Time).
+          from = toIso(fromInput) || from;
+          to = toIso(toInput) || to;
         }
       }
     }
@@ -742,57 +734,61 @@
         </div>
       </div>
 
-      <div class="filter-field">
-        <label for="filter-traceid">Trace ID</label>
-        <input
-          id="filter-traceid"
-          type="text"
-          placeholder="abc123..."
-          bind:value={filterTraceId}
-          on:focus={handleTraceIdActivation}
-          on:click={handleTraceIdActivation}
-        />
-      </div>
-      {#if filterTraceId}
-        <p class="helper">
-          Con Trace ID impostato, il range date viene ignorato.
-        </p>
+      {#if activeTab === "tracce"}
+        <div class="filter-field">
+          <label for="filter-traceid">Trace ID</label>
+          <input
+            id="filter-traceid"
+            type="text"
+            placeholder="abc123..."
+            bind:value={filterTraceId}
+            on:focus={handleTraceIdActivation}
+            on:click={handleTraceIdActivation}
+          />
+        </div>
+        {#if filterTraceId}
+          <p class="helper">
+            Con Trace ID impostato, il range date viene ignorato.
+          </p>
+        {/if}
       {/if}
 
-      <div class="advanced-filters-trigger">
-        <button type="button" class="btn-secondary" on:click={openFilters}>
-          <svg
-            xmlns="http://www.w3.org/2000/svg"
-            width="16"
-            height="16"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="2"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-            ><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"
-            ></polygon></svg
-          >
-          Filtri Avanzati
-          {#if advancedFilters.length > 0}
-            <span class="badge">{advancedFilters.length}</span>
-          {/if}
-        </button>
-      </div>
-
-      <Modal
-        open={showFilterModal}
-        title="Filtri Avanzati"
-        on:close={closeFilters}
-      >
-        <FilterBuilder bind:filters={advancedFilters} />
-        <div class="modal-actions">
-          <button class="btn-primary" on:click={closeFilters}
-            >Applica Filtri</button
-          >
+      {#if activeTab === "logs"}
+        <div class="advanced-filters-trigger">
+          <button type="button" class="btn-secondary" on:click={openFilters}>
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              width="16"
+              height="16"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              ><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"
+              ></polygon></svg
+            >
+            Filtri Avanzati
+            {#if advancedFilters.length > 0}
+              <span class="badge">{advancedFilters.length}</span>
+            {/if}
+          </button>
         </div>
-      </Modal>
+
+        <Modal
+          open={showFilterModal}
+          title="Filtri Avanzati"
+          on:close={closeFilters}
+        >
+          <FilterBuilder bind:filters={advancedFilters} />
+          <div class="modal-actions">
+            <button class="btn-primary" on:click={closeFilters}
+              >Applica Filtri</button
+            >
+          </div>
+        </Modal>
+      {/if}
     </div>
   {:else}
     <div class="smart-box">
@@ -1223,14 +1219,6 @@
     padding: 2px 6px;
     border-radius: 99px;
     font-weight: 700;
-  }
-
-  .modal-actions {
-    display: flex;
-    justify-content: flex-end;
-    margin-top: 20px;
-    padding-top: 20px;
-    border-top: 1px solid #e2e8f0;
   }
 
   .modal-actions {
