@@ -51,14 +51,10 @@
     return Math.max(0, Math.round(toMs(span.startTime) - startMs));
   }
 
-  $: rangeSpans =
-    spans.filter(
-      (span) => durationMs(span) > 0 && durationMs(span) <= maxDisplayMs,
-    ).length > 0
-      ? spans.filter(
-          (span) => durationMs(span) > 0 && durationMs(span) <= maxDisplayMs,
-        )
-      : spans;
+  $: validSpans = spans.filter(
+    (span) => durationMs(span) > 0 && durationMs(span) <= maxDisplayMs,
+  );
+  $: rangeSpans = validSpans.length > 0 ? validSpans : spans;
 
   $: startMs = rangeSpans.length
     ? Math.min(...rangeSpans.map((span) => toMs(span.startTime)))
@@ -71,6 +67,20 @@
   let hoveredSpan: any = null;
   let tooltipX = 0;
   let tooltipY = 0;
+
+  function handleContainerMouseMove(e: MouseEvent) {
+    const target = e.target as HTMLElement;
+    const bar = target.closest(".bar");
+    if (bar instanceof HTMLElement && bar.dataset.index) {
+      const index = parseInt(bar.dataset.index, 10);
+      const span = spans[index];
+      if (span) {
+        handleMouseMove(e, span);
+        return;
+      }
+    }
+    handleMouseLeave();
+  }
 
   function handleMouseMove(e: MouseEvent, span: any) {
     hoveredSpan = span;
@@ -368,8 +378,13 @@
         <span>Linea temporale</span>
         <span>Durata</span>
       </div>
-      <div class="span-grid">
-        {#each spans as span}
+      <div
+        class="span-grid"
+        role="presentation"
+        on:mousemove={handleContainerMouseMove}
+        on:mouseleave={handleMouseLeave}
+      >
+        {#each spans as span, i}
           {@const source = spanSource(span)}
           {@const kind = spanKindInfo(span)}
           {@const color = colorForSource(source)}
@@ -397,8 +412,7 @@
                 style={barStyle(span)}
                 role="tooltip"
                 aria-label={formatDuration(durationMs(span))}
-                on:mousemove={(e) => handleMouseMove(e, span)}
-                on:mouseleave={handleMouseLeave}
+                data-index={i}
               ></div>
               <span class="bar-label">{formatDuration(offsetMs(span))}</span>
             </div>

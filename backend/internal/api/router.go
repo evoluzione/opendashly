@@ -38,6 +38,7 @@ func NewRouter(cfg RouterConfig) http.Handler {
 	r.Use(middleware.RequestID)
 	r.Use(middleware.Logger)
 	r.Use(middleware.Recoverer)
+	r.Use(middleware.Compress(5))
 	if cfg.AuthMiddleware != nil {
 		r.Use(cfg.AuthMiddleware)
 	}
