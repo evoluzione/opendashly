@@ -1,23 +1,24 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
-  import { createUser, listUsers } from '../services/users';
-  import type { User } from '../services/auth';
+  import { onMount } from "svelte";
+  import { createUser, listUsers } from "../services/users";
+  import type { User } from "../services/auth";
 
   let users: User[] = [];
   let loading = false;
-  let error = '';
+  let error = "";
 
-  let username = '';
-  let password = '';
-  let role: 'admin' | 'user' = 'user';
+  let username = "";
+  let password = "";
+  let role: "admin" | "user" = "user";
 
   async function load() {
     loading = true;
-    error = '';
+    error = "";
     try {
       users = await listUsers();
     } catch (err) {
-      error = err instanceof Error ? err.message : 'Impossibile caricare gli utenti';
+      error =
+        err instanceof Error ? err.message : "Impossibile caricare gli utenti";
     } finally {
       loading = false;
     }
@@ -25,19 +26,22 @@
 
   async function submit() {
     if (!username || !password) {
-      error = 'Username e password sono obbligatori';
+      error = "Username e password sono obbligatori";
       return;
     }
     loading = true;
-    error = '';
+    error = "";
     try {
       const created = await createUser({ username, password, role });
-      users = [...users, created].sort((a, b) => a.username.localeCompare(b.username));
-      username = '';
-      password = '';
-      role = 'user';
+      users = [...users, created].sort((a, b) =>
+        a.username.localeCompare(b.username),
+      );
+      username = "";
+      password = "";
+      role = "user";
     } catch (err) {
-      error = err instanceof Error ? err.message : 'Impossibile creare l\'utente';
+      error =
+        err instanceof Error ? err.message : "Impossibile creare l'utente";
     } finally {
       loading = false;
     }
@@ -63,7 +67,12 @@
       </div>
       <div>
         <label for="password">Password</label>
-        <input id="password" type="password" bind:value={password} placeholder="password" />
+        <input
+          id="password"
+          type="password"
+          bind:value={password}
+          placeholder="password"
+        />
       </div>
       <div>
         <label for="role">Ruolo</label>
@@ -99,7 +108,7 @@
             <tr>
               <td>{user.username}</td>
               <td>{user.role}</td>
-              <td>{user.isDisabled ? 'Disabilitato' : 'Attivo'}</td>
+              <td>{user.isDisabled ? "Disabilitato" : "Attivo"}</td>
             </tr>
           {/each}
         </tbody>
@@ -163,7 +172,11 @@
     background: #fff;
   }
   button {
-    padding: 12px 16px;
+    width: fit-content;
+    height: fit-content;
+    padding: 12px 24px;
+    align-self: flex-end;
+    justify-self: end;
     border-radius: 10px;
     border: none;
     background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);

@@ -41,9 +41,9 @@ func (s *Service) Run(ctx context.Context, req QueryRequest) (*QueryRunResult, e
 	}
 
 	signals := requestedSignals(req.Signals)
-	logsQuery := builders.BuildLogsQuery(req.Filters, req.TimeRange.From, req.TimeRange.To, limit, offset)
-	tracesQuery := builders.BuildTracesQuery(req.Filters, req.TimeRange.From, req.TimeRange.To, limit, offset)
-	metricsQuery := builders.BuildMetricsQuery(req.Filters, req.TimeRange.From, req.TimeRange.To, limit, offset)
+	logsQuery := builders.BuildLogsQuery(req.Filters, req.FilterList, req.TimeRange.From, req.TimeRange.To, limit, offset)
+	tracesQuery := builders.BuildTracesQuery(req.Filters, req.FilterList, req.TimeRange.From, req.TimeRange.To, limit, offset)
+	metricsQuery := builders.BuildMetricsQuery(req.Filters, req.FilterList, req.TimeRange.From, req.TimeRange.To, limit, offset)
 	if s.Debug {
 		log.Printf("DEBUG: executing logsQuery: %s", logsQuery)
 		log.Printf("query.service.run built queries: logs=%q traces=%q metrics=%q", logsQuery, tracesQuery, metricsQuery)
@@ -165,7 +165,7 @@ type TraceEntry struct {
 	SpanCount  uint64    `json:"spanCount,omitempty"`
 	ErrorCount uint64    `json:"errorCount"`
 	LastSeen   time.Time `json:"lastSeen,omitempty"`
-	DurationMs int64     `json:"durationMs,omitempty"`
+	DurationMs float64   `json:"durationMs,omitempty"`
 }
 
 type MetricPoint struct {
@@ -280,4 +280,33 @@ func buildMetricSeries(rows []metricRow) []MetricSeries {
 		seriesList = append(seriesList, *series)
 	}
 	return seriesList
+}
+func (s *Service) GetLogAttributeKeys(ctx context.Context, search string) ([]string, error) {
+	if s.Storage == nil {
+		return []string{}, nil
+	}
+
+	// Limit to last 24h to avoid scanning too much
+	query := "SELECT DISTINCT arrayJoin(mapKeys(LogAttributes)) as key FROM telemetry.otel_logs WHERE Timestamp > now() - INTERVAL 24 HOUR"
+	if search != "" {
+		escaped := builders.EscapeLiteral(search)
+		query += " AND key ILIKE '%" + escaped + "%'"
+	}
+	query += " ORDER BY key LIMIT 50"
+
+	rows, err := s.Storage.Conn.Query(ctx, query)
+	if err != nil {
+		return nil, fmt.Errorf("query attributes: %w", err)
+	}
+	defer rows.Close()
+
+	var keys []string
+	for rows.Next() {
+		var key string
+		if err := rows.Scan(&key); err != nil {
+			return nil, err
+		}
+		keys = append(keys, key)
+	}
+	return keys, nil
 }

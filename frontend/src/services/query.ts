@@ -1,9 +1,17 @@
 import { apiRequest } from './api';
 
+export interface FilterItem {
+  connector: 'AND' | 'OR';
+  key: string;
+  operator: string;
+  value: string;
+}
+
 export type QueryRequest = {
   signals: string[];
   timeRange: { from: string; to: string };
   filters: Record<string, string>;
+  filterList?: FilterItem[];
   page?: number;
   limit?: number;
   orderBy?: string;
@@ -52,4 +60,9 @@ export function generateSmartQuery(payload: { prompt: string; contextType: 'logs
     method: 'POST',
     body: JSON.stringify(payload)
   });
+}
+
+export function getLogAttributes(search: string): Promise<string[]> {
+  const params = new URLSearchParams({ q: search });
+  return apiRequest<string[]>(`/api/query/attributes?${params.toString()}`);
 }

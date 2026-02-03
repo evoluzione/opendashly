@@ -1,15 +1,23 @@
 package query
 
-import "time"
+import (
+	"time"
+
+	"opendashly/backend/internal/query/builders"
+)
+
+// FilterItem represents a single filter condition.
+// Moved to builders package, removed from here.
 
 // QueryRequest captures an ad-hoc query.
 type QueryRequest struct {
-	Signals   []string          `json:"signals"`
-	TimeRange TimeRange         `json:"timeRange"`
-	Filters   map[string]string `json:"filters"`
-	Page      int               `json:"page"`
-	Limit     int               `json:"limit"`
-	OrderBy   string            `json:"orderBy"`
+	Signals    []string              `json:"signals"`
+	TimeRange  TimeRange             `json:"timeRange"`
+	Filters    map[string]string     `json:"filters"` // Deprecated: use FilterList
+	FilterList []builders.FilterItem `json:"filterList"`
+	Page       int                   `json:"page"`
+	Limit      int                   `json:"limit"`
+	OrderBy    string                `json:"orderBy"`
 }
 
 // TimeRange defines a query window.
@@ -36,11 +44,11 @@ type QueryRunSummary struct {
 
 // QueryRunResult holds query results.
 type QueryRunResult struct {
-	RunID   string       `json:"runId"`
-	Status  string       `json:"status"`
-	Summary QueryRunSummary `json:"summary"`
-	Pagination PaginationSet `json:"pagination"`
-	Results Results      `json:"results"`
+	RunID      string          `json:"runId"`
+	Status     string          `json:"status"`
+	Summary    QueryRunSummary `json:"summary"`
+	Pagination PaginationSet   `json:"pagination"`
+	Results    Results         `json:"results"`
 }
 
 // Results aggregates signal results.

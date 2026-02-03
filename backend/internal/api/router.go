@@ -58,6 +58,10 @@ func NewRouter(cfg RouterConfig) http.Handler {
 
 	r.Post("/api/query/run", queryHandler.ServeHTTP)
 	r.Post("/api/query/smart", smartQuery.ServeHTTP)
+	// New attributes endpoint
+	attributesHandler := &handlers.AttributesHandler{Service: cfg.QueryService}
+	r.Get("/api/query/attributes", attributesHandler.ServeHTTP)
+
 	r.Get("/api/queries", savedHandler.List)
 	r.Post("/api/queries", savedHandler.Create)
 	r.Get("/api/queries/{queryId}", savedHandler.Get)
