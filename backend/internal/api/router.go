@@ -38,6 +38,7 @@ func NewRouter(cfg RouterConfig) http.Handler {
 	r.Use(middleware.RequestID)
 	r.Use(middleware.Logger)
 	r.Use(middleware.Recoverer)
+	r.Use(middleware.Compress(5))
 	if cfg.AuthMiddleware != nil {
 		r.Use(cfg.AuthMiddleware)
 	}
@@ -57,6 +58,10 @@ func NewRouter(cfg RouterConfig) http.Handler {
 
 	r.Post("/api/query/run", queryHandler.ServeHTTP)
 	r.Post("/api/query/smart", smartQuery.ServeHTTP)
+	// New attributes endpoint
+	attributesHandler := &handlers.AttributesHandler{Service: cfg.QueryService}
+	r.Get("/api/query/attributes", attributesHandler.ServeHTTP)
+
 	r.Get("/api/queries", savedHandler.List)
 	r.Post("/api/queries", savedHandler.Create)
 	r.Get("/api/queries/{queryId}", savedHandler.Get)

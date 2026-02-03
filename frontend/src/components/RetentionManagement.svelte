@@ -1,6 +1,6 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
-  import ConfirmModal from './common/ConfirmModal.svelte';
+  import { onMount } from "svelte";
+  import ConfirmModal from "./common/ConfirmModal.svelte";
   import {
     getRetentionSettings,
     updateRetentionSetting,
@@ -8,36 +8,36 @@
     listCleanupJobs,
     type RetentionSetting,
     type SignalType,
-    type CleanupJob
-  } from '../services/retention';
-  import { fetchServices } from '../services/services';
+    type CleanupJob,
+  } from "../services/retention";
+  import { fetchServices } from "../services/services";
 
   let settings: RetentionSetting[] = [];
   let jobs: CleanupJob[] = [];
   let services: string[] = [];
   let loading = false;
-  let error = '';
-  let successMessage = '';
+  let error = "";
+  let successMessage = "";
 
   let editingSignal: SignalType | null = null;
   let editRetentionDays = 7;
 
   let selectedSignals: SignalType[] = [];
-  let selectedService = '';
+  let selectedService = "";
   let cleanupLoading = false;
   let confirmOpen = false;
-  let confirmMessage = '';
+  let confirmMessage = "";
   let showAllJobs = false;
   let totalJobs = 0;
   const signalLabels: Record<SignalType, string> = {
-    logs: 'Log',
-    traces: 'Tracce',
-    metrics: 'Metriche'
+    logs: "Log",
+    traces: "Tracce",
+    metrics: "Metriche",
   };
   const statusLabels: Record<string, string> = {
-    completed: 'Completato',
-    running: 'In corso',
-    failed: 'Fallito'
+    completed: "Completato",
+    running: "In corso",
+    failed: "Fallito",
   };
 
   function labelForSignal(signal: SignalType) {
@@ -45,7 +45,7 @@
   }
 
   function labelList(signals: SignalType[]) {
-    return signals.map(labelForSignal).join(', ');
+    return signals.map(labelForSignal).join(", ");
   }
 
   function labelForStatus(status: string) {
@@ -54,12 +54,15 @@
 
   async function loadSettings() {
     loading = true;
-    error = '';
+    error = "";
     try {
       const result = await getRetentionSettings();
       settings = result.settings;
     } catch (err) {
-      error = err instanceof Error ? err.message : 'Impossibile caricare le impostazioni';
+      error =
+        err instanceof Error
+          ? err.message
+          : "Impossibile caricare le impostazioni";
     } finally {
       loading = false;
     }
@@ -71,7 +74,7 @@
       jobs = result.jobs;
       totalJobs = result.total ?? result.jobs.length;
     } catch (err) {
-      console.error('Failed to load jobs', err);
+      console.error("Failed to load jobs", err);
     }
   }
 
@@ -80,7 +83,7 @@
       const result = await fetchServices();
       services = result.services;
     } catch (err) {
-      console.error('Failed to load services', err);
+      console.error("Failed to load services", err);
     }
   }
 
@@ -97,8 +100,8 @@
     if (!editingSignal) return;
 
     loading = true;
-    error = '';
-    successMessage = '';
+    error = "";
+    successMessage = "";
 
     try {
       await updateRetentionSetting(editingSignal, editRetentionDays);
@@ -106,7 +109,10 @@
       editingSignal = null;
       await loadSettings();
     } catch (err) {
-      error = err instanceof Error ? err.message : 'Impossibile aggiornare la conservazione';
+      error =
+        err instanceof Error
+          ? err.message
+          : "Impossibile aggiornare la conservazione";
     } finally {
       loading = false;
     }
@@ -114,7 +120,7 @@
 
   async function runCleanup() {
     if (selectedSignals.length === 0) {
-      error = 'Seleziona almeno un tipo di segnale';
+      error = "Seleziona almeno un tipo di segnale";
       return;
     }
 
@@ -129,23 +135,27 @@
     confirmOpen = false;
 
     cleanupLoading = true;
-    error = '';
-    successMessage = '';
+    error = "";
+    successMessage = "";
 
     try {
       const result = await executeCleanup({
         signalTypes: selectedSignals,
-        serviceName: selectedService || undefined
+        serviceName: selectedService || undefined,
       });
 
-      const totalDeleted = result.results.reduce((sum, r) => sum + r.recordsDeleted, 0);
+      const totalDeleted = result.results.reduce(
+        (sum, r) => sum + r.recordsDeleted,
+        0,
+      );
       successMessage = `Pulizia completata! ${totalDeleted} record eliminati (ID operazione: ${result.jobId})`;
 
       selectedSignals = [];
-      selectedService = '';
+      selectedService = "";
       await loadJobs(showAllJobs);
     } catch (err) {
-      error = err instanceof Error ? err.message : 'Impossibile eseguire la pulizia';
+      error =
+        err instanceof Error ? err.message : "Impossibile eseguire la pulizia";
     } finally {
       cleanupLoading = false;
     }
@@ -162,7 +172,7 @@
 
   function toggleSignal(signal: SignalType) {
     if (selectedSignals.includes(signal)) {
-      selectedSignals = selectedSignals.filter(s => s !== signal);
+      selectedSignals = selectedSignals.filter((s) => s !== signal);
     } else {
       selectedSignals = [...selectedSignals, signal];
     }
@@ -190,112 +200,121 @@
 
   <div class="panels">
     <div class="panel">
-    <h3>Impostazioni conservazione</h3>
-    <p class="help-text">
-      I dati piu vecchi del periodo di conservazione verranno eliminati automaticamente ogni 24 ore.
-    </p>
+      <h3>Impostazioni conservazione</h3>
+      <p class="help-text">
+        I dati piu vecchi del periodo di conservazione verranno eliminati
+        automaticamente ogni 24 ore.
+      </p>
 
-    {#if loading && settings.length === 0}
-      <div class="status">Caricamento...</div>
-    {:else}
-      <table>
-        <thead>
-          <tr>
-            <th>Tipo Segnale</th>
-            <th>Conservazione (giorni)</th>
-            <th>Azioni</th>
-          </tr>
-        </thead>
-        <tbody>
-          {#each settings as setting}
+      {#if loading && settings.length === 0}
+        <div class="status">Caricamento...</div>
+      {:else}
+        <table>
+          <thead>
             <tr>
-              <td class="signal-type">{labelForSignal(setting.signalType)}</td>
-              <td>
-                {#if editingSignal === setting.signalType}
-                  <input
-                    type="number"
-                    bind:value={editRetentionDays}
-                    min="1"
-                    max="365"
-                    class="edit-input"
-                  />
-                {:else}
-                  {setting.retentionDays} giorni
-                {/if}
-              </td>
-              <td>
-                {#if editingSignal === setting.signalType}
-                  <div class="action-buttons">
-                    <button class="btn-small btn-primary" on:click={saveEdit}>Salva</button>
-                    <button class="btn-small" on:click={cancelEdit}>Annulla</button>
-                  </div>
-                {:else}
-                  <button class="btn-small" on:click={() => startEdit(setting)}>Modifica</button>
-                {/if}
-              </td>
+              <th>Tipo Segnale</th>
+              <th>Conservazione (giorni)</th>
+              <th>Azioni</th>
             </tr>
-          {/each}
-        </tbody>
-      </table>
-    {/if}
+          </thead>
+          <tbody>
+            {#each settings as setting}
+              <tr>
+                <td class="signal-type">{labelForSignal(setting.signalType)}</td
+                >
+                <td>
+                  {#if editingSignal === setting.signalType}
+                    <input
+                      type="number"
+                      bind:value={editRetentionDays}
+                      min="1"
+                      max="365"
+                      class="edit-input"
+                    />
+                  {:else}
+                    {setting.retentionDays} giorni
+                  {/if}
+                </td>
+                <td>
+                  {#if editingSignal === setting.signalType}
+                    <div class="action-buttons">
+                      <button class="btn-small btn-primary" on:click={saveEdit}
+                        >Salva</button
+                      >
+                      <button class="btn-small" on:click={cancelEdit}
+                        >Annulla</button
+                      >
+                    </div>
+                  {:else}
+                    <button
+                      class="btn-small"
+                      on:click={() => startEdit(setting)}>Modifica</button
+                    >
+                  {/if}
+                </td>
+              </tr>
+            {/each}
+          </tbody>
+        </table>
+      {/if}
     </div>
 
     <div class="panel">
-    <h3>Pulizia manuale</h3>
-    <p class="help-text">
-      Elimina manualmente tutti i dati o filtra per servizio specifico.
-    </p>
+      <h3>Pulizia manuale</h3>
+      <p class="help-text">
+        Elimina manualmente tutti i dati o filtra per servizio specifico.
+      </p>
 
-    <div class="cleanup-form">
-      <fieldset class="form-group">
-        <legend>Tipi di segnale</legend>
-        <div class="checkbox-group">
-          <label>
-            <input
-              type="checkbox"
-              checked={selectedSignals.includes('logs')}
-              on:change={() => toggleSignal('logs')}
-            />
-            {labelForSignal('logs')}
-          </label>
-          <label>
-            <input
-              type="checkbox"
-              checked={selectedSignals.includes('traces')}
-              on:change={() => toggleSignal('traces')}
-            />
-            {labelForSignal('traces')}
-          </label>
-          <label>
-            <input
-              type="checkbox"
-              checked={selectedSignals.includes('metrics')}
-              on:change={() => toggleSignal('metrics')}
-            />
-            {labelForSignal('metrics')}
-          </label>
+      <div class="cleanup-form">
+        <fieldset class="form-group">
+          <legend>Tipi di segnale</legend>
+          <div class="checkbox-group">
+            <label>
+              <input
+                type="checkbox"
+                checked={selectedSignals.includes("logs")}
+                on:change={() => toggleSignal("logs")}
+              />
+              {labelForSignal("logs")}
+            </label>
+            <label>
+              <input
+                type="checkbox"
+                checked={selectedSignals.includes("traces")}
+                on:change={() => toggleSignal("traces")}
+              />
+              {labelForSignal("traces")}
+            </label>
+            <label>
+              <input
+                type="checkbox"
+                checked={selectedSignals.includes("metrics")}
+                on:change={() => toggleSignal("metrics")}
+              />
+              {labelForSignal("metrics")}
+            </label>
+          </div>
+        </fieldset>
+
+        <div class="form-group">
+          <label for="service-select">Servizio (opzionale)</label>
+          <select id="service-select" bind:value={selectedService}>
+            <option value="">Tutti i servizi</option>
+            {#each services as service}
+              <option value={service}>{service}</option>
+            {/each}
+          </select>
+          <p class="hint">Lascia vuoto per eliminare dati di tutti i servizi</p>
         </div>
-      </fieldset>
 
-      <div class="form-group">
-        <label for="service-select">Servizio (opzionale)</label>
-        <select id="service-select" bind:value={selectedService}>
-          <option value="">Tutti i servizi</option>
-          {#each services as service}
-            <option value={service}>{service}</option>
-          {/each}
-        </select>
-        <p class="hint">Lascia vuoto per eliminare dati di tutti i servizi</p>
+        <button
+          class="btn-danger"
+          on:click={runCleanup}
+          disabled={cleanupLoading || selectedSignals.length === 0}
+        >
+          {cleanupLoading ? "Pulizia in corso..." : "Esegui pulizia"}
+        </button>
       </div>
-
-      <button
-        class="btn-danger"
-        on:click={runCleanup}
-        disabled={cleanupLoading || selectedSignals.length === 0}
-      >
-        {cleanupLoading ? 'Pulizia in corso...' : 'Esegui pulizia'}
-      </button>
-    </div>
     </div>
   </div>
 
@@ -322,21 +341,28 @@
               <td class="monospace">{job.jobId.slice(0, 8)}</td>
               <td>{job.jobType}</td>
               <td>{job.signalType}</td>
-              <td>{job.serviceName || 'tutti'}</td>
+              <td>{job.serviceName || "tutti"}</td>
               <td>
                 <span class="status-badge {job.status}">
                   {labelForStatus(job.status)}
                 </span>
               </td>
               <td>{job.recordsDeleted.toLocaleString()}</td>
-              <td>{job.completedAt ? new Date(job.completedAt).toLocaleString('it-IT') : '-'}</td>
+              <td
+                >{job.completedAt
+                  ? new Date(job.completedAt).toLocaleString("it-IT")
+                  : "-"}</td
+              >
             </tr>
           {/each}
         </tbody>
       </table>
       {#if totalJobs > 10 || showAllJobs}
-        <button class="btn-small btn-outline toggle-jobs" on:click={toggleJobsView}>
-          {showAllJobs ? 'Mostra ultime 10' : 'Mostra tutte'}
+        <button
+          class="btn-small btn-outline toggle-jobs"
+          on:click={toggleJobsView}
+        >
+          {showAllJobs ? "Mostra ultime 10" : "Mostra tutte"}
         </button>
       {/if}
     {/if}
@@ -348,6 +374,7 @@
     message={confirmMessage}
     confirmLabel="Conferma"
     cancelLabel="Annulla"
+    variant="danger"
     on:confirm={confirmCleanup}
     on:cancel={cancelCleanup}
   />
@@ -556,19 +583,21 @@
   }
 
   .btn-danger {
-    padding: 12px 20px;
+    padding: 12px 24px;
     border-radius: 10px;
     border: none;
-    background: #dc2626;
+    background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
     color: white;
     font-weight: 600;
     cursor: pointer;
     align-self: flex-start;
     transition: all 0.2s ease;
+    box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3);
   }
 
-  .btn-danger:hover {
-    background: #b91c1c;
+  .btn-danger:hover:not(:disabled) {
+    transform: translateY(-1px);
+    box-shadow: 0 6px 16px rgba(99, 102, 241, 0.4);
   }
 
   .btn-danger:disabled {
@@ -582,7 +611,7 @@
   }
 
   .monospace {
-    font-family: 'Courier New', monospace;
+    font-family: "Courier New", monospace;
     font-size: 13px;
   }
 

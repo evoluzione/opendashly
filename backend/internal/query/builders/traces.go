@@ -7,9 +7,9 @@ import (
 )
 
 // BuildTracesQuery creates a ClickHouse SQL statement for traces.
-func BuildTracesQuery(filters map[string]string, from, to time.Time, limit, offset int) string {
-	base := "SELECT TraceId AS traceId, argMin(SpanName, Timestamp) AS name, any(ServiceName) AS serviceName, count() AS spanCount, countIf(StatusCode = 'Error' OR StatusCode = 'STATUS_CODE_ERROR' OR toString(StatusCode) = '2') AS errorCount, max(Timestamp) AS lastSeen, dateDiff('millisecond', min(Timestamp), max(addNanoseconds(Timestamp, Duration))) AS durationMs FROM telemetry.otel_traces"
-	clauses := buildOtelClauses("Timestamp", filters, from, to, "ServiceName", "TraceId", "StatusCode", []string{"ResourceAttributes", "SpanAttributes"})
+func BuildTracesQuery(filters map[string]string, filterList []FilterItem, from, to time.Time, limit, offset int) string {
+	base := "SELECT TraceId AS traceId, any(SpanName) AS name, any(ServiceName) AS service, count() AS spanCount, countIf(StatusCode = 'STATUS_CODE_ERROR') AS errorCount, max(Timestamp) AS lastSeen, max(Duration) / 1000000 AS durationMs FROM telemetry.otel_traces"
+	clauses := buildOtelClauses("Timestamp", filters, filterList, from, to, "ServiceName", "TraceId", "", []string{"ResourceAttributes", "SpanAttributes"})
 	query := base
 	if len(clauses) > 0 {
 		query += " WHERE " + strings.Join(clauses, " AND ")

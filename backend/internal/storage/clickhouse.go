@@ -3,6 +3,7 @@ package storage
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/ClickHouse/clickhouse-go/v2"
 	"github.com/ClickHouse/clickhouse-go/v2/lib/driver"
@@ -21,6 +22,9 @@ func NewClient(ctx context.Context, dsn string, user string, password string) (*
 			Username: user,
 			Password: password,
 		},
+		MaxOpenConns:    20,
+		MaxIdleConns:    10,
+		ConnMaxLifetime: time.Hour,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("open clickhouse: %w", err)

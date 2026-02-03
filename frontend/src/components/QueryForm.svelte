@@ -1,3 +1,7 @@
+<script context="module" lang="ts">
+  let persistedStates: any = null;
+</script>
+
 <script lang="ts">
   import { createEventDispatcher, onMount } from "svelte";
   import ConfirmModal from "./common/ConfirmModal.svelte";
@@ -11,6 +15,9 @@
   import { generateSmartQuery } from "../services/query";
   import type { QueryRequest } from "../services/query";
   import { getAISettings } from "../services/settings";
+  import FilterBuilder from "./FilterBuilder.svelte";
+  import Modal from "./common/Modal.svelte";
+  import type { FilterItem } from "../services/query";
 
   const dispatch = createEventDispatcher();
 
@@ -30,42 +37,56 @@
     smartPrompt: string;
     smartError: string;
     smartRequest: QueryRequest | null;
+    advancedFilters: FilterItem[];
   }
 
   const defaultState: TabState = {
     searchMode: "auto",
     fromInput: "",
     toInput: "",
-    autoRangeMinutes: 5,
+    autoRangeMinutes: null,
     autoRefreshSeconds: 10,
     smartPrompt: "",
     smartError: "",
     smartRequest: null,
+    advancedFilters: [],
   };
 
-  let tabStates: Record<string, TabState> = {
+  let tabStates: Record<string, TabState> = persistedStates || {
     logs: { ...defaultState },
     metriche: { ...defaultState },
     tracce: { ...defaultState },
   };
+  // Sincronizza il riferimento persistente
+  persistedStates = tabStates;
 
   let searchMode: SearchMode = "auto";
   let fromInput = "";
   let toInput = "";
-  let autoRangeMinutes: number | null = 5;
+  let autoRangeMinutes: number | null = null;
   let autoRefreshSeconds: number | null = 10;
   let smartPrompt = "";
   let smartError = "";
   let smartRequest: QueryRequest | null = null;
+  let advancedFilters: FilterItem[] = [];
 
   // Track previous tab to save state before switching
-  let previousTab = activeTab;
+  let previousTab = "";
 
   // React to activeTab changes
-  $: if (activeTab !== previousTab) {
-    saveState(previousTab);
+  $: if (activeTab && activeTab !== previousTab) {
+    const oldTab = previousTab;
+    if (oldTab) saveState(oldTab);
     loadState(activeTab);
     previousTab = activeTab;
+
+    // Sincronizza il riferimento persistente
+    persistedStates = tabStates;
+
+    // Esegui submit automatico solo se non è il caricamento iniziale (gestito da onMount)
+    if (oldTab && searchMode === "auto") {
+      submit();
+    }
   }
 
   function saveState(tab: string) {
@@ -78,6 +99,7 @@
       smartPrompt,
       smartError,
       smartRequest,
+      advancedFilters,
     };
   }
 
@@ -91,6 +113,7 @@
     smartPrompt = state.smartPrompt;
     smartError = state.smartError;
     smartRequest = state.smartRequest;
+    advancedFilters = state.advancedFilters || [];
   }
 
   let smartLoading = false;
@@ -106,6 +129,16 @@
 
   // Separate SQL field
   let generatedSql = "";
+
+  let showFilterModal = false;
+
+  function openFilters() {
+    showFilterModal = true;
+  }
+
+  function closeFilters() {
+    showFilterModal = false;
+  }
 
   // Dirty tracking for conditional button enabling
   let promptDirty = true;
@@ -167,7 +200,13 @@
   }
 
   function toIso(value: string) {
-    return value ? new Date(value).toISOString() : "";
+    if (!value) return "";
+    try {
+      const d = new Date(value);
+      return isNaN(d.getTime()) ? "" : d.toISOString();
+    } catch {
+      return "";
+    }
   }
 
   function setManualRange(minutes: number) {
@@ -250,7 +289,11 @@
   function applyUrlParams() {
     const params = $page.url.searchParams;
     const modeParam = params.get("mode");
-    if (modeParam === "auto" || modeParam === "manual" || modeParam === "smart") {
+    if (
+      modeParam === "auto" ||
+      modeParam === "manual" ||
+      modeParam === "smart"
+    ) {
       searchMode = modeParam;
     }
 
@@ -265,7 +308,9 @@
     const refreshParam = params.get("refresh");
     if (refreshParam) {
       const parsed = Number(refreshParam);
-      autoRefreshSeconds = Number.isFinite(parsed) ? parsed : autoRefreshSeconds;
+      autoRefreshSeconds = Number.isFinite(parsed)
+        ? parsed
+        : autoRefreshSeconds;
     }
 
     const serviceParam = params.get("service");
@@ -319,7 +364,10 @@
     }
 
     if (searchMode === "auto") {
-      params.set("range", autoRangeMinutes === null ? "all" : String(autoRangeMinutes));
+      params.set(
+        "range",
+        autoRangeMinutes === null ? "all" : String(autoRangeMinutes),
+      );
       if (autoRefreshSeconds) {
         params.set("refresh", String(autoRefreshSeconds));
       }
@@ -347,28 +395,27 @@
   }
 
   onMount(async () => {
+    loadState(activeTab);
     applyUrlParams();
     if (forceMode) {
       searchMode = forceMode;
     }
-    if (searchMode === "auto") {
-      applyQuickRange(autoRangeMinutes);
-    }
-    suppressUrlSync = false;
-    if (searchMode === "manual" && (!fromInput || !toInput) && !initialTraceId) {
-      setManualRange(24 * 60);
-    }
+
     if (initialTraceId) {
       filterTraceId = initialTraceId;
       lastInitialTraceId = initialTraceId;
       fromInput = "";
       toInput = "";
     }
-    if (searchMode === "auto") {
-      submit();
-    } else if (autoRun) {
-      submit();
-    }
+
+    // Caricamento differito per stabilità degli store e della navigazione
+    setTimeout(() => {
+      suppressUrlSync = false;
+      if (searchMode === "auto" || autoRun) {
+        submit();
+      }
+    }, 100);
+
     try {
       const settings = await getAISettings();
       smartEnabled = settings.enabled;
@@ -496,18 +543,55 @@
     if (searchMode === "auto") {
       applyQuickRange(autoRangeMinutes);
     }
-    const zeroTime = "0001-01-01T00:00:00Z";
-    const from =
-      hasTraceId || rangeMinutes === null ? zeroTime : toIso(fromInput);
-    const to = hasTraceId || rangeMinutes === null ? zeroTime : toIso(toInput);
-    if (!from || !to) {
-      return;
+    const zeroTime = "1970-01-01T00:00:00Z";
+    let from = zeroTime;
+    let to = new Date().toISOString();
+
+    if (searchMode === "auto") {
+      if (rangeMinutes !== null) {
+        from = toIso(fromInput) || from;
+        to = toIso(toInput) || to;
+      }
+    } else {
+      if (!hasTraceId) {
+        if (fromInput && toInput) {
+          from = toIso(fromInput) || from;
+          to = toIso(toInput) || to;
+        }
+      }
     }
+
+    if (!from || !to) {
+      // cleanup if conversion failed
+      from = zeroTime;
+      to = zeroTime;
+    }
+    // Merge manual filters into filterList if advanced filters are used
+    let finalFilterList = [...advancedFilters];
+    if (finalFilterList.length > 0) {
+      for (const [k, v] of Object.entries(manualFilters)) {
+        // Only add if not already present to avoid duplicates
+        // Note: This simple check prevents overriding advanced filters with same key
+        if (!finalFilterList.some((f) => f.key === k)) {
+          finalFilterList.push({
+            connector: "AND",
+            key: k,
+            operator: "=",
+            value: v,
+          });
+        }
+      }
+    }
+
+    // Filter out incomplete filters
+    finalFilterList = finalFilterList.filter((f) => f.key && f.value);
+
     dispatch("run", {
       request: {
         signals: ["logs", "traces", "metrics"],
         timeRange: { from, to },
         filters: manualFilters,
+        filterList: finalFilterList,
         page: 1,
         limit,
       },
@@ -625,43 +709,85 @@
     </fieldset>
   {:else if searchMode === "manual"}
     <div class="manual-filters">
-      <div class="filter-field">
-        <label for="query-from">Da</label>
-        <input
-          id="query-from"
-          type="datetime-local"
-          bind:value={fromInput}
-          readonly={!!filterTraceId}
-          on:focus={handleDateActivation}
-          on:click={handleDateActivation}
-        />
+      <div class="date-row">
+        <div class="filter-field compact">
+          <label for="query-from">Da</label>
+          <input
+            id="query-from"
+            type="datetime-local"
+            bind:value={fromInput}
+            readonly={!!filterTraceId}
+            on:focus={handleDateActivation}
+            on:click={handleDateActivation}
+          />
+        </div>
+        <div class="filter-field compact">
+          <label for="query-to">A</label>
+          <input
+            id="query-to"
+            type="datetime-local"
+            bind:value={toInput}
+            readonly={!!filterTraceId}
+            on:focus={handleDateActivation}
+            on:click={handleDateActivation}
+          />
+        </div>
       </div>
-      <div class="filter-field">
-        <label for="query-to">A</label>
-        <input
-          id="query-to"
-          type="datetime-local"
-          bind:value={toInput}
-          readonly={!!filterTraceId}
-          on:focus={handleDateActivation}
-          on:click={handleDateActivation}
-        />
-      </div>
-      <div class="filter-field">
-        <label for="filter-traceid">Trace ID</label>
-        <input
-          id="filter-traceid"
-          type="text"
-          placeholder="abc123..."
-          bind:value={filterTraceId}
-          on:focus={handleTraceIdActivation}
-          on:click={handleTraceIdActivation}
-        />
-      </div>
-      {#if filterTraceId}
-        <p class="helper">
-          Con Trace ID impostato, il range date viene ignorato.
-        </p>
+
+      {#if activeTab === "tracce"}
+        <div class="filter-field">
+          <label for="filter-traceid">Trace ID</label>
+          <input
+            id="filter-traceid"
+            type="text"
+            placeholder="abc123..."
+            bind:value={filterTraceId}
+            on:focus={handleTraceIdActivation}
+            on:click={handleTraceIdActivation}
+          />
+        </div>
+        {#if filterTraceId}
+          <p class="helper">
+            Con Trace ID impostato, il range date viene ignorato.
+          </p>
+        {/if}
+      {/if}
+
+      {#if activeTab === "logs"}
+        <div class="advanced-filters-trigger">
+          <button type="button" class="btn-secondary" on:click={openFilters}>
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              width="16"
+              height="16"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              ><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"
+              ></polygon></svg
+            >
+            Filtri Avanzati
+            {#if advancedFilters.length > 0}
+              <span class="badge">{advancedFilters.length}</span>
+            {/if}
+          </button>
+        </div>
+
+        <Modal
+          open={showFilterModal}
+          title="Filtri Avanzati"
+          on:close={closeFilters}
+        >
+          <FilterBuilder bind:filters={advancedFilters} />
+          <div class="modal-actions">
+            <button class="btn-primary" on:click={closeFilters}
+              >Applica Filtri</button
+            >
+          </div>
+        </Modal>
       {/if}
     </div>
   {:else}
@@ -726,7 +852,9 @@
       class="btn-execute"
       on:click={submit}
       disabled={searchMode !== "smart"
-        ? (!filterTraceId && (!fromInput || !toInput))
+        ? !filterTraceId &&
+          (!fromInput || !toInput) &&
+          advancedFilters.length === 0
         : !generatedSql || !sqlDirty}
     >
       <svg
@@ -741,6 +869,7 @@
       </svg>
       Esegui Query
     </button>
+    <div class="spacer"></div>
   {/if}
 </div>
 
@@ -826,10 +955,18 @@
     gap: 16px;
   }
 
+  .advanced-filters-trigger {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    margin-top: 10px;
+  }
+
   .filter-field {
     display: flex;
     flex-direction: column;
     gap: 6px;
+    margin-bottom: 10px;
   }
 
   .quick-range-buttons button {
@@ -956,16 +1093,16 @@
     font-weight: 600;
     border: none;
     border-radius: 8px;
-    background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+    background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
     color: white;
     cursor: pointer;
     transition: all 0.2s ease;
-    box-shadow: 0 2px 8px rgba(16, 185, 129, 0.3);
+    box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3);
   }
 
   .btn-generate:hover:not([disabled]) {
     transform: translateY(-1px);
-    box-shadow: 0 4px 12px rgba(16, 185, 129, 0.4);
+    box-shadow: 0 6px 16px rgba(99, 102, 241, 0.4);
   }
 
   .btn-generate[disabled] {
@@ -1037,5 +1174,108 @@
     opacity: 0.5;
     cursor: not-allowed;
     transform: none;
+  }
+
+  .date-row {
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+  }
+
+  .filter-field.compact {
+    flex: 1 1 180px;
+    min-width: 0;
+  }
+
+  .filter-field.compact input {
+    padding: 8px 10px;
+    font-size: 13px;
+  }
+
+  .btn-secondary {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 16px;
+    background: white;
+    border: 1px solid #cbd5e1;
+    border-radius: 8px;
+    color: #334155;
+    font-weight: 500;
+    font-size: 13px;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+
+  .btn-secondary:hover {
+    background: #f8fafc;
+    border-color: #94a3b8;
+  }
+
+  .badge {
+    background: #6366f1;
+    color: white;
+    font-size: 11px;
+    padding: 2px 6px;
+    border-radius: 99px;
+    font-weight: 700;
+  }
+
+  .modal-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 12px;
+    margin-top: 24px;
+    padding-top: 20px;
+    border-top: 1px solid #e2e8f0;
+  }
+
+  .btn-primary {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 12px 24px;
+    background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+    color: white;
+    border: none;
+    border-radius: 10px;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3);
+  }
+
+  .btn-primary:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(99, 102, 241, 0.4);
+  }
+
+  .btn-primary:active {
+    transform: translateY(0);
+  }
+
+  .btn-execute {
+    position: fixed;
+    bottom: 20px;
+    right: 24px;
+    width: 272px; /* 320px panel - 48px padding */
+    z-index: 90; /* Lower than Modal (100) */
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+    margin: 0;
+  }
+
+  .spacer {
+    height: 80px;
+    flex-shrink: 0;
+  }
+
+  @media (max-width: 1200px) {
+    .btn-execute {
+      width: auto;
+      right: 20px;
+      left: 20px; /* Full width minus margins on mobile/tablet */
+    }
   }
 </style>

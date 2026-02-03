@@ -150,11 +150,11 @@ func buildLegacySmartQuery(prompt string, now time.Time) (*SmartQueryResponse, e
 func buildPreviewSQL(signal string, filters map[string]string, from, to time.Time, limit int) string {
 	switch signal {
 	case "traces":
-		return builders.BuildTracesQuery(filters, from, to, limit, 0)
+		return builders.BuildTracesQuery(filters, nil, from, to, limit, 0)
 	case "metrics":
-		return builders.BuildMetricsQuery(filters, from, to, limit, 0)
+		return builders.BuildMetricsQuery(filters, nil, from, to, limit, 0)
 	default:
-		return builders.BuildLogsQuery(filters, from, to, limit, 0)
+		return builders.BuildLogsQuery(filters, nil, from, to, limit, 0)
 	}
 }
 

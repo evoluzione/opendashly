@@ -11,7 +11,6 @@
   let highlightKeys = new Set<string>();
   let highlightTimers = new Map<string, ReturnType<typeof setTimeout>>();
   let initialized = false;
-  let showAttributes = false;
 
   const severityStyles: Record<
     string,
@@ -214,11 +213,6 @@
       knownKeys = nextKeys;
     }
   }
-
-  $: if (selectedLog) {
-    showAttributes = false;
-  }
-
   onDestroy(() => {
     highlightTimers.forEach((timer) => clearTimeout(timer));
     highlightTimers.clear();
@@ -290,112 +284,155 @@
     on:click|self={closeLogModal}
     on:keydown={(event) => handleBackdropKeydown(event, closeLogModal)}
   >
-    <div class="modal" role="dialog" aria-modal="true">
-      <header>
-        <div>
-          <p class="kicker">Dettagli log</p>
-          <h3>{formatTimestamp(selectedLog.timestamp)}</h3>
-        </div>
-        <button type="button" class="close" on:click={closeLogModal}
-          >Chiudi</button
-        >
-      </header>
-      <div class="meta">
-        <span class="pill">Severita: {selectedLog.severity || "info"}</span>
-        {#if selectedLog.traceId}
-          <button
-            type="button"
-            class="pill link"
-            on:click={() => goToTraceSearch(selectedLog.traceId)}
+    <div class="modal log-modal" role="dialog" aria-modal="true">
+      <header class="modal-header">
+        <div class="header-title">
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            width="20"
+            height="20"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
           >
-            Traccia {selectedLog.traceId}
-          </button>
-        {/if}
-        {#if selectedLog.spanId}
-          <span class="pill">Span {selectedLog.spanId}</span>
-        {/if}
-      </div>
-      <div class="body">
-        <h4>Messaggio</h4>
-        <p>{@html formatLogMessageHtml(selectedLog, structuredBody)}</p>
-      </div>
-      {#if tags.length > 0}
-        <div class="tags">
-          {#each tags as tag}
-            <span class="tag"
-              ><span class="tag-key">{tag.key}</span>{tag.value}</span
-            >
-          {/each}
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"
+            ></path>
+            <polyline points="14 2 14 8 20 8"></polyline>
+            <line x1="16" y1="13" x2="8" y2="13"></line>
+            <line x1="16" y1="17" x2="8" y2="17"></line>
+          </svg>
+          <span>Dettagli Log</span>
         </div>
-      {/if}
-      <div class="json-grid">
-        {#if structuredBody}
-          <div>
-            <h4>Corpo</h4>
-            <pre>{JSON.stringify(structuredBody, null, 2)}</pre>
+        <button
+          type="button"
+          class="close-btn"
+          on:click={closeLogModal}
+          aria-label="Chiudi"
+        >
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            width="20"
+            height="20"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          >
+            <line x1="18" y1="6" x2="6" y2="18"></line>
+            <line x1="6" y1="6" x2="18" y2="18"></line>
+          </svg>
+        </button>
+      </header>
+
+      <div class="modal-body">
+        <!-- Info principali: Severity e Data -->
+        <div class="log-header-info">
+          <div
+            class="severity-badge severity-{(
+              selectedLog.severity || 'info'
+            ).toLowerCase()}"
+          >
+            {selectedLog.severity || "INFO"}
           </div>
-        {/if}
-        {#if Object.keys(mergedAttributes).length > 0}
-          <div>
-            <button
-              type="button"
-              class="toggle-attributes"
-              aria-expanded={showAttributes}
-              on:click={() => (showAttributes = !showAttributes)}
-            >
-              {showAttributes ? "Nascondi attributi" : "Mostra attributi"}
-            </button>
-          </div>
-        {/if}
-      </div>
-      {#if showAttributes}
-        {#if selectedLog.resourceAttributes && Object.keys(selectedLog.resourceAttributes).length > 0}
-          <div class="attributes-block">
-            <h4>Attributi risorsa</h4>
-            <table class="attributes-table">
-              <thead>
-                <tr>
-                  <th>Chiave</th>
-                  <th>Valore</th>
-                </tr>
-              </thead>
-              <tbody>
-                {#each Object.entries(selectedLog.resourceAttributes) as [key, value]}
-                  <tr>
-                    <td class="attr-key">{key}</td>
-                    <td class="attr-value">{formatValue(value)}</td>
-                  </tr>
-                {/each}
-              </tbody>
-            </table>
-          </div>
-        {/if}
+          <span class="log-timestamp"
+            >{formatTimestamp(selectedLog.timestamp)}</span
+          >
+        </div>
+
+        <!-- Messaggio -->
+        <section class="log-section message-section">
+          <h4 class="section-title">Messaggio</h4>
+          <p class="log-message">
+            {@html formatLogMessageHtml(selectedLog, structuredBody)}
+          </p>
+        </section>
+
+        <!-- Attributi Log (prioritari) -->
         {#if selectedLog.logAttributes && Object.keys(selectedLog.logAttributes).length > 0}
-          <div class="attributes-block">
-            <h4>Attributi log</h4>
-            <table class="attributes-table">
-              <thead>
-                <tr>
-                  <th>Chiave</th>
-                  <th>Valore</th>
-                </tr>
-              </thead>
-              <tbody>
-                {#each Object.entries(selectedLog.logAttributes) as [key, value]}
-                  <tr>
-                    <td class="attr-key">{key}</td>
-                    <td class="attr-value">{formatValue(value)}</td>
-                  </tr>
-                {/each}
-              </tbody>
-            </table>
-          </div>
+          <section class="log-section">
+            <h4 class="section-title">Attributi Log</h4>
+            <div class="attributes-list">
+              {#each Object.entries(selectedLog.logAttributes) as [key, value]}
+                <div class="attr-row">
+                  <span class="attr-key">{key}</span>
+                  <span class="attr-value">{formatValue(value)}</span>
+                </div>
+              {/each}
+            </div>
+          </section>
         {/if}
-      {/if}
+
+        <!-- Sezione secondaria -->
+        <div class="secondary-info">
+          <!-- Trace/Span Info -->
+          {#if selectedLog.traceId || selectedLog.spanId || tags.length > 0}
+            <section class="log-section compact">
+              <h4 class="section-title">Contesto</h4>
+              <div class="context-grid">
+                {#if selectedLog.traceId}
+                  <div class="context-item">
+                    <span class="context-label">Trace ID</span>
+                    <button
+                      type="button"
+                      class="context-value link"
+                      on:click={() => goToTraceSearch(selectedLog.traceId)}
+                    >
+                      {selectedLog.traceId}
+                    </button>
+                  </div>
+                {/if}
+                {#if selectedLog.spanId}
+                  <div class="context-item">
+                    <span class="context-label">Span ID</span>
+                    <span class="context-value mono">{selectedLog.spanId}</span>
+                  </div>
+                {/if}
+                {#each tags as tag}
+                  <div class="context-item">
+                    <span class="context-label">{tag.key}</span>
+                    <span class="context-value">{tag.value}</span>
+                  </div>
+                {/each}
+              </div>
+            </section>
+          {/if}
+
+          <!-- Corpo strutturato -->
+          {#if structuredBody}
+            <section class="log-section compact">
+              <h4 class="section-title">Corpo strutturato</h4>
+              <pre class="code-block">{JSON.stringify(
+                  structuredBody,
+                  null,
+                  2,
+                )}</pre>
+            </section>
+          {/if}
+
+          <!-- Attributi Risorsa -->
+          {#if selectedLog.resourceAttributes && Object.keys(selectedLog.resourceAttributes).length > 0}
+            <section class="log-section compact">
+              <h4 class="section-title">Attributi Risorsa</h4>
+              <div class="attributes-list compact">
+                {#each Object.entries(selectedLog.resourceAttributes) as [key, value]}
+                  <div class="attr-row">
+                    <span class="attr-key">{key}</span>
+                    <span class="attr-value">{formatValue(value)}</span>
+                  </div>
+                {/each}
+              </div>
+            </section>
+          {/if}
+        </div>
+      </div>
     </div>
   </div>
 {/if}
-
 
 <style>
   .empty {
@@ -487,8 +524,8 @@
     font-size: 11px;
     padding: 4px 10px;
     border-radius: 999px;
-    background: #eef2ff;
-    color: #4338ca;
+    background: #f5f3ff;
+    color: #6366f1;
     font-weight: 600;
   }
 
@@ -515,8 +552,8 @@
   }
 
   .pager button:hover:not(:disabled) {
-    border-color: #2563eb;
-    color: #2563eb;
+    border-color: #6366f1;
+    color: #6366f1;
   }
 
   .pager button:disabled {
@@ -533,218 +570,260 @@
   .modal-backdrop {
     position: fixed;
     inset: 0;
-    background: rgba(15, 23, 42, 0.45);
+    background: rgba(15, 23, 42, 0.7);
+    backdrop-filter: blur(8px);
     display: flex;
     align-items: center;
     justify-content: center;
     padding: 24px;
-    z-index: 60;
+    z-index: 100;
   }
 
-  .modal {
-    width: min(1100px, 96vw);
+  .log-modal {
+    width: min(1200px, 96vw);
     max-height: 90vh;
-    overflow: auto;
-    background: white;
+    overflow: hidden;
+    background: #f8fafc;
     border-radius: 16px;
-    padding: 24px;
-    box-shadow: 0 20px 40px rgba(15, 23, 42, 0.2);
+    box-shadow:
+      0 25px 50px -12px rgba(0, 0, 0, 0.25),
+      0 0 0 1px rgba(255, 255, 255, 0.1);
     display: flex;
     flex-direction: column;
-    gap: 16px;
   }
 
-  .modal header {
+  .modal-header {
     display: flex;
     align-items: center;
     justify-content: space-between;
+    padding: 14px 20px;
+    background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+    color: white;
+    flex-shrink: 0;
+  }
+
+  .header-title {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 16px;
+    font-weight: 600;
+  }
+
+  .close-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(255, 255, 255, 0.1);
+    border: none;
+    color: white;
+    cursor: pointer;
+    padding: 8px;
+    border-radius: 8px;
+    transition: all 0.2s ease;
+  }
+
+  .close-btn:hover {
+    background: rgba(255, 255, 255, 0.2);
+  }
+
+  .modal-body {
+    flex: 1;
+    overflow: auto;
+    display: flex;
+    flex-direction: column;
     gap: 16px;
+    padding: 20px;
   }
 
-  .kicker {
-    margin: 0 0 6px 0;
-    font-size: 11px;
-    text-transform: uppercase;
-    letter-spacing: 0.08em;
-    color: #94a3b8;
-  }
-
-  .modal h3 {
-    margin: 0;
-    font-size: 18px;
-    color: #0f172a;
-  }
-
-  .close {
-    border: none;
-    background: #1d4ed8;
-    color: white;
-    padding: 8px 14px;
-    border-radius: 999px;
-    font-weight: 600;
-    cursor: pointer;
-  }
-
-  .meta {
+  .log-header-info {
     display: flex;
-    flex-wrap: wrap;
-    gap: 8px;
+    align-items: center;
+    gap: 16px;
+    padding-bottom: 16px;
+    border-bottom: 1px solid #e2e8f0;
   }
 
-  .pill {
-    font-size: 12px;
-    padding: 6px 10px;
-    border-radius: 999px;
-    background: #f1f5f9;
-    color: #475569;
-    font-weight: 600;
-  }
-
-  .pill.link {
-    background: #1d4ed8;
-    color: white;
-    text-decoration: none;
-    border: none;
-    cursor: pointer;
-  }
-
-  .body h4,
-  .json-grid h4 {
-    margin: 0 0 6px 0;
-    font-size: 12px;
-    text-transform: uppercase;
-    letter-spacing: 0.08em;
-    color: #64748b;
-  }
-
-  .body p {
-    margin: 0;
-    font-size: 14px;
-    color: #0f172a;
-  }
-
-  .tags {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 6px;
-  }
-
-  .tag {
+  .severity-badge {
     display: inline-flex;
     align-items: center;
-    gap: 6px;
-    font-size: 11px;
-    padding: 4px 8px;
-    border-radius: 999px;
-    background: #f1f5f9;
-    color: #475569;
-    border: 1px solid rgba(148, 163, 184, 0.3);
+    padding: 6px 14px;
+    border-radius: 8px;
+    font-size: 12px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
   }
 
-  .tag-key {
-    font-weight: 600;
+  .severity-badge.severity-fatal,
+  .severity-badge.severity-error {
+    background: #fef2f2;
+    color: #dc2626;
+    border: 1px solid #fecaca;
+  }
+
+  .severity-badge.severity-warn,
+  .severity-badge.severity-warning {
+    background: #fffbeb;
+    color: #d97706;
+    border: 1px solid #fde68a;
+  }
+
+  .severity-badge.severity-info {
+    background: #eff6ff;
+    color: #2563eb;
+    border: 1px solid #bfdbfe;
+  }
+
+  .severity-badge.severity-debug,
+  .severity-badge.severity-trace {
+    background: #f8fafc;
+    color: #64748b;
+    border: 1px solid #e2e8f0;
+  }
+
+  .log-timestamp {
+    font-size: 14px;
+    color: #64748b;
+    font-weight: 500;
+  }
+
+  .log-section {
+    background: white;
+    border-radius: 12px;
+    padding: 16px;
+    border: 1px solid #e2e8f0;
+  }
+
+  .log-section.compact {
+    padding: 14px;
+  }
+
+  .log-section.message-section {
+    background: #f8fafc;
+  }
+
+  .section-title {
+    margin: 0 0 10px 0;
+    font-size: 11px;
+    font-weight: 700;
     text-transform: uppercase;
     letter-spacing: 0.06em;
-    font-size: 9px;
     color: #64748b;
   }
 
-  .json-grid {
+  .log-message {
+    margin: 0;
+    font-size: 15px;
+    color: #0f172a;
+    line-height: 1.7;
+    word-break: break-word;
+  }
+
+  .secondary-info {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    padding-top: 8px;
+    border-top: 1px solid #e2e8f0;
+  }
+
+  .context-grid {
     display: grid;
+    grid-template-columns: repeat(4, 1fr);
     gap: 12px;
   }
 
-  .toggle-attributes {
-    border: 1px solid #e2e8f0;
-    background: #f8fafc;
-    color: #475569;
-    padding: 8px 12px;
-    border-radius: 8px;
+  .context-item {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  .context-label {
+    font-size: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: #94a3b8;
+  }
+
+  .context-value {
     font-size: 12px;
+    color: #0f172a;
+    word-break: break-all;
+  }
+
+  .context-value.mono {
+    font-family: "Courier New", monospace;
+    color: #475569;
+  }
+
+  .context-value.link {
+    background: none;
+    border: none;
+    padding: 0;
+    color: #6366f1;
     font-weight: 600;
     cursor: pointer;
-    transition: border 0.15s ease, color 0.15s ease;
+    text-align: left;
+    font-size: 12px;
+    transition: color 0.2s ease;
   }
 
-  .toggle-attributes:hover {
-    border-color: #2563eb;
-    color: #2563eb;
+  .context-value.link:hover {
+    color: #4f46e5;
+    text-decoration: underline;
   }
 
-  .attributes-block {
-    display: grid;
-    gap: 8px;
-  }
-
-  pre {
+  .code-block {
     margin: 0;
     padding: 12px;
     background: #0f172a;
     color: #e2e8f0;
-    border-radius: 10px;
+    border-radius: 8px;
     font-size: 12px;
     overflow-x: auto;
     white-space: pre-wrap;
     word-break: break-word;
-  }
-
-  .attributes-table {
-    width: 100%;
-    border-collapse: collapse;
-    border-radius: 10px;
-    overflow: hidden;
-    border: 1px solid #e2e8f0;
-    background: white;
-  }
-
-  .attributes-table thead {
-    background: #f8fafc;
-  }
-
-  .attributes-table th {
-    text-align: left;
-    padding: 10px 14px;
-    font-size: 11px;
-    font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: 0.08em;
-    color: #64748b;
-    border-bottom: 2px solid #e2e8f0;
-  }
-
-  .attributes-table tbody tr {
-    border-bottom: 1px solid #f1f5f9;
-    transition: background 0.15s ease;
-  }
-
-  .attributes-table tbody tr:last-child {
-    border-bottom: none;
-  }
-
-  .attributes-table tbody tr:hover {
-    background: #f8fafc;
-  }
-
-  .attributes-table td {
-    padding: 10px 14px;
-    font-size: 13px;
-  }
-
-  .attr-key {
-    font-weight: 600;
-    color: #475569;
     font-family: "Courier New", monospace;
-    width: 35%;
-    vertical-align: top;
   }
 
-  .attr-value {
+  .attributes-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .attr-row {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    padding: 8px 10px;
+    background: #f8fafc;
+    border-radius: 6px;
+    border: 1px solid #f1f5f9;
+  }
+
+  .attr-row .attr-key {
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: #64748b;
+    font-family: "Courier New", monospace;
+  }
+
+  .attr-row .attr-value {
+    font-size: 13px;
     color: #0f172a;
-    word-break: break-word;
+    word-break: break-all;
   }
 
-  .trace-modal h3 {
-    word-break: break-all;
+  @media (max-width: 900px) {
+    .log-details-grid {
+      grid-template-columns: 1fr;
+    }
   }
 
   @media (max-width: 720px) {

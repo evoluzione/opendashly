@@ -1,11 +1,20 @@
 package builders
 
 import (
+	"fmt"
 	"strings"
 	"time"
 )
 
-func buildOtelClauses(timeColumn string, filters map[string]string, from, to time.Time, serviceColumn, traceColumn, severityColumn string, attributeColumns []string) []string {
+// FilterItem represents a single filter condition.
+type FilterItem struct {
+	Connector string `json:"connector"` // "AND", "OR"
+	Key       string `json:"key"`
+	Operator  string `json:"operator"` // "=", "!=", "contains", etc.
+	Value     string `json:"value"`
+}
+
+func buildOtelClauses(timeColumn string, filters map[string]string, filterList []FilterItem, from, to time.Time, serviceColumn, traceColumn, severityColumn string, attributeColumns []string) []string {
 	clauses := []string{}
 	if !from.IsZero() {
 		clauses = append(clauses, timeColumn+" >= "+formatDateTime64(from))
@@ -13,54 +22,138 @@ func buildOtelClauses(timeColumn string, filters map[string]string, from, to tim
 	if !to.IsZero() {
 		clauses = append(clauses, timeColumn+" <= "+formatDateTime64(to))
 	}
-	for k, v := range filters {
-		escapedKey := escapeLiteral(k)
-		escapedValue := escapeLiteral(v)
-		switch k {
-		case "service.name":
-			if serviceColumn != "" {
-				clauses = append(clauses, serviceColumn+" = '"+escapedValue+"'")
-			}
-		case "trace_id":
-			if traceColumn != "" {
-				clauses = append(clauses, traceColumn+" = '"+escapedValue+"'")
-			}
-		case "severity":
-			if severityColumn != "" && v != "Tutti" {
-				// Special handling for StatusCode which identifies errors
-				if strings.EqualFold(v, "Error") {
-					clauses = append(clauses, "("+severityColumn+" = 'Error' OR "+severityColumn+" = 'STATUS_CODE_ERROR' OR toString("+severityColumn+") = '2')")
-				} else {
-					clauses = append(clauses, "upper("+severityColumn+") = '"+strings.ToUpper(escapedValue)+"'")
-				}
-			}
-		default:
-			if len(attributeColumns) == 0 {
+	// If we have a filterList (new mode), use that.
+	if len(filterList) > 0 {
+		// New logic with AND/OR
+		// We treat the list as a sequence.
+		// For the first item, Connector is ignored (effectively AND with time range).
+		// We group the time range logic as base.
+		// Actually, standard SQL: WHERE (time conditions) AND ( (filter1) OR (filter2) AND (filter3) )
+		// So we construct the filter part separately.
+
+		filterPart := ""
+		for i, f := range filterList {
+			clause := buildSingleClause(f.Key, f.Value, f.Operator, serviceColumn, traceColumn, severityColumn, attributeColumns)
+			if clause == "" {
 				continue
 			}
-			attrClauses := make([]string, 0, len(attributeColumns))
-			for _, column := range attributeColumns {
-				attrClauses = append(attrClauses, column+"['"+escapedKey+"'] = '"+escapedValue+"'")
+
+			conn := " AND "
+			if i > 0 {
+				if strings.ToUpper(f.Connector) == "OR" {
+					conn = " OR "
+				}
 			}
-			if len(attrClauses) == 1 {
-				clauses = append(clauses, attrClauses[0])
-			} else {
-				clauses = append(clauses, "("+strings.Join(attrClauses, " OR ")+")")
+
+			filterPart += conn + clause
+		}
+
+		if filterPart != "" {
+			// Remove leading AND if strictly needed, but here we append to time clauses
+			// logic: (Time) AND (Filters)
+			// Wait, the caller joins 'clauses' with AND.
+			// If we return multiple clauses, they get ANDed.
+			// So we should return one combined clause for the filters if there are mixed operators?
+			// Yes.
+
+			// Trim leading " AND " or " OR " just in case, though our loop handles i>0.
+			if strings.HasPrefix(filterPart, " AND ") {
+				filterPart = filterPart[5:]
+			} else if strings.HasPrefix(filterPart, " OR ") {
+				filterPart = filterPart[4:]
+			}
+
+			clauses = append(clauses, "("+filterPart+")")
+		}
+
+	} else {
+		// Legacy map-based behavior (implicit AND)
+		for k, v := range filters {
+			clause := buildSingleClause(k, v, "=", serviceColumn, traceColumn, severityColumn, attributeColumns)
+			if clause != "" {
+				clauses = append(clauses, clause)
 			}
 		}
 	}
 	return clauses
 }
 
+func buildSingleClause(k, v, op string, serviceColumn, traceColumn, severityColumn string, attributeColumns []string) string {
+	if k == "" {
+		return ""
+	}
+	escapedKey := EscapeLiteral(k)
+	escapedValue := EscapeLiteral(v)
+
+	// Default operator to =
+	if op == "" {
+		op = "="
+	}
+
+	sqlOp := "="
+	sqlValue := "'" + escapedValue + "'"
+
+	switch strings.ToLower(op) {
+	case "=":
+		sqlOp = "="
+	case "!=":
+		sqlOp = "!="
+	case "contains":
+		sqlOp = "ILIKE"
+		sqlValue = "'%" + escapedValue + "%'"
+		// Add more as needed
+	}
+
+	switch k {
+	case "service.name":
+		if serviceColumn != "" {
+			return fmt.Sprintf("%s %s %s", serviceColumn, sqlOp, sqlValue)
+		}
+	case "trace_id":
+		if traceColumn != "" {
+			return fmt.Sprintf("%s %s %s", traceColumn, sqlOp, sqlValue)
+		}
+	case "severity":
+		if severityColumn != "" && v != "Tutti" {
+			// Special handling for severity still useful?
+			// If custom operator is used, we might skip the special handling or adapt it.
+			// For now, if simple equality, keep special handling?
+			if op == "=" || op == "" {
+				if strings.EqualFold(v, "Error") {
+					return fmt.Sprintf("(%s = 'Error' OR %s = 'STATUS_CODE_ERROR' OR toString(%s) = '2')", severityColumn, severityColumn, severityColumn)
+				} else {
+					return fmt.Sprintf("upper(%s) = '%s'", severityColumn, strings.ToUpper(escapedValue))
+				}
+			} else {
+				return fmt.Sprintf("%s %s %s", severityColumn, sqlOp, sqlValue)
+			}
+		}
+	default:
+		if len(attributeColumns) == 0 {
+			return ""
+		}
+		attrClauses := make([]string, 0, len(attributeColumns))
+		for _, column := range attributeColumns {
+			attrClauses = append(attrClauses, fmt.Sprintf("%s['%s'] %s %s", column, escapedKey, sqlOp, sqlValue))
+		}
+		if len(attrClauses) == 1 {
+			return attrClauses[0]
+		} else {
+			return "(" + strings.Join(attrClauses, " OR ") + ")"
+		}
+	}
+	return ""
+}
+
 func formatDateTime64(value time.Time) string {
 	return "toDateTime64('" + value.UTC().Format("2006-01-02 15:04:05.000000000") + "', 9)"
 }
 
-func escapeLiteral(value string) string {
+func EscapeLiteral(value string) string {
 	return strings.ReplaceAll(value, "'", "\\'")
 }
 
 // EscapeTraceID ensures trace IDs are safe for direct SQL interpolation.
 func EscapeTraceID(value string) string {
-	return escapeLiteral(value)
+	return EscapeLiteral(value)
 }

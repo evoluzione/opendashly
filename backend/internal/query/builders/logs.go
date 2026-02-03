@@ -7,9 +7,9 @@ import (
 )
 
 // BuildLogsQuery creates a ClickHouse SQL statement for logs.
-func BuildLogsQuery(filters map[string]string, from, to time.Time, limit, offset int) string {
+func BuildLogsQuery(filters map[string]string, filterList []FilterItem, from, to time.Time, limit, offset int) string {
 	base := "SELECT Timestamp AS timestamp, SeverityText AS severity, Body AS body, TraceId AS traceId, SpanId AS spanId, ResourceAttributes AS resourceAttributes, LogAttributes AS logAttributes FROM telemetry.otel_logs"
-	clauses := buildOtelClauses("Timestamp", filters, from, to, "ServiceName", "TraceId", "SeverityText", []string{"ResourceAttributes", "LogAttributes"})
+	clauses := buildOtelClauses("Timestamp", filters, filterList, from, to, "ServiceName", "TraceId", "SeverityText", []string{"ResourceAttributes", "LogAttributes"})
 	query := base
 	if len(clauses) > 0 {
 		query += " WHERE " + strings.Join(clauses, " AND ")

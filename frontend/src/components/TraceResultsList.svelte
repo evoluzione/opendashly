@@ -183,48 +183,86 @@
     on:keydown={handleBackdropKeydown}
   >
     <div class="modal" role="dialog" aria-modal="true" on:click|stopPropagation>
-      <header>
-        <div>
-          <p class="kicker">Dettagli traccia</p>
-          <h3>{selectedTrace.name || "Traccia senza nome"}</h3>
+      <header class="modal-header">
+        <div class="header-content">
+          <div class="header-icon">
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              width="20"
+              height="20"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <path d="M22 12h-4l-3 9L9 3l-3 9H2"></path>
+            </svg>
+          </div>
+          <div class="header-text">
+            <p class="kicker">Dettagli traccia</p>
+            <h3>{selectedTrace.name || "Traccia senza nome"}</h3>
+          </div>
         </div>
-        <button type="button" class="close" on:click={closeModal}>Chiudi</button
+        <button
+          type="button"
+          class="close-btn"
+          on:click={closeModal}
+          aria-label="Chiudi"
         >
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            width="18"
+            height="18"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          >
+            <line x1="18" y1="6" x2="6" y2="18"></line>
+            <line x1="6" y1="6" x2="18" y2="18"></line>
+          </svg>
+        </button>
       </header>
-      <div class="meta">
-        <span class="pill">ID traccia {selectedTrace.traceId}</span>
-        <span class="pill">Servizio {selectedTrace.service || "-"}</span>
-        <span class="pill">Span {selectedTrace.spanCount ?? 0}</span>
-        {#if selectedTrace.errorCount > 0}
-          <span class="pill error">Errori {selectedTrace.errorCount}</span>
-        {/if}
-        <span class="pill"
-          >Ultimo span {formatTimestamp(selectedTrace.lastSeen)}</span
-        >
-      </div>
-      <div class="tabs">
-        <button
-          class="tab"
-          class:active={activeTab === "spans"}
-          on:click={() => (activeTab = "spans")}
-        >
-          Span
-        </button>
-        <button
-          class="tab"
-          class:active={activeTab === "logs"}
-          on:click={() => (activeTab = "logs")}
-        >
-          Logs
-        </button>
-      </div>
-
-      <div class="details-panel">
-        <div class:hidden={activeTab !== "spans"}>
-          <TraceSpanTimeline traceId={selectedTrace.traceId} />
+      <div class="modal-body">
+        <div class="meta">
+          <span class="pill">ID traccia {selectedTrace.traceId}</span>
+          <span class="pill">Servizio {selectedTrace.service || "-"}</span>
+          <span class="pill">Span {selectedTrace.spanCount ?? 0}</span>
+          {#if selectedTrace.errorCount > 0}
+            <span class="pill error">Errori {selectedTrace.errorCount}</span>
+          {/if}
+          <span class="pill"
+            >Ultimo span {formatTimestamp(selectedTrace.lastSeen)}</span
+          >
         </div>
-        <div class:hidden={activeTab !== "logs"}>
-          <CorrelationPanel traceId={selectedTrace.traceId} />
+        <div class="tabs">
+          <button
+            class="tab"
+            class:active={activeTab === "spans"}
+            on:click={() => (activeTab = "spans")}
+          >
+            Span
+          </button>
+          <button
+            class="tab"
+            class:active={activeTab === "logs"}
+            on:click={() => (activeTab = "logs")}
+          >
+            Logs
+          </button>
+        </div>
+
+        <div class="details-panel">
+          <div class:hidden={activeTab !== "spans"}>
+            <TraceSpanTimeline traceId={selectedTrace.traceId} />
+          </div>
+          <div class:hidden={activeTab !== "logs"}>
+            <CorrelationPanel traceId={selectedTrace.traceId} />
+          </div>
         </div>
       </div>
     </div>
@@ -394,57 +432,102 @@
   .modal-backdrop {
     position: fixed;
     inset: 0;
-    background: rgba(15, 23, 42, 0.45);
+    background: rgba(15, 23, 42, 0.7);
+    backdrop-filter: blur(8px);
     display: flex;
     align-items: center;
     justify-content: center;
     padding: 24px;
-    z-index: 60;
+    z-index: 100;
   }
 
   .modal {
-    width: min(1600px, 98vw);
+    width: min(1350px, 96vw);
     height: 90vh;
     max-height: 90vh;
-    overflow: auto;
+    overflow: hidden;
     background: white;
     border-radius: 16px;
-    padding: 24px;
-    box-shadow: 0 20px 40px rgba(15, 23, 42, 0.2);
+    box-shadow:
+      0 25px 50px -12px rgba(0, 0, 0, 0.25),
+      0 0 0 1px rgba(255, 255, 255, 0.1);
     display: flex;
     flex-direction: column;
-    gap: 16px;
   }
 
-  .modal header {
+  .modal-header {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: 16px;
+    padding: 16px 24px;
+    background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+    color: white;
+    flex-shrink: 0;
+  }
+
+  .header-content {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+  }
+
+  .header-icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 40px;
+    height: 40px;
+    background: rgba(255, 255, 255, 0.2);
+    border-radius: 10px;
+  }
+
+  .header-text {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
   }
 
   .kicker {
-    margin: 0 0 6px 0;
+    margin: 0;
     font-size: 11px;
     text-transform: uppercase;
     letter-spacing: 0.08em;
-    color: #94a3b8;
+    color: rgba(255, 255, 255, 0.8);
   }
 
   .modal h3 {
     margin: 0;
     font-size: 18px;
-    color: #0f172a;
+    color: white;
+    font-weight: 600;
   }
 
-  .close {
+  .close-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(255, 255, 255, 0.15);
     border: none;
-    background: #1d4ed8;
     color: white;
-    padding: 8px 14px;
-    border-radius: 999px;
-    font-weight: 600;
     cursor: pointer;
+    padding: 10px;
+    border-radius: 10px;
+    transition: all 0.2s ease;
+  }
+
+  .close-btn:hover {
+    background: rgba(255, 255, 255, 0.25);
+    transform: scale(1.05);
+  }
+
+  .modal-body {
+    flex: 1;
+    overflow: auto;
+    padding: 20px 24px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    background: linear-gradient(180deg, #f8fafc 0%, #ffffff 100%);
   }
 
   .meta {
@@ -455,11 +538,12 @@
 
   .pill {
     font-size: 12px;
-    padding: 6px 10px;
+    padding: 6px 12px;
     border-radius: 999px;
-    background: #f1f5f9;
+    background: white;
     color: #475569;
     font-weight: 600;
+    border: 1px solid #e2e8f0;
   }
 
   .details-panel {
@@ -506,8 +590,8 @@
   }
 
   .tab.active {
-    color: #2563eb;
-    border-bottom-color: #2563eb;
+    color: #6366f1;
+    border-bottom-color: #6366f1;
   }
 
   .hidden {
