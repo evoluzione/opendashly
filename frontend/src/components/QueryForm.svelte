@@ -18,6 +18,7 @@
   import FilterBuilder from "./FilterBuilder.svelte";
   import Modal from "./common/Modal.svelte";
   import type { FilterItem } from "../services/query";
+  import LogLevelSelector from "./LogLevelSelector.svelte";
 
   const dispatch = createEventDispatcher();
 
@@ -126,6 +127,7 @@
 
   // Manual filter fields
   let filterTraceId = "";
+  let filterSpanName = "";
 
   // Separate SQL field
   let generatedSql = "";
@@ -224,6 +226,7 @@
       toInput = "";
     }
     filterTraceId = traceId;
+    filterSpanName = "";
     if (autoRun) {
       submit();
     }
@@ -247,6 +250,7 @@
     confirmOpen = false;
     confirmAction = null;
     filterTraceId = "";
+    filterSpanName = "";
     if (!fromInput || !toInput) {
       setManualRange(24 * 60);
     }
@@ -512,6 +516,10 @@
     const hasTraceId = activeTab === "tracce" && !!filterTraceId;
     if (hasTraceId) manualFilters["trace_id"] = filterTraceId;
 
+    if (activeTab === "tracce" && filterSpanName) {
+      manualFilters["span_name"] = filterSpanName;
+    }
+
     if (searchMode === "smart") {
       if (!generatedSql) {
         return;
@@ -566,20 +574,21 @@
       from = zeroTime;
       to = zeroTime;
     }
-    // Merge manual filters into filterList if advanced filters are used
+    // Merge manual filters into filterList (always, to assume control over operators)
     let finalFilterList = [...advancedFilters];
-    if (finalFilterList.length > 0) {
-      for (const [k, v] of Object.entries(manualFilters)) {
-        // Only add if not already present to avoid duplicates
-        // Note: This simple check prevents overriding advanced filters with same key
-        if (!finalFilterList.some((f) => f.key === k)) {
-          finalFilterList.push({
-            connector: "AND",
-            key: k,
-            operator: "=",
-            value: v,
-          });
-        }
+    for (const [k, v] of Object.entries(manualFilters)) {
+      // Only add if not already present to avoid duplicates
+      // Note: This simple check prevents overriding advanced filters with same key
+      if (!finalFilterList.some((f) => f.key === k)) {
+        let op = "=";
+        if (k === "span_name") op = "contains";
+
+        finalFilterList.push({
+          connector: "AND",
+          key: k,
+          operator: op,
+          value: v,
+        });
       }
     }
 
@@ -607,6 +616,14 @@
 
   $: if (!filterTraceId && $page.url.searchParams.get("traceId")) {
     clearTraceIdFromUrl();
+  }
+
+  function clearManualFilters() {
+    fromInput = "";
+    toInput = "";
+    filterTraceId = "";
+    filterSpanName = "";
+    advancedFilters = [];
   }
 </script>
 
@@ -639,6 +656,12 @@
       {/if}
     </div>
   </fieldset>
+
+  {#if activeTab === "logs" && searchMode !== "smart"}
+    <div class="log-level-filter">
+      <LogLevelSelector />
+    </div>
+  {/if}
 
   {#if searchMode === "auto"}
     <fieldset class="quick-range">
@@ -709,6 +732,17 @@
     </fieldset>
   {:else if searchMode === "manual"}
     <div class="manual-filters">
+      <div class="actions-row">
+        <button
+          type="button"
+          class="btn-text"
+          on:click={clearManualFilters}
+          title="Svuota tutti i campi"
+        >
+          Pulisci filtri
+        </button>
+      </div>
+
       <div class="date-row">
         <div class="filter-field compact">
           <label for="query-from">Da</label>
@@ -744,6 +778,15 @@
             bind:value={filterTraceId}
             on:focus={handleTraceIdActivation}
             on:click={handleTraceIdActivation}
+          />
+        </div>
+        <div class="filter-field">
+          <label for="filter-spanname">Span Name</label>
+          <input
+            id="filter-spanname"
+            type="text"
+            placeholder="Cerca nome span..."
+            bind:value={filterSpanName}
           />
         </div>
         {#if filterTraceId}
@@ -851,11 +894,7 @@
     <button
       class="btn-execute"
       on:click={submit}
-      disabled={searchMode !== "smart"
-        ? !filterTraceId &&
-          (!fromInput || !toInput) &&
-          advancedFilters.length === 0
-        : !generatedSql || !sqlDirty}
+      disabled={searchMode === "smart" && (!generatedSql || !sqlDirty)}
     >
       <svg
         width="16"
@@ -1277,5 +1316,28 @@
       right: 20px;
       left: 20px; /* Full width minus margins on mobile/tablet */
     }
+  }
+
+  .actions-row {
+    display: flex;
+    justify-content: flex-end;
+  }
+
+  .btn-text {
+    background: none;
+    border: none;
+    padding: 4px 8px;
+    font-size: 12px;
+    color: #64748b;
+    cursor: pointer;
+    text-decoration: underline;
+  }
+
+  .btn-text:hover {
+    color: #334155;
+  }
+
+  .log-level-filter {
+    margin-bottom: 16px;
   }
 </style>

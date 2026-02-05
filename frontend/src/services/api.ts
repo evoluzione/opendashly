@@ -41,10 +41,19 @@ export async function apiRequest<T>(path: string, options: RequestInit = {}): Pr
     } catch {
       bodyText = '';
     }
+    let errorMessage = `Request failed: ${response.status}`;
     if (bodyText) {
       console.debug('api.response.body', { url, status: response.status, bodyText });
+      try {
+        const bodyJson = JSON.parse(bodyText);
+        if (bodyJson && (bodyJson.error || bodyJson.message)) {
+          errorMessage = bodyJson.error || bodyJson.message;
+        }
+      } catch {
+        // Not a JSON body or parse failed, stick to default
+      }
     }
-    throw new Error(`Request failed: ${response.status}`);
+    throw new Error(errorMessage);
   }
 
   if (response.status === 204) {

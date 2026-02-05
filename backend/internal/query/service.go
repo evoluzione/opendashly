@@ -44,6 +44,10 @@ func (s *Service) Run(ctx context.Context, req QueryRequest) (*QueryRunResult, e
 	logsQuery := builders.BuildLogsQuery(req.Filters, req.FilterList, req.TimeRange.From, req.TimeRange.To, limit, offset)
 	tracesQuery := builders.BuildTracesQuery(req.Filters, req.FilterList, req.TimeRange.From, req.TimeRange.To, limit, offset)
 	metricsQuery := builders.BuildMetricsQuery(req.Filters, req.FilterList, req.TimeRange.From, req.TimeRange.To, limit, offset)
+
+	logsCountQuery := builders.BuildLogsCountQuery(req.Filters, req.FilterList, req.TimeRange.From, req.TimeRange.To)
+	tracesCountQuery := builders.BuildTracesCountQuery(req.Filters, req.FilterList, req.TimeRange.From, req.TimeRange.To)
+	metricsCountQuery := builders.BuildMetricsCountQuery(req.Filters, req.FilterList, req.TimeRange.From, req.TimeRange.To)
 	if s.Debug {
 		log.Printf("DEBUG: executing logsQuery: %s", logsQuery)
 		log.Printf("query.service.run built queries: logs=%q traces=%q metrics=%q", logsQuery, tracesQuery, metricsQuery)
@@ -52,15 +56,28 @@ func (s *Service) Run(ctx context.Context, req QueryRequest) (*QueryRunResult, e
 	var logs []LogEntry
 	var traces []TraceEntry
 	var metrics []MetricSeries
+
+	var logsTotal, tracesTotal, metricsTotal uint64
 	var err error
 	if signals["logs"] {
 		logs, err = fetchLogs(ctx, s.Storage.Conn, logsQuery)
 		if err != nil {
 			return nil, err
 		}
+		logsTotal, err = fetchCount(ctx, s.Storage.Conn, logsCountQuery)
+		if err != nil {
+			// Log error but don't fail entire request? Or fail?
+			// Let's fail for now to be safe, or just use len(logs) if count fails (fallback).
+			// Robustness: fallback to len(logs) if count query fails, but let's assume it works.
+			return nil, err
+		}
 	}
 	if signals["traces"] {
 		traces, err = fetchTraces(ctx, s.Storage.Conn, tracesQuery)
+		if err != nil {
+			return nil, err
+		}
+		tracesTotal, err = fetchCount(ctx, s.Storage.Conn, tracesCountQuery)
 		if err != nil {
 			return nil, err
 		}
@@ -70,15 +87,19 @@ func (s *Service) Run(ctx context.Context, req QueryRequest) (*QueryRunResult, e
 		if err != nil {
 			return nil, err
 		}
+		metricsTotal, err = fetchCount(ctx, s.Storage.Conn, metricsCountQuery)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	result := &QueryRunResult{
 		RunID:  fmt.Sprintf("run-%d", time.Now().UnixNano()),
 		Status: "complete",
 		Pagination: PaginationSet{
-			Logs:    buildPagination(page, limit, len(logs)),
-			Traces:  buildPagination(page, limit, len(traces)),
-			Metrics: buildPagination(page, limit, len(metrics)),
+			Logs:    buildPagination(page, limit, int(logsTotal)),
+			Traces:  buildPagination(page, limit, int(tracesTotal)),
+			Metrics: buildPagination(page, limit, int(metricsTotal)),
 		},
 		Results: Results{
 			Logs:    wrapAny(logs),
@@ -247,6 +268,14 @@ func fetchMetrics(ctx context.Context, conn driver.Conn, query string) ([]Metric
 		return nil, fmt.Errorf("iterate metrics: %w", err)
 	}
 	return buildMetricSeries(metricRows), nil
+}
+
+func fetchCount(ctx context.Context, conn driver.Conn, query string) (uint64, error) {
+	var count uint64
+	if err := conn.QueryRow(ctx, query).Scan(&count); err != nil {
+		return 0, fmt.Errorf("fetch count: %w", err)
+	}
+	return count, nil
 }
 
 func buildMetricSeries(rows []metricRow) []MetricSeries {

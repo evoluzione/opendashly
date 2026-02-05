@@ -4,7 +4,6 @@
   import { goto } from "$app/navigation";
   import Sidebar from "../components/Sidebar.svelte";
   import ServiceDropdown from "../components/ServiceDropdown.svelte";
-  import LogLevelDropdown from "../components/LogLevelDropdown.svelte";
   import QueryForm from "../components/QueryForm.svelte";
   import LogResultsTable from "../components/LogResultsTable.svelte";
   import TraceResultsList from "../components/TraceResultsList.svelte";
@@ -83,8 +82,32 @@
 
   function handleRun(event: CustomEvent) {
     const { request, autoRefreshSeconds } = event.detail;
+    lastRequest = request;
     void executeQuery(request);
     setAutoRefresh(autoRefreshSeconds);
+  }
+
+  let lastRequest: any = null;
+  let pageSize = "100";
+  const pageSizeOptions = ["25", "50", "100", "200"];
+
+  async function handlePageChange(
+    signal: "logs" | "traces" | "metrics",
+    nextPage: number,
+  ) {
+    if (!lastRequest) return;
+    const page = nextPage < 1 ? 1 : nextPage;
+    const updated = { ...lastRequest, page };
+    lastRequest = updated;
+    await executeQuery(updated, { retainResult: true });
+  }
+
+  async function handlePageSizeChange() {
+    if (!lastRequest) return;
+    const limit = Number(pageSize) || 100;
+    const updated = { ...lastRequest, limit, page: 1 };
+    lastRequest = updated;
+    await executeQuery(updated, { retainResult: true });
   }
 
   function handleTabSelect(tab: "logs" | "metriche" | "tracce") {
@@ -190,9 +213,18 @@
       {:else}
         <div class="header-filters">
           <ServiceDropdown />
-          {#if activeTab === "logs"}
-            <LogLevelDropdown />
-          {/if}
+          <div class="page-size-selector">
+            <label for="page-size">Risultati</label>
+            <select
+              id="page-size"
+              bind:value={pageSize}
+              on:change={handlePageSizeChange}
+            >
+              {#each pageSizeOptions as size}
+                <option value={size}>{size}</option>
+              {/each}
+            </select>
+          </div>
         </div>
       {/if}
     </div>
@@ -265,9 +297,19 @@
           <div class="status">Aggiornamento in corso...</div>
         {/if}
         {#if activeTab === "logs"}
-          <LogResultsTable logs={$queryState.result.results.logs} />
-        {:else}
-          <TraceResultsList traces={$queryState.result.results.traces} />
+          <LogResultsTable
+            logs={$queryState.result.results.logs}
+            pagination={$queryState.result.pagination?.logs ?? null}
+            isLiveUpdate={$queryState.isLiveUpdate}
+            on:pageChange={(e) => handlePageChange("logs", e.detail.page)}
+          />
+        {:else if activeTab === "tracce"}
+          <TraceResultsList
+            traces={$queryState.result.results.traces}
+            pagination={$queryState.result.pagination?.traces ?? null}
+            isLiveUpdate={$queryState.isLiveUpdate}
+            on:pageChange={(e) => handlePageChange("traces", e.detail.page)}
+          />
         {/if}
       {/if}
     </div>
@@ -356,6 +398,9 @@
       0 4px 12px rgba(0, 0, 0, 0.03);
     border: 1px solid rgba(15, 23, 42, 0.06);
     overflow-x: auto;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
   }
 
   .results.dashboard-results {
@@ -554,5 +599,46 @@
     .filters {
       grid-column: 1;
     }
+  }
+
+  .page-size-selector {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .page-size-selector label {
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: #64748b;
+  }
+
+  .page-size-selector select {
+    padding: 12px 16px;
+    border-radius: 10px;
+    border: 1px solid #e2e8f0;
+    background: white;
+    font-size: 14px;
+    font-weight: 500;
+    color: #0f172a;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%2364748b' stroke-width='2'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 12px center;
+    padding-right: 40px;
+  }
+
+  .page-size-selector select:hover {
+    border-color: #cbd5e1;
+  }
+
+  .page-size-selector select:focus {
+    outline: none;
+    border-color: #6366f1;
+    box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
   }
 </style>

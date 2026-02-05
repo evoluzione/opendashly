@@ -5,6 +5,7 @@
 
   export let traces: any[] = [];
   export let pagination: { page: number; totalPages: number } | null = null;
+  export let isLiveUpdate = false;
 
   const dispatch = createEventDispatcher();
   let selectedTrace: any | null = null;
@@ -85,13 +86,17 @@
     if (!initialized) {
       knownKeys = nextKeys;
       initialized = true;
-    } else {
+    } else if (isLiveUpdate) {
       for (const key of nextKeys) {
         if (!knownKeys.has(key)) {
           markHighlight(key);
         }
       }
       knownKeys = nextKeys;
+    } else {
+      // Page change or manual query - reset without highlighting
+      knownKeys = nextKeys;
+      highlightKeys = new Set();
     }
   }
 
@@ -101,77 +106,151 @@
   });
 </script>
 
-{#if traces.length === 0}
-  <div class="empty">Nessuna traccia trovata per i filtri selezionati.</div>
-{:else}
-  <ul class="trace-list">
-    {#each traces as trace}
-      {@const key = traceKey(trace)}
-      <li>
-        <button
-          type="button"
-          class="trace-row"
-          class:new-item={highlightKeys.has(key)}
-          on:click={() => (selectedTrace = trace)}
-        >
-          <span class="name">{trace.name || "Traccia senza nome"}</span>
-          <span class="service"
-            >{trace.service || "Servizio non specificato"}</span
-          >
-          <span class="last-seen">{formatTimestamp(trace.lastSeen)}</span>
-          <span class="count">Span {trace.spanCount ?? 0}</span>
+<div class="results-container">
+  <div class="results-content">
+    {#if traces.length === 0}
+      <div class="empty">Nessuna traccia trovata per i filtri selezionati.</div>
+    {:else}
+      <ul class="trace-list">
+        {#each traces as trace}
+          {@const key = traceKey(trace)}
+          <li>
+            <button
+              type="button"
+              class="trace-row"
+              class:new-item={highlightKeys.has(key)}
+              on:click={() => (selectedTrace = trace)}
+            >
+              <span class="name">{trace.name || "Traccia senza nome"}</span>
+              <span class="service"
+                >{trace.service || "Servizio non specificato"}</span
+              >
+              <span class="last-seen">{formatTimestamp(trace.lastSeen)}</span>
+              <span class="count">Span {trace.spanCount ?? 0}</span>
 
-          <div class="status-cell">
-            <span class="duration {getDurationClass(trace.durationMs)}">
-              {formatDuration(trace.durationMs)}
-            </span>
-            {#if trace.errorCount > 0}
-              <div class="error-indicator" title="Contiene errori">
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  width="16"
-                  height="16"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="2"
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                >
-                  <circle cx="12" cy="12" r="10"></circle>
-                  <line x1="12" y1="8" x2="12" y2="12"></line>
-                  <line x1="12" y1="16" x2="12.01" y2="16"></line>
-                </svg>
+              <div class="status-cell">
+                <span class="duration {getDurationClass(trace.durationMs)}">
+                  {formatDuration(trace.durationMs)}
+                </span>
+                {#if trace.errorCount > 0}
+                  <div class="error-indicator" title="Contiene errori">
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      width="16"
+                      height="16"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    >
+                      <circle cx="12" cy="12" r="10"></circle>
+                      <line x1="12" y1="8" x2="12" y2="12"></line>
+                      <line x1="12" y1="16" x2="12.01" y2="16"></line>
+                    </svg>
+                  </div>
+                {/if}
               </div>
-            {/if}
-          </div>
-        </button>
-      </li>
-    {/each}
-  </ul>
-{/if}
-
-{#if pagination}
-  <div class="pager">
-    <button
-      type="button"
-      on:click={() => changePage(pagination.page - 1)}
-      disabled={pagination.page <= 1}
-    >
-      Precedente
-    </button>
-    <span>Pagina {pagination.page} di {pagination.totalPages || 1}</span>
-    <button
-      type="button"
-      on:click={() => changePage(pagination.page + 1)}
-      disabled={pagination.totalPages > 0
-        ? pagination.page >= pagination.totalPages
-        : traces.length === 0}
-    >
-      Successiva
-    </button>
+            </button>
+          </li>
+        {/each}
+      </ul>
+    {/if}
   </div>
-{/if}
+
+  {#if pagination}
+    <div class="pager">
+      <button
+        type="button"
+        class="pager-btn"
+        on:click={() => changePage(1)}
+        disabled={pagination.page <= 1}
+        title="Prima pagina"
+      >
+        <svg
+          width="16"
+          height="16"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <polyline points="11 17 6 12 11 7"></polyline>
+          <polyline points="18 17 13 12 18 7"></polyline>
+        </svg>
+      </button>
+      <button
+        type="button"
+        class="pager-btn"
+        on:click={() => changePage(pagination.page - 1)}
+        disabled={pagination.page <= 1}
+        title="Pagina precedente"
+      >
+        <svg
+          width="16"
+          height="16"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <polyline points="15 18 9 12 15 6"></polyline>
+        </svg>
+      </button>
+      <span>Pagina {pagination.page} di {pagination.totalPages || 1}</span>
+      <button
+        type="button"
+        class="pager-btn"
+        on:click={() => changePage(pagination.page + 1)}
+        disabled={pagination.totalPages > 0
+          ? pagination.page >= pagination.totalPages
+          : traces.length === 0}
+        title="Pagina successiva"
+      >
+        <svg
+          width="16"
+          height="16"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <polyline points="9 18 15 12 9 6"></polyline>
+        </svg>
+      </button>
+      <button
+        type="button"
+        class="pager-btn"
+        on:click={() => changePage(pagination.totalPages || 1)}
+        disabled={pagination.totalPages > 0
+          ? pagination.page >= pagination.totalPages
+          : traces.length === 0}
+        title="Ultima pagina"
+      >
+        <svg
+          width="16"
+          height="16"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <polyline points="13 17 18 12 13 7"></polyline>
+          <polyline points="6 17 11 12 6 7"></polyline>
+        </svg>
+      </button>
+    </div>
+  {/if}
+</div>
 
 {#if selectedTrace}
   <div
@@ -275,6 +354,24 @@
     font-size: 14px;
     text-align: center;
     padding: 40px 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex: 1;
+  }
+
+  .results-container {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    min-height: 0;
+    flex: 1;
+  }
+
+  .results-content {
+    flex: 1;
+    overflow-y: auto;
+    min-height: 0;
   }
 
   .trace-list {
@@ -392,9 +489,10 @@
     align-items: center;
     justify-content: center;
     gap: 12px;
-    margin-top: 20px;
-    padding-top: 20px;
-    border-top: 1px solid #f1f5f9;
+    padding: 20px 16px 6px 16px;
+    border-top: 1px solid #e2e8f0;
+    background: white;
+    flex-shrink: 0;
   }
 
   .pager button {
@@ -422,6 +520,11 @@
   .pager span {
     font-size: 13px;
     color: #64748b;
+  }
+
+  .pager-btn {
+    min-width: 36px;
+    padding: 8px 12px !important;
   }
 
   .pill.error {
