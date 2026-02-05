@@ -113,6 +113,15 @@ func buildSingleClause(k, v, op string, serviceColumn, traceColumn, severityColu
 		if traceColumn != "" {
 			return fmt.Sprintf("%s %s %s", traceColumn, sqlOp, sqlValue)
 		}
+	case "span_name":
+		// Heuristic: Only applies to Traces (traceColumn is set, severityColumn is empty).
+		// Logs have traceColumn set but severityColumn set. Metrics have neither.
+		if traceColumn != "" && severityColumn == "" {
+			if op == "contains" || op == "" {
+				return fmt.Sprintf("SpanName ILIKE '%%%s%%'", escapedValue)
+			}
+			return fmt.Sprintf("SpanName %s %s", sqlOp, sqlValue)
+		}
 	case "severity":
 		if severityColumn != "" && v != "Tutti" {
 			// Special handling for severity still useful?

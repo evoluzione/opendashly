@@ -10,6 +10,7 @@ type QueryState = {
   lastRequest: QueryRequest | null;
   autoRefreshSeconds: number | null;
   autoRefreshRangeMinutes: number | null;
+  isLiveUpdate: boolean;
 };
 
 type ServiceState = {
@@ -26,7 +27,8 @@ const initial: QueryState = {
   result: null,
   lastRequest: null,
   autoRefreshSeconds: null,
-  autoRefreshRangeMinutes: null
+  autoRefreshRangeMinutes: null,
+  isLiveUpdate: false
 };
 
 export const queryState = writable<QueryState>(initial);
@@ -218,7 +220,7 @@ export async function executeQuery(
       !!previousResult &&
       (request.page === undefined || request.page === 1);
     const result = shouldMerge ? mergeResult(previousResult, response, request) : response;
-    queryState.update((state) => ({ ...state, loading: false, error: null, result }));
+    queryState.update((state) => ({ ...state, loading: false, error: null, result, isLiveUpdate: !!options.isBackground }));
     scheduleAutoRefresh();
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Errore sconosciuto';

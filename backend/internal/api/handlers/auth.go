@@ -10,11 +10,11 @@ import (
 )
 
 type AuthHandler struct {
-	Repo        auth.Repository
-	Secret      []byte
-	CookieName  string
-	SessionTTL  time.Duration
-	TenantID    string
+	Repo       auth.Repository
+	Secret     []byte
+	CookieName string
+	SessionTTL time.Duration
+	TenantID   string
 }
 
 type loginRequest struct {
@@ -47,30 +47,36 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 	}
 	user, err := h.Repo.GetByUsername(r.Context(), req.Username)
 	if err != nil {
-		w.WriteHeader(http.StatusUnauthorized)
+		writeError(w, http.StatusUnauthorized, "Credenziali non valide")
 		return
 	}
 	if user.IsDisabled {
-		w.WriteHeader(http.StatusForbidden)
+		writeError(w, http.StatusForbidden, "Utente disabilitato")
 		return
 	}
 	if err := auth.ComparePassword(user.PasswordHash, req.Password); err != nil {
-		w.WriteHeader(http.StatusUnauthorized)
+		writeError(w, http.StatusUnauthorized, "Credenziali non valide")
 		return
 	}
 	if err := h.Repo.UpdateLastLogin(r.Context(), user.ID, time.Now().UTC()); err != nil {
 		log.Printf("auth.login: update last login failed user=%s err=%v", user.ID, err)
-		w.WriteHeader(http.StatusInternalServerError)
+		writeError(w, http.StatusInternalServerError, "Errore interno")
 		return
 	}
 	token, err := auth.GenerateToken(h.Secret, user.ID, user.Role, h.SessionTTL)
 	if err != nil {
 		log.Printf("auth.login: generate token failed user=%s err=%v", user.ID, err)
-		w.WriteHeader(http.StatusInternalServerError)
+		writeError(w, http.StatusInternalServerError, "Errore creazione sessione")
 		return
 	}
 	setSessionCookie(w, h.CookieName, token, h.SessionTTL, r.TLS != nil)
 	writeJSON(w, sessionResponse{User: toUserResponse(*user), MustChangePassword: user.MustChangePassword})
+}
+
+func writeError(w http.ResponseWriter, status int, message string) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(status)
+	json.NewEncoder(w).Encode(map[string]string{"error": message})
 }
 
 func (h *AuthHandler) Logout(w http.ResponseWriter, r *http.Request) {

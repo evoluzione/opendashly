@@ -23,3 +23,14 @@ func BuildLogsQuery(filters map[string]string, filterList []FilterItem, from, to
 	}
 	return query
 }
+
+// BuildLogsCountQuery creates a count query for logs.
+func BuildLogsCountQuery(filters map[string]string, filterList []FilterItem, from, to time.Time) string {
+	base := "SELECT count(*) FROM telemetry.otel_logs"
+	clauses := buildOtelClauses("Timestamp", filters, filterList, from, to, "ServiceName", "TraceId", "SeverityText", []string{"ResourceAttributes", "LogAttributes"})
+	query := base
+	if len(clauses) > 0 {
+		query += " WHERE " + strings.Join(clauses, " AND ")
+	}
+	return query
+}

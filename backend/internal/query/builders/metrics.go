@@ -29,3 +29,22 @@ func BuildMetricsQuery(filters map[string]string, filterList []FilterItem, from,
 	}
 	return query
 }
+
+// BuildMetricsCountQuery creates a count query for metrics.
+func BuildMetricsCountQuery(filters map[string]string, filterList []FilterItem, from, to time.Time) string {
+	// Strategy: Union sum and gauge tables for counting
+	sumBase := "SELECT MetricName, MetricUnit FROM telemetry.otel_metrics_sum"
+	gaugeBase := "SELECT MetricName, MetricUnit FROM telemetry.otel_metrics_gauge"
+	clauses := buildOtelClauses("TimeUnix", filters, filterList, from, to, "ServiceName", "", "", []string{"ResourceAttributes", "Attributes"})
+
+	sumQuery := sumBase
+	gaugeQuery := gaugeBase
+	if len(clauses) > 0 {
+		where := " WHERE " + strings.Join(clauses, " AND ")
+		sumQuery += where
+		gaugeQuery += where
+	}
+	// We count distinct series (Name + Unit)
+	query := "SELECT uniqExact(tuple(MetricName, MetricUnit)) FROM (" + sumQuery + " UNION ALL " + gaugeQuery + ")"
+	return query
+}
