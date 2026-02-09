@@ -151,7 +151,7 @@ func (s *Service) getLatencyDistribution(ctx context.Context, req DashboardReque
 }
 
 func (s *Service) getSlowestEndpoints(ctx context.Context, req DashboardRequest) ([]EndpointLatency, error) {
-	query := BuildSlowestEndpointsQuery(req.From, req.To, req.ServiceName, 20)
+	query := BuildSlowestEndpointsQuery(req.From, req.To, req.ServiceName, 10)
 	log.Printf("metrics.service.getSlowestEndpoints: executing query")
 
 	rows, err := s.Storage.Conn.Query(ctx, query)
@@ -190,7 +190,7 @@ func (s *Service) getSlowestEndpoints(ctx context.Context, req DashboardRequest)
 }
 
 func (s *Service) getErrorHotspots(ctx context.Context, req DashboardRequest) ([]ErrorHotspot, error) {
-	query := BuildErrorHotspotsQuery(req.From, req.To, req.ServiceName, 20)
+	query := BuildErrorHotspotsQuery(req.From, req.To, req.ServiceName, 10)
 	log.Printf("metrics.service.getErrorHotspots: executing query")
 
 	rows, err := s.Storage.Conn.Query(ctx, query)

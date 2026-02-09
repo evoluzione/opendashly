@@ -25,7 +25,7 @@
         text="Endpoint ordinati per P95 (95° percentile). Il P95 indica che il 95% delle richieste è più veloce di questo valore. Utile per identificare colli di bottiglia."
       />
     </span>
-    <span class="table-subtitle">Top 20 per P95</span>
+    <span class="table-subtitle">Top 10 per P95</span>
   </div>
 
   {#if data.length === 0}

@@ -118,12 +118,7 @@
   }
 
   async function loadDashboardMetrics() {
-    const now = new Date();
-    const from = new Date(now.getTime() - 24 * 60 * 60 * 1000); // ultime 24 ore
-    await loadDashboard({
-      from: from.toISOString(),
-      to: now.toISOString(),
-    });
+    await loadDashboard({});
     dashboardLoaded = true;
     lastRefresh = new Date();
     // Also load the existing metrics chart
@@ -146,13 +141,12 @@
   }
 
   async function loadAllMetrics() {
-    const now = new Date();
-    const from = new Date(now.getTime() - 24 * 60 * 60 * 1000); // ultime 24 ore
+    const now = new Date().toISOString();
     await executeQuery({
       signals: ["metrics"],
       timeRange: {
-        from: from.toISOString(),
-        to: now.toISOString(),
+        from: "1970-01-01T00:00:00Z",
+        to: now,
       },
       filters: {},
       limit: 1000,

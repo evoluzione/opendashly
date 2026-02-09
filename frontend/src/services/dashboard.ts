@@ -67,8 +67,8 @@ export interface DashboardResponse {
 }
 
 export interface DashboardRequest {
-  from: string;
-  to: string;
+  from?: string;
+  to?: string;
   serviceName?: string;
 }
 
