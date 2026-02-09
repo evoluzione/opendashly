@@ -128,11 +128,37 @@ func buildSingleClause(k, v, op string, serviceColumn, traceColumn, severityColu
 			// If custom operator is used, we might skip the special handling or adapt it.
 			// For now, if simple equality, keep special handling?
 			if op == "=" || op == "" {
-				if strings.EqualFold(v, "Error") {
-					return fmt.Sprintf("(%s = 'Error' OR %s = 'STATUS_CODE_ERROR' OR toString(%s) = '2')", severityColumn, severityColumn, severityColumn)
-				} else {
-					return fmt.Sprintf("upper(%s) = '%s'", severityColumn, strings.ToUpper(escapedValue))
+				upperValue := strings.ToUpper(escapedValue)
+				allowed := []string{upperValue}
+				switch upperValue {
+				case "TRACE":
+					allowed = append(allowed, "VERBOSE", "TRACE1", "TRACE2", "TRACE3", "TRACE4")
+				case "DEBUG":
+					allowed = append(allowed, "DBG", "DEBUG1", "DEBUG2", "DEBUG3", "DEBUG4")
+				case "INFO":
+					allowed = append(allowed, "INFORMATION", "INFO1", "INFO2", "INFO3", "INFO4")
+				case "WARN":
+					allowed = append(allowed, "WARNING", "WARNINGS", "WARN1", "WARN2", "WARN3", "WARN4")
+				case "ERROR":
+					allowed = append(allowed, "ERR", "ERRORS", "SEVERE", "ERROR1", "ERROR2", "ERROR3", "ERROR4")
+				case "FATAL":
+					allowed = append(allowed, "CRITICAL", "CRIT", "ALERT", "EMERG", "EMERGENCY", "FATAL1", "FATAL2", "FATAL3", "FATAL4")
 				}
+				allowedList := "'" + strings.Join(allowed, "','") + "'"
+
+				clauses := []string{
+					fmt.Sprintf("upper(%s) IN (%s)", severityColumn, allowedList),
+				}
+				if upperValue == "INFO" {
+					clauses = append(clauses, fmt.Sprintf("(%s = '' OR isNull(%s))", severityColumn, severityColumn))
+				}
+				for _, column := range attributeColumns {
+					clauses = append(clauses,
+						fmt.Sprintf("upper(%s['severity']) IN (%s)", column, allowedList),
+						fmt.Sprintf("upper(%s['level']) IN (%s)", column, allowedList),
+					)
+				}
+				return "(" + strings.Join(clauses, " OR ") + ")"
 			} else {
 				return fmt.Sprintf("%s %s %s", severityColumn, sqlOp, sqlValue)
 			}
