@@ -103,11 +103,7 @@
 
   function barStyle(span: any) {
     // Error highlighting logic
-    const isError =
-      span.status === "ERROR" ||
-      span.status === "STATUS_CODE_ERROR" ||
-      span.status === "2";
-    const color = isError ? "#ef4444" : colorForSource(spanSource(span));
+    const color = colorForSource(spanSource(span));
 
     const left = ((toMs(span.startTime) - startMs) / rangeMs) * 100;
     const rawWidth =
@@ -413,9 +409,27 @@
                 role="tooltip"
                 aria-label={formatDuration(durationMs(span))}
                 data-index={i}
-              ></div>
+              >
+                {#if span.status === "ERROR" || span.status === "STATUS_CODE_ERROR" || span.status === "2"}
+                  <div class="error-marker" title="Error">
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      viewBox="0 0 20 20"
+                      fill="currentColor"
+                      class="w-5 h-5"
+                    >
+                      <path
+                        fill-rule="evenodd"
+                        d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.28 7.22a.75.75 0 00-1.06 1.06L8.94 10l-1.72 1.72a.75.75 0 101.06 1.06L10 11.06l1.72 1.72a.75.75 0 101.06-1.06L11.06 10l1.72-1.72a.75.75 0 00-1.06-1.06L10 8.94 8.28 7.22z"
+                        clip-rule="evenodd"
+                      />
+                    </svg>
+                  </div>
+                {/if}
+              </div>
               <span class="bar-label">{formatDuration(offsetMs(span))}</span>
             </div>
+
             <div class="duration">{formatDuration(durationMs(span))}</div>
           </div>
         {/each}
@@ -461,6 +475,38 @@
           <span class="value">{formatDuration(durationMs(hoveredSpan))}</span>
         </div>
       </div>
+
+      {#if hoveredSpan.events}
+        {#each hoveredSpan.events as event}
+          {#if event.name === "exception"}
+            <div class="tooltip-section">
+              <span class="section-title" style="color: #ef4444;"
+                >Exception</span
+              >
+              <div class="attr-row">
+                <span class="attr-key">Type:</span>
+                <span class="attr-value"
+                  >{event.attributes["exception.type"] || "Unknown"}</span
+                >
+              </div>
+              <div class="attr-row">
+                <span class="attr-key">Message:</span>
+                <span class="attr-value"
+                  >{event.attributes["exception.message"] || "No message"}</span
+                >
+              </div>
+              {#if event.attributes["exception.stacktrace"]}
+                <div class="attr-row" style="flex-direction: column; gap: 2px;">
+                  <span class="attr-key">Stacktrace:</span>
+                  <pre class="code-block">{event.attributes[
+                      "exception.stacktrace"
+                    ]}</pre>
+                </div>
+              {/if}
+            </div>
+          {/if}
+        {/each}
+      {/if}
 
       {#if hoveredSpan.attributes && Object.keys(hoveredSpan.attributes).length > 0}
         <div class="tooltip-section">
@@ -762,5 +808,36 @@
     .span-grid {
       grid-template-columns: 1fr;
     }
+  }
+
+  .error-marker {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 14px;
+    height: 14px;
+    color: #ef4444;
+    background: white;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+    z-index: 2;
+  }
+
+  .code-block {
+    font-family: monospace;
+    font-size: 10px;
+    background: rgba(0, 0, 0, 0.3);
+    padding: 4px;
+    border-radius: 4px;
+    overflow-x: auto;
+    white-space: pre-wrap;
+    color: #e2e8f0;
+    margin: 0;
+    max-height: 100px;
+    overflow-y: auto;
   }
 </style>

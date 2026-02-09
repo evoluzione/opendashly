@@ -2,10 +2,10 @@
   import { onDestroy, onMount, afterUpdate } from 'svelte';
   import uPlot from 'uplot';
   import 'uplot/dist/uPlot.min.css';
-  import type { ThroughputPoint } from '../../services/dashboard';
+  import type { ErrorRatePoint } from '../../services/dashboard';
   import InfoTooltip from '../common/InfoTooltip.svelte';
 
-  export let data: ThroughputPoint[] = [];
+  export let data: ErrorRatePoint[] = [];
 
   let containerEl: HTMLDivElement;
   let chartEl: HTMLDivElement;
@@ -40,33 +40,26 @@
     return Number.isFinite(num) ? num : null;
   }
 
-  function buildChartData(points: ThroughputPoint[]) {
+  function buildChartData(points: ErrorRatePoint[]) {
     if (!points || points.length === 0) return null;
     const rows = points
       .map((p) => {
         const x = toEpochSeconds(p.timestamp);
         if (x === null) return null;
-        const requestCount = toFiniteNumber(p.requestCount);
-        const errorCount = toFiniteNumber(p.errorCount);
-        if (requestCount === null && errorCount === null) return null;
-        return {
-          x,
-          request: requestCount ?? 0,
-          error: errorCount ?? 0
-        };
+        const rate = toFiniteNumber(p.errorRate);
+        return { x, rate: rate ?? 0 };
       })
-      .filter((row): row is { x: number; request: number; error: number } => row !== null)
+      .filter((row): row is { x: number; rate: number } => row !== null)
       .sort((a, b) => a.x - b.x);
 
     if (rows.length === 0) return null;
 
     const xValues = rows.map((row) => row.x);
-    const requestValues = rows.map((row) => row.request);
-    const errorValues = rows.map((row) => row.error);
-    return [xValues, requestValues, errorValues];
+    const rateValues = rows.map((row) => row.rate);
+    return [xValues, rateValues];
   }
 
-  function renderChart(points: ThroughputPoint[], width: number) {
+  function renderChart(points: ErrorRatePoint[], width: number) {
     if (!chartEl || !width || points.length === 0) return;
     if (chart) {
       chart.destroy();
@@ -76,52 +69,29 @@
     const chartData = buildChartData(points);
     if (!chartData) return;
 
-
     chart = new uPlot(
       {
-        title: 'Throughput nel tempo',
+        title: 'Error rate nel tempo',
         width,
         height: 220,
         series: [
           {},
-          {
-            show: true,
-            label: 'Richieste',
-            stroke: '#2563eb',
-            width: 2,
-            fill: 'rgba(37, 99, 235, 0.1)',
-            points: { show: true, size: 6 }
-          },
-          {
-            show: true,
-            label: 'Errori',
-            stroke: '#ef4444',
-            width: 2,
-            fill: 'rgba(239, 68, 68, 0.1)',
-            points: { show: true, size: 6 }
-          }
+          { label: 'Error rate %', stroke: '#ef4444', width: 2, fill: 'rgba(239, 68, 68, 0.1)' }
         ],
         scales: {
           x: { time: true },
-          y: { min: 0, auto: true }
+          y: { min: 0 }
         },
         axes: [
           {},
-          {
-            label: 'Count',
-            labelSize: 12,
-            size: 50
-          }
+          { label: '%', labelSize: 12, size: 50 }
         ],
-        legend: {
-          show: true
-        }
+        legend: { show: true }
       },
       chartData,
       chartEl
     );
 
-    // Force resize on next frame to ensure canvas picks up final dimensions.
     requestAnimationFrame(() => {
       chart?.setSize({ width, height: 220 });
       const canvases = chartEl.querySelectorAll('canvas');
@@ -131,11 +101,6 @@
       });
       chart?.setData(chartData);
     });
-
-    
-    const wrap = chartEl.querySelector('.u-wrap');
-    
-    const canvas = chartEl.querySelector('canvas');
   }
 
   onMount(() => {
@@ -147,8 +112,6 @@
       });
       if (containerEl) {
         resizeObserver.observe(containerEl);
-      }
-      if (containerEl) {
         containerWidth = Math.max(320, Math.floor(containerEl.clientWidth));
       }
     } else if (containerEl) {
@@ -186,10 +149,10 @@
 <div class="chart-card" bind:this={containerEl}>
   <div class="chart-header">
     <span class="chart-title">
-      Throughput nel Tempo
-      <InfoTooltip text="Andamento delle richieste e degli errori nel tempo. Utile per identificare picchi di carico e correlazioni tra traffico ed errori." />
+      Error Rate nel Tempo
+      <InfoTooltip text="Andamento della percentuale di richieste in errore. Utile per individuare regressioni di affidabilita." />
     </span>
-    <span class="chart-subtitle">Richieste ed errori nel tempo</span>
+    <span class="chart-subtitle">Percentuale errori nel tempo</span>
   </div>
 
   {#if data.length === 0}
@@ -234,7 +197,6 @@
 
   .chart-container {
     min-height: 220px;
-    width: 100%;
   }
 
   .chart-container.hidden {
@@ -243,7 +205,6 @@
 
   .chart-card :global(.uplot) {
     font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
-    width: 100% !important;
   }
 
   .chart-card :global(.u-wrap) {
@@ -259,15 +220,5 @@
     display: block;
     width: 100% !important;
     height: 100% !important;
-  }
-
-  .chart-card :global(.u-title) {
-    font-size: 13px !important;
-    font-weight: 600 !important;
-    color: #334155 !important;
-  }
-
-  .chart-card :global(.u-legend) {
-    font-size: 12px;
   }
 </style>

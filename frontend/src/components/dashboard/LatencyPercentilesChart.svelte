@@ -2,10 +2,10 @@
   import { onDestroy, onMount, afterUpdate } from 'svelte';
   import uPlot from 'uplot';
   import 'uplot/dist/uPlot.min.css';
-  import type { ThroughputPoint } from '../../services/dashboard';
+  import type { LatencyPercentilePoint } from '../../services/dashboard';
   import InfoTooltip from '../common/InfoTooltip.svelte';
 
-  export let data: ThroughputPoint[] = [];
+  export let data: LatencyPercentilePoint[] = [];
 
   let containerEl: HTMLDivElement;
   let chartEl: HTMLDivElement;
@@ -40,33 +40,32 @@
     return Number.isFinite(num) ? num : null;
   }
 
-  function buildChartData(points: ThroughputPoint[]) {
+  function buildChartData(points: LatencyPercentilePoint[]) {
     if (!points || points.length === 0) return null;
     const rows = points
       .map((p) => {
         const x = toEpochSeconds(p.timestamp);
         if (x === null) return null;
-        const requestCount = toFiniteNumber(p.requestCount);
-        const errorCount = toFiniteNumber(p.errorCount);
-        if (requestCount === null && errorCount === null) return null;
         return {
           x,
-          request: requestCount ?? 0,
-          error: errorCount ?? 0
+          p50: toFiniteNumber(p.p50),
+          p95: toFiniteNumber(p.p95),
+          p99: toFiniteNumber(p.p99)
         };
       })
-      .filter((row): row is { x: number; request: number; error: number } => row !== null)
+      .filter((row): row is { x: number; p50: number | null; p95: number | null; p99: number | null } => row !== null)
       .sort((a, b) => a.x - b.x);
 
     if (rows.length === 0) return null;
 
     const xValues = rows.map((row) => row.x);
-    const requestValues = rows.map((row) => row.request);
-    const errorValues = rows.map((row) => row.error);
-    return [xValues, requestValues, errorValues];
+    const p50Values = rows.map((row) => row.p50);
+    const p95Values = rows.map((row) => row.p95);
+    const p99Values = rows.map((row) => row.p99);
+    return [xValues, p50Values, p95Values, p99Values];
   }
 
-  function renderChart(points: ThroughputPoint[], width: number) {
+  function renderChart(points: LatencyPercentilePoint[], width: number) {
     if (!chartEl || !width || points.length === 0) return;
     if (chart) {
       chart.destroy();
@@ -76,52 +75,31 @@
     const chartData = buildChartData(points);
     if (!chartData) return;
 
-
     chart = new uPlot(
       {
-        title: 'Throughput nel tempo',
+        title: 'Latenza percentili',
         width,
         height: 220,
         series: [
           {},
-          {
-            show: true,
-            label: 'Richieste',
-            stroke: '#2563eb',
-            width: 2,
-            fill: 'rgba(37, 99, 235, 0.1)',
-            points: { show: true, size: 6 }
-          },
-          {
-            show: true,
-            label: 'Errori',
-            stroke: '#ef4444',
-            width: 2,
-            fill: 'rgba(239, 68, 68, 0.1)',
-            points: { show: true, size: 6 }
-          }
+          { label: 'P50', stroke: '#0ea5e9', width: 2 },
+          { label: 'P95', stroke: '#f97316', width: 2 },
+          { label: 'P99', stroke: '#ef4444', width: 2 }
         ],
         scales: {
           x: { time: true },
-          y: { min: 0, auto: true }
+          y: { min: 0 }
         },
         axes: [
           {},
-          {
-            label: 'Count',
-            labelSize: 12,
-            size: 50
-          }
+          { label: 'ms', labelSize: 12, size: 50 }
         ],
-        legend: {
-          show: true
-        }
+        legend: { show: true }
       },
       chartData,
       chartEl
     );
 
-    // Force resize on next frame to ensure canvas picks up final dimensions.
     requestAnimationFrame(() => {
       chart?.setSize({ width, height: 220 });
       const canvases = chartEl.querySelectorAll('canvas');
@@ -131,11 +109,6 @@
       });
       chart?.setData(chartData);
     });
-
-    
-    const wrap = chartEl.querySelector('.u-wrap');
-    
-    const canvas = chartEl.querySelector('canvas');
   }
 
   onMount(() => {
@@ -147,8 +120,6 @@
       });
       if (containerEl) {
         resizeObserver.observe(containerEl);
-      }
-      if (containerEl) {
         containerWidth = Math.max(320, Math.floor(containerEl.clientWidth));
       }
     } else if (containerEl) {
@@ -186,10 +157,10 @@
 <div class="chart-card" bind:this={containerEl}>
   <div class="chart-header">
     <span class="chart-title">
-      Throughput nel Tempo
-      <InfoTooltip text="Andamento delle richieste e degli errori nel tempo. Utile per identificare picchi di carico e correlazioni tra traffico ed errori." />
+      Latenza Percentili
+      <InfoTooltip text="Andamento dei percentili P50/P95/P99 nel tempo. Aiuta a individuare regressioni di performance." />
     </span>
-    <span class="chart-subtitle">Richieste ed errori nel tempo</span>
+    <span class="chart-subtitle">P50, P95 e P99 nel tempo</span>
   </div>
 
   {#if data.length === 0}
@@ -234,7 +205,6 @@
 
   .chart-container {
     min-height: 220px;
-    width: 100%;
   }
 
   .chart-container.hidden {
@@ -243,7 +213,6 @@
 
   .chart-card :global(.uplot) {
     font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
-    width: 100% !important;
   }
 
   .chart-card :global(.u-wrap) {
@@ -259,15 +228,5 @@
     display: block;
     width: 100% !important;
     height: 100% !important;
-  }
-
-  .chart-card :global(.u-title) {
-    font-size: 13px !important;
-    font-weight: 600 !important;
-    color: #334155 !important;
-  }
-
-  .chart-card :global(.u-legend) {
-    font-size: 12px;
   }
 </style>

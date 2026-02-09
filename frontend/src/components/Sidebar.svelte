@@ -174,6 +174,21 @@
           </svg>
           <span>Gestione utenti</span>
         </a>
+        <a href="/admin/dashboard" class="nav-link">
+          <svg
+            width="18"
+            height="18"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+          >
+            <path d="M3 3h18v4H3z" />
+            <path d="M3 11h10v10H3z" />
+            <path d="M17 11h4v10h-4z" />
+          </svg>
+          <span>Dashboard</span>
+        </a>
         <a href="/admin/retention" class="nav-link">
           <svg
             width="18"

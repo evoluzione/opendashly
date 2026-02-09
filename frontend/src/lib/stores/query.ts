@@ -187,7 +187,6 @@ function getMaxTimestamp(result: QueryRunResult | null): string | null {
 // Debug helper
 function debugLog(message: string, ...args: any[]) {
   if (import.meta.env.VITE_DEBUG_QUERY === 'true') {
-    console.debug(message, ...args);
   }
 }
 

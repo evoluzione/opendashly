@@ -55,11 +55,58 @@ type ThroughputPoint struct {
 	ErrorCount   int64     `json:"errorCount"`
 }
 
+// LatencyPercentilePoint represents latency percentiles over time.
+type LatencyPercentilePoint struct {
+	Timestamp time.Time `json:"timestamp"`
+	P50       float64   `json:"p50"`
+	P95       float64   `json:"p95"`
+	P99       float64   `json:"p99"`
+}
+
+// ErrorRatePoint represents error rate over time.
+type ErrorRatePoint struct {
+	Timestamp  time.Time `json:"timestamp"`
+	ErrorRate  float64   `json:"errorRate"`
+	ErrorCount int64     `json:"errorCount"`
+	TotalCount int64     `json:"totalCount"`
+}
+
+// StatusCodeBreakdown summarizes status code distribution.
+type StatusCodeBreakdown struct {
+	Code       string  `json:"code"`
+	Count      int64   `json:"count"`
+	Percentage float64 `json:"percentage"`
+}
+
+// EndpointThroughput contains throughput statistics per endpoint.
+type EndpointThroughput struct {
+	Endpoint     string  `json:"endpoint"`
+	Service      string  `json:"service"`
+	RequestCount int64   `json:"requestCount"`
+	ErrorCount   int64   `json:"errorCount"`
+	ErrorRate    float64 `json:"errorRate"`
+}
+
+// LogVolumePoint represents log volume over time.
+type LogVolumePoint struct {
+	Timestamp time.Time `json:"timestamp"`
+	Count     int64     `json:"count"`
+}
+
+// LogLevelCount represents log level distribution.
+type LogLevelCount struct {
+	Level      string  `json:"level"`
+	Count      int64   `json:"count"`
+	Percentage float64 `json:"percentage"`
+}
+
 // HotspotsData contains performance hotspot information.
 type HotspotsData struct {
 	LatencyDistribution []LatencyBucket   `json:"latencyDistribution"`
 	SlowestEndpoints    []EndpointLatency `json:"slowestEndpoints"`
 	ErrorHotspots       []ErrorHotspot    `json:"errorHotspots"`
+	TopEndpoints        []EndpointThroughput `json:"topEndpoints"`
+	StatusCodes         []StatusCodeBreakdown `json:"statusCodes"`
 }
 
 // SatisfactionData contains satisfaction metrics.
@@ -68,6 +115,14 @@ type SatisfactionData struct {
 	ErrorRate  float64           `json:"errorRate"`
 	Throughput ThroughputSummary `json:"throughput"`
 	TimeSeries []ThroughputPoint `json:"timeSeries"`
+	LatencySeries []LatencyPercentilePoint `json:"latencySeries"`
+	ErrorRateSeries []ErrorRatePoint `json:"errorRateSeries"`
+}
+
+// LogsData contains log analytics.
+type LogsData struct {
+	VolumeSeries []LogVolumePoint `json:"volumeSeries"`
+	Levels       []LogLevelCount  `json:"levels"`
 }
 
 // ThroughputSummary contains summary statistics for throughput.
@@ -82,4 +137,5 @@ type ThroughputSummary struct {
 type DashboardResponse struct {
 	Hotspots     HotspotsData     `json:"hotspots"`
 	Satisfaction SatisfactionData `json:"satisfaction"`
+	Logs         LogsData         `json:"logs"`
 }

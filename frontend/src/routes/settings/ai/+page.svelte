@@ -32,7 +32,6 @@
       }
     } catch (err) {
       error = 'Impossibile caricare le impostazioni AI.';
-      console.error(err);
     } finally {
       loading = false;
     }
@@ -54,7 +53,6 @@
       successMessage = 'Impostazioni salvate con successo.';
     } catch (err) {
       error = 'Errore durante il salvataggio.';
-      console.error(err);
     } finally {
       saving = false;
     }

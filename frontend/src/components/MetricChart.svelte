@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onDestroy, onMount } from 'svelte';
+  import { onDestroy, onMount, afterUpdate } from 'svelte';
   import { createEventDispatcher } from 'svelte';
   import uPlot from 'uplot';
   import 'uplot/dist/uPlot.min.css';
@@ -13,14 +13,56 @@
   let containerWidth = 0;
   let activeSeries = 0;
   let resizeObserver: ResizeObserver | null = null;
+  let lastSeriesLength = 0;
+  let lastActiveSeries = -1;
+  let lastWidth = 0;
 
   const dispatch = createEventDispatcher();
   const palette = ['#2563eb', '#16a34a', '#f97316', '#ef4444', '#0ea5e9', '#0f766e'];
 
+  function toEpochSeconds(value: unknown): number | null {
+    if (value instanceof Date) {
+      const ms = value.getTime();
+      return Number.isFinite(ms) ? ms / 1000 : null;
+    }
+    if (typeof value === 'number') {
+      if (!Number.isFinite(value)) return null;
+      return value > 1e11 ? value / 1000 : value;
+    }
+    if (typeof value === 'string') {
+      const numeric = Number(value);
+      if (Number.isFinite(numeric)) {
+        return numeric > 1e11 ? numeric / 1000 : numeric;
+      }
+      const parsed = Date.parse(value);
+      if (Number.isFinite(parsed)) return parsed / 1000;
+    }
+    return null;
+  }
+
+  function toFiniteNumber(value: unknown): number | null {
+    const num = typeof value === 'number' ? value : Number(value);
+    return Number.isFinite(num) ? num : null;
+  }
+
   function buildChartData(selected: typeof series[number]) {
     if (!selected || !selected.points || selected.points.length === 0) return null;
-    const xValues = selected.points.map((point) => new Date(point.timestamp).getTime() / 1000);
-    const yValues = selected.points.map((point) => point.value ?? 0);
+    const rows = selected.points
+      .map((point) => {
+        const x = toEpochSeconds(point.timestamp);
+        if (x === null) return null;
+        return {
+          x,
+          y: toFiniteNumber(point.value)
+        };
+      })
+      .filter((row): row is { x: number; y: number | null } => row !== null)
+      .sort((a, b) => a.x - b.x);
+
+    if (rows.length === 0) return null;
+
+    const xValues = rows.map((row) => row.x);
+    const yValues = rows.map((row) => row.y);
     return [xValues, yValues];
   }
 
@@ -55,6 +97,16 @@
       data,
       chartEl
     );
+
+    requestAnimationFrame(() => {
+      chart?.setSize({ width, height: 260 });
+      const canvases = chartEl.querySelectorAll('canvas');
+      canvases.forEach((canvas) => {
+        canvas.style.width = '100%';
+        canvas.style.height = '100%';
+      });
+      chart?.setData(data);
+    });
   }
 
   function changePage(nextPage: number) {
@@ -98,9 +150,17 @@
     chart = null;
   }
 
-  $: if (chartEl && containerWidth > 0) {
-    renderChart(activeSeries, series, Math.max(320, containerWidth - 40));
-  }
+  afterUpdate(() => {
+    if (chartEl && containerWidth > 0 && series.length > 0) {
+      const needsRender = !chart || lastSeriesLength !== series.length || lastActiveSeries !== activeSeries || lastWidth !== containerWidth;
+      if (needsRender) {
+        lastSeriesLength = series.length;
+        lastActiveSeries = activeSeries;
+        lastWidth = containerWidth;
+        renderChart(activeSeries, series, Math.max(320, containerWidth - 40));
+      }
+    }
+  });
 </script>
 
 <div class="metric-panel" bind:this={containerEl}>
@@ -118,12 +178,12 @@
       </select>
     </div>
     <div class="chart">
-      <div class="chart-canvas" bind:this={chartEl}></div>
       {#if !series[activeSeries]?.points || series[activeSeries].points.length === 0}
         <div class="empty">Nessun punto disponibile per questa metrica.</div>
       {/if}
     </div>
   {/if}
+  <div class="chart-canvas" class:hidden={series.length === 0} bind:this={chartEl}></div>
 </div>
 
 {#if pagination}
@@ -202,8 +262,27 @@
     color: #334155 !important;
   }
 
+  .chart-canvas :global(.u-wrap) {
+    position: relative;
+  }
+
+  .chart-canvas :global(.u-under),
+  .chart-canvas :global(.u-over) {
+    position: absolute;
+  }
+
+  .chart-canvas :global(.uplot canvas) {
+    display: block;
+    width: 100% !important;
+    height: 100% !important;
+  }
+
   .chart-canvas {
     min-height: 240px;
+  }
+
+  .chart-canvas.hidden {
+    display: none;
   }
 
   .pager {

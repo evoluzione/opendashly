@@ -28,18 +28,31 @@ func (h *DashboardHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	from, err := time.Parse(time.RFC3339, req.From)
-	if err != nil {
-		log.Printf("dashboard.metrics invalid from time: %v", err)
-		http.Error(w, "Invalid from time format", http.StatusBadRequest)
-		return
+	// Default time range: 1970-01-01 to 2100-01-01
+	defaultFrom := time.Date(1970, 1, 1, 0, 0, 0, 0, time.UTC)
+	defaultTo := time.Date(2100, 1, 1, 0, 0, 0, 0, time.UTC)
+
+	var from, to time.Time
+	var err error
+
+	if req.From == "" {
+		from = defaultFrom
+	} else {
+		from, err = time.Parse(time.RFC3339, req.From)
+		if err != nil {
+			log.Printf("dashboard.metrics invalid from time: %v, using default", err)
+			from = defaultFrom
+		}
 	}
 
-	to, err := time.Parse(time.RFC3339, req.To)
-	if err != nil {
-		log.Printf("dashboard.metrics invalid to time: %v", err)
-		http.Error(w, "Invalid to time format", http.StatusBadRequest)
-		return
+	if req.To == "" {
+		to = defaultTo
+	} else {
+		to, err = time.Parse(time.RFC3339, req.To)
+		if err != nil {
+			log.Printf("dashboard.metrics invalid to time: %v, using default", err)
+			to = defaultTo
+		}
 	}
 
 	log.Printf("dashboard.metrics request: from=%s to=%s service=%s",

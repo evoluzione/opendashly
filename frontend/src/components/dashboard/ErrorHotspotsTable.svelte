@@ -18,7 +18,7 @@
       Hotspot Errori
       <InfoTooltip text="Endpoint con il più alto tasso di errore. Mostra quali API generano più problemi e richiedono attenzione prioritaria." />
     </span>
-    <span class="table-subtitle">Top 20 per error rate</span>
+    <span class="table-subtitle">Top 10 per error rate</span>
   </div>
 
   {#if data.length === 0}

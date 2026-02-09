@@ -15,7 +15,6 @@ export async function apiRequest<T>(path: string, options: RequestInit = {}): Pr
   const url = `${baseUrl}${path}`;
   const method = options.method ?? 'GET';
   const startedAt = performance.now();
-  console.debug('api.request', { url, method });
   let response: Response;
   try {
     response = await fetch(url, {
@@ -28,11 +27,9 @@ export async function apiRequest<T>(path: string, options: RequestInit = {}): Pr
     });
   } catch (error) {
     const durationMs = Math.round(performance.now() - startedAt);
-    console.debug('api.request.failed', { url, method, durationMs, error });
     throw error;
   }
   const durationMs = Math.round(performance.now() - startedAt);
-  console.debug('api.response', { url, method, status: response.status, ok: response.ok, durationMs });
 
   if (!response.ok) {
     let bodyText = '';
@@ -43,7 +40,6 @@ export async function apiRequest<T>(path: string, options: RequestInit = {}): Pr
     }
     let errorMessage = `Request failed: ${response.status}`;
     if (bodyText) {
-      console.debug('api.response.body', { url, status: response.status, bodyText });
       try {
         const bodyJson = JSON.parse(bodyText);
         if (bodyJson && (bodyJson.error || bodyJson.message)) {

@@ -74,7 +74,6 @@
       jobs = result.jobs;
       totalJobs = result.total ?? result.jobs.length;
     } catch (err) {
-      console.error("Failed to load jobs", err);
     }
   }
 
@@ -83,7 +82,6 @@
       const result = await fetchServices();
       services = result.services;
     } catch (err) {
-      console.error("Failed to load services", err);
     }
   }
 
