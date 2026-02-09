@@ -69,6 +69,30 @@ func (s *Service) GetDashboard(ctx context.Context, req DashboardRequest) (*Dash
 		return nil, fmt.Errorf("error hotspots: %w", err)
 	}
 
+	latencySeries, err := s.getLatencyPercentiles(ctx, req)
+	if err != nil {
+		log.Printf("metrics.service: latency percentiles error: %v", err)
+		return nil, fmt.Errorf("latency percentiles: %w", err)
+	}
+
+	errorRateSeries, err := s.getErrorRateSeries(ctx, req)
+	if err != nil {
+		log.Printf("metrics.service: error rate series error: %v", err)
+		return nil, fmt.Errorf("error rate series: %w", err)
+	}
+
+	statusCodes, err := s.getStatusCodeBreakdown(ctx, req)
+	if err != nil {
+		log.Printf("metrics.service: status code breakdown error: %v", err)
+		return nil, fmt.Errorf("status code breakdown: %w", err)
+	}
+
+	topEndpoints, err := s.getTopEndpointsThroughput(ctx, req)
+	if err != nil {
+		log.Printf("metrics.service: top endpoints error: %v", err)
+		return nil, fmt.Errorf("top endpoints: %w", err)
+	}
+
 	apdex, err := s.getApdexScore(ctx, req)
 	if err != nil {
 		log.Printf("metrics.service: apdex score error: %v", err)
@@ -79,6 +103,18 @@ func (s *Service) GetDashboard(ctx context.Context, req DashboardRequest) (*Dash
 	if err != nil {
 		log.Printf("metrics.service: throughput error: %v", err)
 		return nil, fmt.Errorf("throughput: %w", err)
+	}
+
+	logVolume, err := s.getLogVolume(ctx, req)
+	if err != nil {
+		log.Printf("metrics.service: log volume error: %v", err)
+		return nil, fmt.Errorf("log volume: %w", err)
+	}
+
+	logLevels, err := s.getLogLevels(ctx, req)
+	if err != nil {
+		log.Printf("metrics.service: log levels error: %v", err)
+		return nil, fmt.Errorf("log levels: %w", err)
 	}
 
 	errorRate, err := s.getErrorRate(ctx, req)
@@ -92,12 +128,20 @@ func (s *Service) GetDashboard(ctx context.Context, req DashboardRequest) (*Dash
 			LatencyDistribution: latencyDist,
 			SlowestEndpoints:    slowest,
 			ErrorHotspots:       errorHotspots,
+			TopEndpoints:        topEndpoints,
+			StatusCodes:         statusCodes,
 		},
 		Satisfaction: SatisfactionData{
 			Apdex:      apdex,
 			ErrorRate:  errorRate,
 			Throughput: throughput,
 			TimeSeries: timeSeries,
+			LatencySeries: latencySeries,
+			ErrorRateSeries: errorRateSeries,
+		},
+		Logs: LogsData{
+			VolumeSeries: logVolume,
+			Levels:       logLevels,
 		},
 	}, nil
 }
@@ -222,6 +266,191 @@ func (s *Service) getErrorHotspots(ctx context.Context, req DashboardRequest) ([
 
 	if results == nil {
 		results = []ErrorHotspot{}
+	}
+	return results, nil
+}
+
+func (s *Service) getLatencyPercentiles(ctx context.Context, req DashboardRequest) ([]LatencyPercentilePoint, error) {
+	query := BuildLatencyPercentilesQuery(req.From, req.To, req.ServiceName)
+	log.Printf("metrics.service.getLatencyPercentiles: executing query")
+
+	rows, err := s.Storage.Conn.Query(ctx, query)
+	if err != nil {
+		return nil, fmt.Errorf("query: %w", err)
+	}
+	defer rows.Close()
+
+	results := []LatencyPercentilePoint{}
+	for rows.Next() {
+		var bucket time.Time
+		var p50, p95, p99 float64
+		if err := rows.Scan(&bucket, &p50, &p95, &p99); err != nil {
+			return nil, fmt.Errorf("scan: %w", err)
+		}
+		results = append(results, LatencyPercentilePoint{
+			Timestamp: bucket,
+			P50:       p50,
+			P95:       p95,
+			P99:       p99,
+		})
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate: %w", err)
+	}
+	return results, nil
+}
+
+func (s *Service) getErrorRateSeries(ctx context.Context, req DashboardRequest) ([]ErrorRatePoint, error) {
+	query := BuildErrorRateTimeSeriesQuery(req.From, req.To, req.ServiceName)
+	log.Printf("metrics.service.getErrorRateSeries: executing query")
+
+	rows, err := s.Storage.Conn.Query(ctx, query)
+	if err != nil {
+		return nil, fmt.Errorf("query: %w", err)
+	}
+	defer rows.Close()
+
+	results := []ErrorRatePoint{}
+	for rows.Next() {
+		var bucket time.Time
+		var errorCount, totalCount uint64
+		var errorRate float64
+		if err := rows.Scan(&bucket, &errorCount, &totalCount, &errorRate); err != nil {
+			return nil, fmt.Errorf("scan: %w", err)
+		}
+		results = append(results, ErrorRatePoint{
+			Timestamp:  bucket,
+			ErrorRate:  errorRate,
+			ErrorCount: int64(errorCount),
+			TotalCount: int64(totalCount),
+		})
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate: %w", err)
+	}
+	return results, nil
+}
+
+func (s *Service) getStatusCodeBreakdown(ctx context.Context, req DashboardRequest) ([]StatusCodeBreakdown, error) {
+	query := BuildStatusCodeBreakdownQuery(req.From, req.To, req.ServiceName)
+	log.Printf("metrics.service.getStatusCodeBreakdown: executing query")
+
+	rows, err := s.Storage.Conn.Query(ctx, query)
+	if err != nil {
+		return nil, fmt.Errorf("query: %w", err)
+	}
+	defer rows.Close()
+
+	results := []StatusCodeBreakdown{}
+	var total int64
+	for rows.Next() {
+		var code string
+		var count uint64
+		if err := rows.Scan(&code, &count); err != nil {
+			return nil, fmt.Errorf("scan: %w", err)
+		}
+		results = append(results, StatusCodeBreakdown{
+			Code:  code,
+			Count: int64(count),
+		})
+		total += int64(count)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate: %w", err)
+	}
+	for i := range results {
+		if total > 0 {
+			results[i].Percentage = float64(results[i].Count) / float64(total) * 100
+		}
+	}
+	return results, nil
+}
+
+func (s *Service) getTopEndpointsThroughput(ctx context.Context, req DashboardRequest) ([]EndpointThroughput, error) {
+	query := BuildTopEndpointsThroughputQuery(req.From, req.To, req.ServiceName, 10)
+	log.Printf("metrics.service.getTopEndpointsThroughput: executing query")
+
+	rows, err := s.Storage.Conn.Query(ctx, query)
+	if err != nil {
+		return nil, fmt.Errorf("query: %w", err)
+	}
+	defer rows.Close()
+
+	results := []EndpointThroughput{}
+	for rows.Next() {
+		var endpoint, service string
+		var requestCount, errorCount uint64
+		var errorRate float64
+		if err := rows.Scan(&endpoint, &service, &requestCount, &errorCount, &errorRate); err != nil {
+			return nil, fmt.Errorf("scan: %w", err)
+		}
+		results = append(results, EndpointThroughput{
+			Endpoint:     endpoint,
+			Service:      service,
+			RequestCount: int64(requestCount),
+			ErrorCount:   int64(errorCount),
+			ErrorRate:    errorRate,
+		})
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate: %w", err)
+	}
+	return results, nil
+}
+
+func (s *Service) getLogVolume(ctx context.Context, req DashboardRequest) ([]LogVolumePoint, error) {
+	query := BuildLogVolumeQuery(req.From, req.To, req.ServiceName)
+	log.Printf("metrics.service.getLogVolume: executing query")
+
+	rows, err := s.Storage.Conn.Query(ctx, query)
+	if err != nil {
+		return nil, fmt.Errorf("query: %w", err)
+	}
+	defer rows.Close()
+
+	results := []LogVolumePoint{}
+	for rows.Next() {
+		var bucket time.Time
+		var count uint64
+		if err := rows.Scan(&bucket, &count); err != nil {
+			return nil, fmt.Errorf("scan: %w", err)
+		}
+		results = append(results, LogVolumePoint{Timestamp: bucket, Count: int64(count)})
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate: %w", err)
+	}
+	return results, nil
+}
+
+func (s *Service) getLogLevels(ctx context.Context, req DashboardRequest) ([]LogLevelCount, error) {
+	query := BuildLogLevelsQuery(req.From, req.To, req.ServiceName)
+	log.Printf("metrics.service.getLogLevels: executing query")
+
+	rows, err := s.Storage.Conn.Query(ctx, query)
+	if err != nil {
+		return nil, fmt.Errorf("query: %w", err)
+	}
+	defer rows.Close()
+
+	results := []LogLevelCount{}
+	var total int64
+	for rows.Next() {
+		var level string
+		var count uint64
+		if err := rows.Scan(&level, &count); err != nil {
+			return nil, fmt.Errorf("scan: %w", err)
+		}
+		results = append(results, LogLevelCount{Level: level, Count: int64(count)})
+		total += int64(count)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate: %w", err)
+	}
+	for i := range results {
+		if total > 0 {
+			results[i].Percentage = float64(results[i].Count) / float64(total) * 100
+		}
 	}
 	return results, nil
 }

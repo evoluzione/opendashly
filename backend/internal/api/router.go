@@ -6,6 +6,7 @@ import (
 	"opendashly/backend/internal/ai"
 	"opendashly/backend/internal/api/handlers"
 	"opendashly/backend/internal/config"
+	"opendashly/backend/internal/dashboard"
 	"opendashly/backend/internal/metrics"
 	"opendashly/backend/internal/query"
 	"opendashly/backend/internal/status"
@@ -23,6 +24,7 @@ type RouterConfig struct {
 	StatusService      *status.Service
 	DashboardService   *metrics.Service
 	AIService          *ai.Service
+	DashboardSettings  *dashboard.Service
 	AuthHandler        *handlers.AuthHandler
 	UsersHandler       *handlers.UsersHandler
 	ServicesHandler    *handlers.ServicesHandler
@@ -55,6 +57,7 @@ func NewRouter(cfg RouterConfig) http.Handler {
 	smartQuery := &handlers.SmartQueryHandler{AIService: cfg.AIService}
 	dashboardHandler := &handlers.DashboardHandler{Service: cfg.DashboardService}
 	aiHandler := &handlers.AISettingsHandler{Service: cfg.AIService}
+	dashboardSettingsHandler := &handlers.DashboardSettingsHandler{Service: cfg.DashboardSettings}
 
 	r.Post("/api/query/run", queryHandler.ServeHTTP)
 	r.Post("/api/query/smart", smartQuery.ServeHTTP)
@@ -71,10 +74,13 @@ func NewRouter(cfg RouterConfig) http.Handler {
 	r.Get("/api/traces/{traceId}/spans", traceSpans.ServeHTTP)
 	r.Get("/api/status/summary", statusHandler.ServeHTTP)
 	r.Post("/api/dashboard/metrics", dashboardHandler.ServeHTTP)
+	r.Get("/api/dashboard/settings", dashboardSettingsHandler.Get)
 
 	// Admin Settings
 	r.Get("/api/admin/ai/settings", aiHandler.Get)
 	r.Put("/api/admin/ai/settings", aiHandler.Update)
+	r.Get("/api/admin/dashboard/settings", dashboardSettingsHandler.Get)
+	r.Put("/api/admin/dashboard/settings", dashboardSettingsHandler.Update)
 
 	if cfg.AuthHandler != nil {
 		r.Post("/api/auth/login", cfg.AuthHandler.Login)

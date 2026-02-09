@@ -26,7 +26,6 @@
             try {
                 options = await fetchOptions(value);
             } catch (e) {
-                console.error("Failed to fetch options", e);
             } finally {
                 loading = false;
             }

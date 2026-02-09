@@ -424,7 +424,6 @@
       const settings = await getAISettings();
       smartEnabled = settings.enabled;
     } catch (e) {
-      console.error("failed to load ai settings", e);
     }
   });
 

@@ -55,7 +55,6 @@ function scheduleAutoRefresh() {
 }
 
 export async function loadDashboard(request: DashboardRequest) {
-  console.debug('dashboard.load.start', { request });
   dashboardState.update((state) => ({
     ...state,
     loading: true,
@@ -64,7 +63,6 @@ export async function loadDashboard(request: DashboardRequest) {
   }));
   try {
     const response = await fetchDashboardMetrics(request);
-    console.debug('dashboard.load.success', { response });
     dashboardState.update((state) => ({
       ...state,
       loading: false,
@@ -74,7 +72,6 @@ export async function loadDashboard(request: DashboardRequest) {
     scheduleAutoRefresh();
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Errore sconosciuto';
-    console.debug('dashboard.load.error', { message, error: err });
     dashboardState.update((state) => ({
       ...state,
       loading: false,

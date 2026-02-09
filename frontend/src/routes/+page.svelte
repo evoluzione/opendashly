@@ -7,7 +7,6 @@
   import QueryForm from "../components/QueryForm.svelte";
   import LogResultsTable from "../components/LogResultsTable.svelte";
   import TraceResultsList from "../components/TraceResultsList.svelte";
-  import MetricChart from "../components/MetricChart.svelte";
   import {
     executeQuery,
     queryState,
@@ -18,6 +17,11 @@
     loadDashboard,
     setDashboardAutoRefresh,
   } from "../lib/stores/dashboard";
+  import {
+    loadDashboardSettings,
+    isChartEnabled,
+    getOrderedChartKeys,
+  } from "../lib/stores/dashboard_settings";
 
   // Dashboard components
   import ApdexGauge from "../components/dashboard/ApdexGauge.svelte";
@@ -25,12 +29,17 @@
   import ThroughputGauge from "../components/dashboard/ThroughputGauge.svelte";
   import LatencyDistributionChart from "../components/dashboard/LatencyDistributionChart.svelte";
   import ThroughputChart from "../components/dashboard/ThroughputChart.svelte";
+  import LatencyPercentilesChart from "../components/dashboard/LatencyPercentilesChart.svelte";
+  import ErrorRateChart from "../components/dashboard/ErrorRateChart.svelte";
+  import StatusCodeBreakdownChart from "../components/dashboard/StatusCodeBreakdownChart.svelte";
+  import TopEndpointsThroughputTable from "../components/dashboard/TopEndpointsThroughputTable.svelte";
+  import LogVolumeChart from "../components/dashboard/LogVolumeChart.svelte";
+  import LogLevelDistributionChart from "../components/dashboard/LogLevelDistributionChart.svelte";
   import SlowestEndpointsTable from "../components/dashboard/SlowestEndpointsTable.svelte";
   import ErrorHotspotsTable from "../components/dashboard/ErrorHotspotsTable.svelte";
   import DashboardServiceFilter from "../components/DashboardServiceFilter.svelte";
 
   let activeTab: "logs" | "metriche" | "tracce" = "metriche";
-  let metricsLoaded = false;
   let dashboardLoaded = false;
   let initialTraceId: string | null = null;
   let forceMode: "auto" | "manual" | "smart" | null = null;
@@ -78,6 +87,7 @@
   onMount(() => {
     // Load dashboard metrics on startup
     loadDashboardMetrics();
+    void loadDashboardSettings();
   });
 
   function handleRun(event: CustomEvent) {
@@ -121,8 +131,6 @@
     await loadDashboard({});
     dashboardLoaded = true;
     lastRefresh = new Date();
-    // Also load the existing metrics chart
-    await loadAllMetrics();
   }
 
   let lastRefresh: Date | null = null;
@@ -140,19 +148,6 @@
     await loadDashboardMetrics();
   }
 
-  async function loadAllMetrics() {
-    const now = new Date().toISOString();
-    await executeQuery({
-      signals: ["metrics"],
-      timeRange: {
-        from: "1970-01-01T00:00:00Z",
-        to: now,
-      },
-      filters: {},
-      limit: 1000,
-    });
-    metricsLoaded = true;
-  }
 </script>
 
 <div class="dashboard" class:metrics-view={activeTab === "metriche"}>
@@ -234,46 +229,66 @@
             <div class="refresh-indicator">Aggiornamento in corso...</div>
           {/if}
 
-          <!-- Satisfaction Gauges -->
-          <div class="gauges-row">
-            <ApdexGauge data={$dashboardState.data.satisfaction.apdex} />
-            <ErrorRateGauge
-              errorRate={$dashboardState.data.satisfaction.errorRate}
-              totalErrors={$dashboardState.data.satisfaction.throughput
-                .totalErrors}
-              totalRequests={$dashboardState.data.satisfaction.throughput
-                .totalRequests}
-            />
-            <ThroughputGauge
-              data={$dashboardState.data.satisfaction.throughput}
-            />
-          </div>
-
-          <!-- Existing OTel Metrics Chart -->
-          {#if $queryState.result?.results?.metrics}
-            <div class="otel-metrics-section">
-              <MetricChart series={$queryState.result.results.metrics} />
-            </div>
-          {/if}
-
-          <!-- Charts Row -->
-          <div class="charts-row">
-            <LatencyDistributionChart
-              data={$dashboardState.data.hotspots.latencyDistribution}
-            />
-            <ThroughputChart
-              data={$dashboardState.data.satisfaction.timeSeries}
-            />
-          </div>
-
-          <!-- Tables Row -->
-          <div class="tables-row">
-            <SlowestEndpointsTable
-              data={$dashboardState.data.hotspots.slowestEndpoints}
-            />
-            <ErrorHotspotsTable
-              data={$dashboardState.data.hotspots.errorHotspots}
-            />
+          <div class="dashboard-grid">
+            {#each getOrderedChartKeys() as chartKey}
+              {#if isChartEnabled(chartKey)}
+                {#if chartKey === "apdex_gauge"}
+                  <ApdexGauge data={$dashboardState.data.satisfaction.apdex} />
+                {:else if chartKey === "error_rate_gauge"}
+                  <ErrorRateGauge
+                    errorRate={$dashboardState.data.satisfaction.errorRate}
+                    totalErrors={$dashboardState.data.satisfaction.throughput
+                      .totalErrors}
+                    totalRequests={$dashboardState.data.satisfaction.throughput
+                      .totalRequests}
+                  />
+                {:else if chartKey === "throughput_gauge"}
+                  <ThroughputGauge
+                    data={$dashboardState.data.satisfaction.throughput}
+                  />
+                {:else if chartKey === "latency_distribution"}
+                  <LatencyDistributionChart
+                    data={$dashboardState.data.hotspots.latencyDistribution}
+                  />
+                {:else if chartKey === "throughput_timeseries"}
+                  <ThroughputChart
+                    data={$dashboardState.data.satisfaction.timeSeries}
+                  />
+                {:else if chartKey === "latency_percentiles"}
+                  <LatencyPercentilesChart
+                    data={$dashboardState.data.satisfaction.latencySeries}
+                  />
+                {:else if chartKey === "error_rate_timeseries"}
+                  <ErrorRateChart
+                    data={$dashboardState.data.satisfaction.errorRateSeries}
+                  />
+                {:else if chartKey === "log_volume"}
+                  <LogVolumeChart
+                    data={$dashboardState.data.logs.volumeSeries}
+                  />
+                {:else if chartKey === "log_levels"}
+                  <LogLevelDistributionChart
+                    data={$dashboardState.data.logs.levels}
+                  />
+                {:else if chartKey === "slowest_endpoints"}
+                  <SlowestEndpointsTable
+                    data={$dashboardState.data.hotspots.slowestEndpoints}
+                  />
+                {:else if chartKey === "top_endpoints_throughput"}
+                  <TopEndpointsThroughputTable
+                    data={$dashboardState.data.hotspots.topEndpoints}
+                  />
+                {:else if chartKey === "error_hotspots"}
+                  <ErrorHotspotsTable
+                    data={$dashboardState.data.hotspots.errorHotspots}
+                  />
+                {:else if chartKey === "status_codes"}
+                  <StatusCodeBreakdownChart
+                    data={$dashboardState.data.hotspots.statusCodes}
+                  />
+                {/if}
+              {/if}
+            {/each}
           </div>
         {:else}
           <div class="status">Caricamento metriche...</div>
@@ -408,6 +423,13 @@
     min-width: 0;
   }
 
+  .dashboard-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(320px, 1fr));
+    gap: 20px;
+    min-width: 0;
+  }
+
   .filters {
     background: white;
     border-left: 1px solid rgba(15, 23, 42, 0.06);
@@ -524,15 +546,6 @@
     gap: 20px;
   }
 
-  .otel-metrics-section {
-    background: white;
-    border-radius: 16px;
-    padding: 20px;
-    box-shadow:
-      0 1px 3px rgba(0, 0, 0, 0.05),
-      0 4px 12px rgba(0, 0, 0, 0.03);
-    border: 1px solid rgba(15, 23, 42, 0.06);
-  }
 
   .charts-row {
     display: grid;
@@ -579,9 +592,19 @@
     }
   }
 
+
   @media (max-width: 900px) {
+    .dashboard-grid {
+      grid-template-columns: 1fr;
+    }
     .gauges-row {
       grid-template-columns: 1fr;
+    }
+  }
+
+  @media (min-width: 1600px) {
+    .dashboard-grid {
+      grid-template-columns: repeat(3, minmax(320px, 1fr));
     }
   }
 
