@@ -8,10 +8,13 @@
 
   const dispatch = createEventDispatcher();
   let selectedLog: any | null = null;
+  let isMessageExpanded = false;
+  let lastSelectedKey = "";
   let knownKeys = new Set<string>();
   let highlightKeys = new Set<string>();
   let highlightTimers = new Map<string, ReturnType<typeof setTimeout>>();
   let initialized = false;
+  const LOG_MESSAGE_PREVIEW = 320;
 
   const severityStyles: Record<
     string,
@@ -147,6 +150,12 @@
     return interpolateMessageHtml(base, attributes);
   }
 
+  function formatLogMessageHtmlFromText(log: any, message: string) {
+    if (!message || message === "-") return message;
+    const attributes = mergeAttributes(log);
+    return interpolateMessageHtml(message, attributes);
+  }
+
   function formatValue(value: any) {
     if (value === null || value === undefined) return "";
     if (typeof value === "string") return value;
@@ -216,6 +225,13 @@
       // Page change or manual query - reset without highlighting
       knownKeys = nextKeys;
       highlightKeys = new Set();
+    }
+  }
+  $: if (selectedLog) {
+    const nextKey = logKey(selectedLog);
+    if (nextKey !== lastSelectedKey) {
+      lastSelectedKey = nextKey;
+      isMessageExpanded = false;
     }
   }
   onDestroy(() => {
@@ -426,9 +442,25 @@
         <!-- Messaggio -->
         <section class="log-section message-section">
           <h4 class="section-title">Messaggio</h4>
-          <p class="log-message">
-            {@html formatLogMessageHtml(selectedLog, structuredBody)}
-          </p>
+          {#if true}
+            {@const baseMessage = extractMessage(selectedLog.body, structuredBody)}
+            {@const isLongMessage = baseMessage && baseMessage.length > LOG_MESSAGE_PREVIEW}
+            {@const displayMessage = isLongMessage && !isMessageExpanded
+              ? `${baseMessage.slice(0, LOG_MESSAGE_PREVIEW).trimEnd()}…`
+              : baseMessage}
+            <p class="log-message">
+              {@html formatLogMessageHtmlFromText(selectedLog, displayMessage)}
+            </p>
+            {#if isLongMessage}
+              <button
+                type="button"
+                class="message-toggle"
+                on:click={() => (isMessageExpanded = !isMessageExpanded)}
+              >
+                {isMessageExpanded ? "Mostra meno" : "Mostra tutto"}
+              </button>
+            {/if}
+          {/if}
         </section>
 
         <!-- Attributi Log (prioritari) -->
@@ -821,6 +853,21 @@
     color: #0f172a;
     line-height: 1.7;
     word-break: break-word;
+  }
+
+  .message-toggle {
+    margin-top: 8px;
+    padding: 0;
+    border: none;
+    background: none;
+    color: #2563eb;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+  }
+
+  .message-toggle:hover {
+    text-decoration: underline;
   }
 
   .secondary-info {
