@@ -18,6 +18,11 @@ services:
       interval: 5s
       timeout: 3s
       retries: 10
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
 
   otel-collector:
     container_name: otel-collector
@@ -33,6 +38,11 @@ services:
     depends_on:
       clickhouse:
         condition: service_healthy
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
 
   backend:
     container_name: backend
@@ -53,6 +63,11 @@ services:
     depends_on:
       - clickhouse
       - otel-collector
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
       
   frontend:
     container_name: frontend
@@ -68,6 +83,11 @@ services:
       - ./frontend/static:/app/static
     depends_on:
       - backend
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
 
 volumes:
   clickhouse_data:
