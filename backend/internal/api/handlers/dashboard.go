@@ -28,9 +28,9 @@ func (h *DashboardHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Default time range: 1970-01-01 to 2100-01-01
-	defaultFrom := time.Date(1970, 1, 1, 0, 0, 0, 0, time.UTC)
-	defaultTo := time.Date(2100, 1, 1, 0, 0, 0, 0, time.UTC)
+	// Default time range: all data
+	defaultFrom := time.Unix(0, 0).UTC()
+	defaultTo := time.Now().UTC()
 
 	var from, to time.Time
 	var err error
@@ -53,6 +53,13 @@ func (h *DashboardHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			log.Printf("dashboard.metrics invalid to time: %v, using default", err)
 			to = defaultTo
 		}
+	}
+
+	if !to.After(from) {
+		log.Printf("dashboard.metrics invalid range: from=%s to=%s, using default all-time",
+			from.Format(time.RFC3339), to.Format(time.RFC3339))
+		from = defaultFrom
+		to = defaultTo
 	}
 
 	log.Printf("dashboard.metrics request: from=%s to=%s service=%s",

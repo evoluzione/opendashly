@@ -19,6 +19,7 @@
   import Modal from "./common/Modal.svelte";
   import type { FilterItem } from "../services/query";
   import LogLevelSelector from "./LogLevelSelector.svelte";
+  import ServiceDropdown from "./ServiceDropdown.svelte";
 
   const dispatch = createEventDispatcher();
 
@@ -39,6 +40,8 @@
     smartError: string;
     smartRequest: QueryRequest | null;
     advancedFilters: FilterItem[];
+    filterDurationOperator: string;
+    filterDurationMs: string;
   }
 
   const defaultState: TabState = {
@@ -51,6 +54,8 @@
     smartError: "",
     smartRequest: null,
     advancedFilters: [],
+    filterDurationOperator: ">",
+    filterDurationMs: "",
   };
 
   let tabStates: Record<string, TabState> = persistedStates || {
@@ -70,6 +75,8 @@
   let smartError = "";
   let smartRequest: QueryRequest | null = null;
   let advancedFilters: FilterItem[] = [];
+  let filterDurationOperator = ">";
+  let filterDurationMs = "";
 
   // Track previous tab to save state before switching
   let previousTab = "";
@@ -101,6 +108,8 @@
       smartError,
       smartRequest,
       advancedFilters,
+      filterDurationOperator,
+      filterDurationMs,
     };
   }
 
@@ -115,6 +124,8 @@
     smartError = state.smartError;
     smartRequest = state.smartRequest;
     advancedFilters = state.advancedFilters || [];
+    filterDurationOperator = state.filterDurationOperator || ">";
+    filterDurationMs = state.filterDurationMs || "";
   }
 
   let smartLoading = false;
@@ -161,6 +172,16 @@
         generateSql();
       }
     }
+  }
+
+  function handleManualEnter(event: KeyboardEvent) {
+    if (searchMode !== "manual") return;
+    if (showFilterModal) return;
+    if (event.key !== "Enter") return;
+    if (event.shiftKey || event.ctrlKey || event.metaKey || event.altKey) return;
+    if (event.isComposing) return;
+    event.preventDefault();
+    submit();
   }
 
   const quickRanges = [
@@ -591,6 +612,22 @@
       }
     }
 
+    const durationRaw = String(filterDurationMs ?? "").trim();
+    if (activeTab === "tracce" && durationRaw) {
+      const durationNumber = Number(durationRaw);
+      if (Number.isFinite(durationNumber) && durationNumber >= 0) {
+        const durationValue = String(durationNumber);
+        if (!finalFilterList.some((f) => f.key === "duration_ms")) {
+          finalFilterList.push({
+            connector: "AND",
+            key: "duration_ms",
+            operator: filterDurationOperator || ">",
+            value: durationValue,
+          });
+        }
+      }
+    }
+
     // Filter out incomplete filters
     finalFilterList = finalFilterList.filter((f) => f.key && f.value);
 
@@ -622,6 +659,8 @@
     toInput = "";
     filterTraceId = "";
     filterSpanName = "";
+    filterDurationOperator = ">";
+    filterDurationMs = "";
     advancedFilters = [];
   }
 </script>
@@ -655,6 +694,10 @@
       {/if}
     </div>
   </fieldset>
+
+  <div class="query-service-filter">
+    <ServiceDropdown />
+  </div>
 
   {#if activeTab === "logs" && searchMode !== "smart"}
     <div class="log-level-filter">
@@ -731,17 +774,6 @@
     </fieldset>
   {:else if searchMode === "manual"}
     <div class="manual-filters">
-      <div class="actions-row">
-        <button
-          type="button"
-          class="btn-text"
-          on:click={clearManualFilters}
-          title="Svuota tutti i campi"
-        >
-          Pulisci filtri
-        </button>
-      </div>
-
       <div class="date-row">
         <div class="filter-field compact">
           <label for="query-from">Da</label>
@@ -752,6 +784,7 @@
             readonly={!!filterTraceId}
             on:focus={handleDateActivation}
             on:click={handleDateActivation}
+            on:keydown={handleManualEnter}
           />
         </div>
         <div class="filter-field compact">
@@ -763,6 +796,7 @@
             readonly={!!filterTraceId}
             on:focus={handleDateActivation}
             on:click={handleDateActivation}
+            on:keydown={handleManualEnter}
           />
         </div>
       </div>
@@ -777,6 +811,7 @@
             bind:value={filterTraceId}
             on:focus={handleTraceIdActivation}
             on:click={handleTraceIdActivation}
+            on:keydown={handleManualEnter}
           />
         </div>
         <div class="filter-field">
@@ -786,7 +821,33 @@
             type="text"
             placeholder="Cerca nome span..."
             bind:value={filterSpanName}
+            on:keydown={handleManualEnter}
           />
+        </div>
+        <div class="duration-row">
+          <div class="filter-field compact operator">
+            <label for="filter-duration-op">Durata</label>
+            <select
+              id="filter-duration-op"
+              bind:value={filterDurationOperator}
+              on:keydown={handleManualEnter}
+            >
+              <option value=">">&gt;</option>
+              <option value="<">&lt;</option>
+            </select>
+          </div>
+          <div class="filter-field compact">
+            <label for="filter-duration-ms">Durata (ms)</label>
+            <input
+              id="filter-duration-ms"
+              type="number"
+              min="0"
+              step="1"
+              placeholder="es. 300"
+              bind:value={filterDurationMs}
+              on:keydown={handleManualEnter}
+            />
+          </div>
         </div>
         {#if filterTraceId}
           <p class="helper">
@@ -831,6 +892,17 @@
           </div>
         </Modal>
       {/if}
+
+      <div class="actions-row bottom">
+        <button
+          type="button"
+          class="btn-text"
+          on:click={clearManualFilters}
+          title="Svuota tutti i campi"
+        >
+          Pulisci filtri
+        </button>
+      </div>
     </div>
   {:else}
     <div class="smart-box">
@@ -1230,6 +1302,23 @@
     font-size: 13px;
   }
 
+  .duration-row {
+    display: grid;
+    grid-template-columns: 110px minmax(0, 1fr);
+    gap: 12px;
+    align-items: end;
+  }
+
+  .filter-field.compact.operator select {
+    width: 100%;
+    padding: 8px 10px;
+    font-size: 13px;
+    border: 1px solid #e2e8f0;
+    border-radius: 10px;
+    background: #f8fafc;
+    color: #0f172a;
+  }
+
   .btn-secondary {
     display: inline-flex;
     align-items: center;
@@ -1322,6 +1411,12 @@
     justify-content: flex-end;
   }
 
+  .actions-row.bottom {
+    margin-top: 8px;
+    padding-top: 8px;
+    border-top: 1px dashed rgba(148, 163, 184, 0.35);
+  }
+
   .btn-text {
     background: none;
     border: none;
@@ -1338,5 +1433,12 @@
 
   .log-level-filter {
     margin-bottom: 16px;
+  }
+
+  .query-service-filter {
+    margin-top: -8px;
+    margin-bottom: 4px;
+    padding-bottom: 14px;
+    border-bottom: 1px solid rgba(15, 23, 42, 0.08);
   }
 </style>

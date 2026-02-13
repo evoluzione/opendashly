@@ -6,6 +6,7 @@ import (
 	"log"
 	"math"
 	"sort"
+	"strings"
 	"time"
 
 	"opendashly/backend/internal/query/builders"
@@ -315,13 +316,33 @@ func (s *Service) GetLogAttributeKeys(ctx context.Context, search string) ([]str
 		return []string{}, nil
 	}
 
-	// Limit to last 24h to avoid scanning too much
-	query := "SELECT DISTINCT arrayJoin(mapKeys(LogAttributes)) as key FROM telemetry.otel_logs WHERE Timestamp > now() - INTERVAL 24 HOUR"
+	// Keep this query fast for autocomplete:
+	// - read only a bounded recent sample
+	// - always include a small seed set
+	// This avoids empty suggestions when full-table scans fail or timeout.
+	query := "SELECT DISTINCT key FROM (" +
+		"SELECT arrayJoin(mapKeys(ResourceAttributes)) AS key FROM (" +
+		"SELECT ResourceAttributes FROM telemetry.otel_logs ORDER BY Timestamp DESC LIMIT 50000" +
+		") " +
+		"UNION ALL " +
+		"SELECT arrayJoin(mapKeys(LogAttributes)) AS key FROM (" +
+		"SELECT LogAttributes FROM telemetry.otel_logs ORDER BY Timestamp DESC LIMIT 50000" +
+		") " +
+		"UNION ALL SELECT 'service.name' AS key " +
+		"UNION ALL SELECT 'severity' AS key " +
+		"UNION ALL SELECT 'trace_id' AS key " +
+		"UNION ALL SELECT 'span_id' AS key " +
+		"UNION ALL SELECT 'http.method' AS key " +
+		"UNION ALL SELECT 'http.route' AS key " +
+		"UNION ALL SELECT 'http.status_code' AS key " +
+		"UNION ALL SELECT 'error.type' AS key " +
+		"UNION ALL SELECT 'error.message' AS key " +
+		") WHERE key != ''"
 	if search != "" {
 		escaped := builders.EscapeLiteral(search)
 		query += " AND key ILIKE '%" + escaped + "%'"
 	}
-	query += " ORDER BY key LIMIT 50"
+	query += " ORDER BY key LIMIT 100"
 
 	rows, err := s.Storage.Conn.Query(ctx, query)
 	if err != nil {
@@ -337,5 +358,30 @@ func (s *Service) GetLogAttributeKeys(ctx context.Context, search string) ([]str
 		}
 		keys = append(keys, key)
 	}
-	return keys, nil
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	if len(keys) > 0 {
+		return keys, nil
+	}
+
+	seed := []string{
+		"service.name",
+		"severity",
+		"trace_id",
+		"span_id",
+		"http.method",
+		"http.route",
+		"http.status_code",
+		"error.type",
+		"error.message",
+	}
+	searchLower := strings.ToLower(strings.TrimSpace(search))
+	filtered := make([]string, 0, len(seed))
+	for _, key := range seed {
+		if searchLower == "" || strings.Contains(strings.ToLower(key), searchLower) {
+			filtered = append(filtered, key)
+		}
+	}
+	return filtered, nil
 }

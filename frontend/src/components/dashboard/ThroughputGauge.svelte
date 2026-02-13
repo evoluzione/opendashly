@@ -5,6 +5,9 @@
   export let data: ThroughputSummary | null = null;
 
   function formatNumber(num: number): string {
+    if (num === 0) return '0.0';
+    if (num < 0.1) return num.toFixed(3);
+    if (num < 1) return num.toFixed(2);
     if (num >= 1000000) return (num / 1000000).toFixed(1) + 'M';
     if (num >= 1000) return (num / 1000).toFixed(1) + 'k';
     return num.toFixed(1);

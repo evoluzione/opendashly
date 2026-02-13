@@ -54,5 +54,8 @@ export function generateSmartQuery(payload: { prompt: string; contextType: 'logs
 
 export function getLogAttributes(search: string): Promise<string[]> {
   const params = new URLSearchParams({ q: search });
-  return apiRequest<string[]>(`/api/query/attributes?${params.toString()}`);
+  return apiRequest<unknown>(`/api/query/attributes?${params.toString()}`).then((payload) => {
+    if (!Array.isArray(payload)) return [];
+    return payload.filter((item): item is string => typeof item === 'string');
+  });
 }
