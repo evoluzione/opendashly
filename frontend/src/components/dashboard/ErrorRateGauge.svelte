@@ -5,6 +5,20 @@
   export let totalErrors: number = 0;
   export let totalRequests: number = 0;
 
+  function computeErrorRate(rate: number, errors: number, requests: number): number {
+    if (requests > 0) {
+      return (errors / requests) * 100;
+    }
+    return Number.isFinite(rate) ? rate : 0;
+  }
+
+  function formatRate(rate: number): string {
+    if (rate === 0) return '0.0%';
+    if (rate < 0.1) return `${rate.toFixed(3)}%`;
+    if (rate < 1) return `${rate.toFixed(2)}%`;
+    return `${rate.toFixed(1)}%`;
+  }
+
   function getColor(rate: number): string {
     if (rate <= 1) return '#22c55e'; // Good - green
     if (rate <= 5) return '#eab308'; // Warning - yellow
@@ -19,9 +33,10 @@
     return 'Critico';
   }
 
-  $: color = getColor(errorRate);
-  $: label = getLabel(errorRate);
-  $: displayRate = Math.min(errorRate, 100);
+  $: effectiveRate = computeErrorRate(errorRate, totalErrors, totalRequests);
+  $: color = getColor(effectiveRate);
+  $: label = getLabel(effectiveRate);
+  $: displayRate = Math.min(effectiveRate, 100);
   $: circumference = 2 * Math.PI * 45;
   $: dashOffset = circumference * (1 - displayRate / 100);
 </script>
@@ -59,7 +74,7 @@
       />
     </svg>
     <div class="gauge-value">
-      <span class="score" style="color: {color}">{errorRate.toFixed(1)}%</span>
+      <span class="score" style="color: {color}">{formatRate(effectiveRate)}</span>
       <span class="label" style="color: {color}">{label}</span>
     </div>
   </div>

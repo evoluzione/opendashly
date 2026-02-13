@@ -2,6 +2,7 @@ package builders
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -98,6 +99,14 @@ func buildSingleClause(k, v, op string, serviceColumn, traceColumn, severityColu
 		sqlOp = "="
 	case "!=":
 		sqlOp = "!="
+	case ">":
+		sqlOp = ">"
+	case "<":
+		sqlOp = "<"
+	case ">=":
+		sqlOp = ">="
+	case "<=":
+		sqlOp = "<="
 	case "contains":
 		sqlOp = "ILIKE"
 		sqlValue = "'%" + escapedValue + "%'"
@@ -121,6 +130,22 @@ func buildSingleClause(k, v, op string, serviceColumn, traceColumn, severityColu
 				return fmt.Sprintf("SpanName ILIKE '%%%s%%'", escapedValue)
 			}
 			return fmt.Sprintf("SpanName %s %s", sqlOp, sqlValue)
+		}
+	case "duration_ms":
+		// Trace duration is stored in nanoseconds as Duration.
+		// Expose a manual filter in milliseconds for UX.
+		if traceColumn != "" && severityColumn == "" {
+			number, err := strconv.ParseFloat(strings.TrimSpace(v), 64)
+			if err != nil {
+				return ""
+			}
+			switch sqlOp {
+			case "=", "!=", ">", "<", ">=", "<=":
+				// valid
+			default:
+				return ""
+			}
+			return fmt.Sprintf("(Duration / 1000000.0) %s %s", sqlOp, strconv.FormatFloat(number, 'f', -1, 64))
 		}
 	case "severity":
 		if severityColumn != "" && v != "Tutti" {

@@ -7,22 +7,54 @@
     export let filters: FilterItem[] = [];
 
     const dispatch = createEventDispatcher();
+    let attributeWarnings: boolean[] = [];
+
+    $: if (attributeWarnings.length !== filters.length) {
+        attributeWarnings = filters.map((_, index) => attributeWarnings[index] ?? false);
+    }
 
     function addFilter() {
         filters = [
             ...filters,
             { connector: "AND", key: "", operator: "=", value: "" },
         ];
+        attributeWarnings = [...attributeWarnings, false];
         dispatch("change", filters);
     }
 
     function removeFilter(index: number) {
         filters = filters.filter((_, i) => i !== index);
+        attributeWarnings = attributeWarnings.filter((_, i) => i !== index);
         dispatch("change", filters);
     }
 
     function handleChange() {
         dispatch("change", filters);
+    }
+
+    function clearAttributeWarning(index: number) {
+        attributeWarnings[index] = false;
+        attributeWarnings = [...attributeWarnings];
+    }
+
+    function handleAttributeResolved(
+        index: number,
+        event: CustomEvent<{ query: string; options: string[] }> | Event
+    ) {
+        const detail = (event as CustomEvent<{ query: string; options: string[] }>).detail;
+        const query = String(detail?.query ?? "").trim();
+        if (!query) {
+            clearAttributeWarning(index);
+            return;
+        }
+        const options = Array.isArray(detail?.options)
+            ? detail.options
+            : [];
+        const exists = options.some(
+            (option) => option.toLowerCase() === query.toLowerCase()
+        );
+        attributeWarnings[index] = !exists;
+        attributeWarnings = [...attributeWarnings];
     }
 
     const operators = [
@@ -84,13 +116,48 @@
                         <div class="filter-fields">
                             <div class="field-key">
                                 <span class="field-label">Attributo</span>
-                                <Autocomplete
-                                    bind:value={filter.key}
-                                    placeholder="es. http.method, service.name"
-                                    fetchOptions={getLogAttributes}
-                                    on:select={handleChange}
-                                    on:input={handleChange}
-                                />
+                                <div class="attribute-input-wrap">
+                                    <Autocomplete
+                                        bind:value={filter.key}
+                                        placeholder="es. http.method, service.name"
+                                        fetchOptions={getLogAttributes}
+                                        on:select={() => {
+                                            clearAttributeWarning(i);
+                                            handleChange();
+                                        }}
+                                        on:input={() => {
+                                            clearAttributeWarning(i);
+                                            handleChange();
+                                        }}
+                                        on:resolved={(event) =>
+                                            handleAttributeResolved(i, event)}
+                                    />
+                                    {#if attributeWarnings[i]}
+                                        <span
+                                            class="attribute-warning"
+                                            title="Attributo non presente tra quelli rilevati nei log recenti. Verifica il nome: la query potrebbe restituire zero risultati."
+                                            aria-label="Attributo non presente tra quelli rilevati nei log recenti. Verifica il nome."
+                                        >
+                                            <svg
+                                                xmlns="http://www.w3.org/2000/svg"
+                                                width="14"
+                                                height="14"
+                                                viewBox="0 0 24 24"
+                                                fill="none"
+                                                stroke="currentColor"
+                                                stroke-width="2"
+                                                stroke-linecap="round"
+                                                stroke-linejoin="round"
+                                            >
+                                                <path
+                                                    d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"
+                                                ></path>
+                                                <line x1="12" y1="9" x2="12" y2="13"></line>
+                                                <line x1="12" y1="17" x2="12.01" y2="17"></line>
+                                            </svg>
+                                        </span>
+                                    {/if}
+                                </div>
                             </div>
 
                             <div class="operator">
@@ -321,6 +388,26 @@
     .field-key,
     .field-value {
         min-width: 0;
+    }
+
+    .attribute-input-wrap {
+        position: relative;
+    }
+
+    .attribute-input-wrap :global(input) {
+        padding-right: 34px;
+    }
+
+    .attribute-warning {
+        position: absolute;
+        top: 50%;
+        right: 10px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        color: #f59e0b;
+        transform: translateY(-50%);
+        cursor: help;
     }
 
     .operator select {

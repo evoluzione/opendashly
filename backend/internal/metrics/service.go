@@ -524,8 +524,17 @@ func (s *Service) getThroughput(ctx context.Context, req DashboardRequest) (Thro
 		return ThroughputSummary{}, nil, fmt.Errorf("iterate: %w", err)
 	}
 
-	// Calculate requests per minute
+	// Calculate requests/errors per minute using observed span first.
+	// This avoids flattening values when requested range is very large.
 	durationMinutes := req.To.Sub(req.From).Minutes()
+	if len(points) > 1 {
+		observedMinutes := points[len(points)-1].Timestamp.Sub(points[0].Timestamp).Minutes()
+		if observedMinutes > 0 {
+			durationMinutes = observedMinutes
+		}
+	} else if len(points) == 1 {
+		durationMinutes = 1
+	}
 	var reqPerMin, errPerMin float64
 	if durationMinutes > 0 {
 		reqPerMin = float64(totalRequests) / durationMinutes

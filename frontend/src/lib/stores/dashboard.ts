@@ -42,9 +42,17 @@ function scheduleAutoRefresh() {
     if (!latest.lastRequest) {
       return;
     }
+    if (!latest.lastRequest.from || !latest.lastRequest.to) {
+      void loadDashboard({ ...latest.lastRequest });
+      return;
+    }
     // Refresh with rolling time range
     const now = new Date();
     const originalDuration = new Date(latest.lastRequest.to).getTime() - new Date(latest.lastRequest.from).getTime();
+    if (!Number.isFinite(originalDuration) || originalDuration <= 0) {
+      void loadDashboard({ ...latest.lastRequest });
+      return;
+    }
     const from = new Date(now.getTime() - originalDuration);
     void loadDashboard({
       ...latest.lastRequest,
@@ -101,11 +109,19 @@ export function resetDashboard() {
   dashboardState.set(initial);
 }
 
-export function selectDashboardService(serviceName: string | null) {
+export function selectDashboardService(
+  serviceName: string | null,
+  options: { reload?: boolean } = {}
+) {
   dashboardState.update((state) => ({
     ...state,
     selectedService: serviceName
   }));
+
+  const shouldReload = options.reload ?? true;
+  if (!shouldReload) {
+    return;
+  }
 
   // Ricarica la dashboard con il nuovo filtro servizio
   const currentState = get(dashboardState);
@@ -116,4 +132,3 @@ export function selectDashboardService(serviceName: string | null) {
     });
   }
 }
-

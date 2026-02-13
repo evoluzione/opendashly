@@ -14,6 +14,12 @@
     let focusedIndex = -1;
     let inputRef: HTMLInputElement;
     let debounceTimer: ReturnType<typeof setTimeout>;
+    let latestRequestId = 0;
+
+    function normalizeOptions(payload: unknown): string[] {
+        if (!Array.isArray(payload)) return [];
+        return payload.filter((item): item is string => typeof item === "string");
+    }
 
     async function handleInput() {
         dispatch("input", value);
@@ -22,12 +28,21 @@
 
         if (debounceTimer) clearTimeout(debounceTimer);
         debounceTimer = setTimeout(async () => {
+            const requestId = ++latestRequestId;
             loading = true;
             try {
-                options = await fetchOptions(value);
+                const resolved = normalizeOptions(await fetchOptions(value));
+                if (requestId !== latestRequestId) return;
+                options = resolved;
+                dispatch("resolved", { query: value, options: resolved });
             } catch (e) {
+                if (requestId !== latestRequestId) return;
+                options = [];
+                dispatch("resolved", { query: value, options: [] });
             } finally {
-                loading = false;
+                if (requestId === latestRequestId) {
+                    loading = false;
+                }
             }
         }, 300);
     }
@@ -44,6 +59,13 @@
             if (event.key === "ArrowDown") {
                 showOptions = true;
                 handleInput();
+            }
+            return;
+        }
+
+        if (options.length === 0) {
+            if (event.key === "Escape" || event.key === "Enter") {
+                showOptions = false;
             }
             return;
         }
