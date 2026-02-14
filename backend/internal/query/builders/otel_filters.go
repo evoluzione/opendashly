@@ -188,6 +188,9 @@ func buildSingleClause(k, v, op string, serviceColumn, traceColumn, severityColu
 				return fmt.Sprintf("%s %s %s", severityColumn, sqlOp, sqlValue)
 			}
 		}
+	case "trace_error_scope":
+		// Handled by traces query builder using HAVING on aggregated errorCount.
+		return ""
 	default:
 		if len(attributeColumns) == 0 {
 			return ""

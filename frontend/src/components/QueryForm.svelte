@@ -42,6 +42,7 @@
     advancedFilters: FilterItem[];
     filterDurationOperator: string;
     filterDurationMs: string;
+    traceErrorScope: "all" | "with_errors" | "without_errors";
   }
 
   const defaultState: TabState = {
@@ -56,6 +57,7 @@
     advancedFilters: [],
     filterDurationOperator: ">",
     filterDurationMs: "",
+    traceErrorScope: "all",
   };
 
   let tabStates: Record<string, TabState> = persistedStates || {
@@ -77,6 +79,7 @@
   let advancedFilters: FilterItem[] = [];
   let filterDurationOperator = ">";
   let filterDurationMs = "";
+  let traceErrorScope: "all" | "with_errors" | "without_errors" = "all";
 
   // Track previous tab to save state before switching
   let previousTab = "";
@@ -110,6 +113,7 @@
       advancedFilters,
       filterDurationOperator,
       filterDurationMs,
+      traceErrorScope,
     };
   }
 
@@ -126,6 +130,7 @@
     advancedFilters = state.advancedFilters || [];
     filterDurationOperator = state.filterDurationOperator || ">";
     filterDurationMs = state.filterDurationMs || "";
+    traceErrorScope = state.traceErrorScope || "all";
   }
 
   let smartLoading = false;
@@ -628,6 +633,17 @@
       }
     }
 
+    if (activeTab === "tracce" && traceErrorScope !== "all") {
+      if (!finalFilterList.some((f) => f.key === "trace_error_scope")) {
+        finalFilterList.push({
+          connector: "AND",
+          key: "trace_error_scope",
+          operator: "=",
+          value: traceErrorScope,
+        });
+      }
+    }
+
     // Filter out incomplete filters
     finalFilterList = finalFilterList.filter((f) => f.key && f.value);
 
@@ -661,6 +677,7 @@
     filterSpanName = "";
     filterDurationOperator = ">";
     filterDurationMs = "";
+    traceErrorScope = "all";
     advancedFilters = [];
   }
 </script>
@@ -847,6 +864,32 @@
               bind:value={filterDurationMs}
               on:keydown={handleManualEnter}
             />
+          </div>
+        </div>
+        <div class="filter-field">
+          <label>Errori Traccia</label>
+          <div class="trace-error-scope" role="group" aria-label="Filtro errori traccia">
+            <button
+              type="button"
+              class:active={traceErrorScope === "all"}
+              on:click={() => (traceErrorScope = "all")}
+            >
+              Tutte
+            </button>
+            <button
+              type="button"
+              class:active={traceErrorScope === "with_errors"}
+              on:click={() => (traceErrorScope = "with_errors")}
+            >
+              Con errori
+            </button>
+            <button
+              type="button"
+              class:active={traceErrorScope === "without_errors"}
+              on:click={() => (traceErrorScope = "without_errors")}
+            >
+              Senza errori
+            </button>
           </div>
         </div>
         {#if filterTraceId}
@@ -1091,6 +1134,39 @@
     transition: all 0.2s ease;
   }
 
+  .trace-error-scope {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    background: #f1f5f9;
+    border: 1px solid #e2e8f0;
+    border-radius: 10px;
+    padding: 4px;
+    gap: 4px;
+  }
+
+  .trace-error-scope button {
+    border: none;
+    background: transparent;
+    color: #475569;
+    border-radius: 8px;
+    font-size: 12px;
+    font-weight: 600;
+    padding: 8px 10px;
+    cursor: pointer;
+    transition: all 0.15s ease;
+  }
+
+  .trace-error-scope button:hover {
+    background: #e2e8f0;
+    color: #334155;
+  }
+
+  .trace-error-scope button.active {
+    background: white;
+    color: #0f172a;
+    box-shadow: 0 2px 8px rgba(15, 23, 42, 0.12);
+  }
+
   .quick-range-buttons button:hover {
     border-color: #6366f1;
     color: #6366f1;
@@ -1144,7 +1220,8 @@
   }
 
   input,
-  textarea {
+  textarea,
+  select {
     width: 100%;
     padding: 12px 14px;
     font-size: 13px;

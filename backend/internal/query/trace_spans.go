@@ -29,8 +29,17 @@ type TraceSpanEntry struct {
 	EndTime      time.Time         `json:"endTime"`
 	Duration     int64             `json:"duration"`
 	Status       string            `json:"status,omitempty"`
+	StatusMessage string           `json:"statusMessage,omitempty"`
 	SpanKind     *int              `json:"spanKind,omitempty"`
 	Attributes   map[string]string `json:"attributes,omitempty"`
+	Events       []TraceSpanEvent  `json:"events,omitempty"`
+}
+
+// TraceSpanEvent represents a single span event.
+type TraceSpanEvent struct {
+	Name       string            `json:"name"`
+	Timestamp  time.Time         `json:"timestamp"`
+	Attributes map[string]string `json:"attributes,omitempty"`
 }
 
 // Spans returns spans for a trace.
@@ -44,7 +53,7 @@ func (s *TraceSpansService) Spans(ctx context.Context, traceID string) ([]TraceS
 
 func buildTraceSpansQuery(traceID string) string {
 	escapedTraceID := builders.EscapeTraceID(traceID)
-	return "SELECT TraceId AS traceId, SpanId AS spanId, ParentSpanId AS parentSpanId, SpanName AS name, ServiceName AS serviceName, ServiceName AS source, Timestamp AS startTime, Duration AS duration, toString(ifNull(StatusCode, 0)) AS status, toInt32OrNull(SpanKind) AS spanKind, CAST(SpanAttributes, 'Map(String, String)') AS attributes FROM telemetry.otel_traces WHERE TraceId = '" + escapedTraceID + "' ORDER BY Timestamp ASC"
+	return "SELECT TraceId AS traceId, SpanId AS spanId, ParentSpanId AS parentSpanId, SpanName AS name, ServiceName AS serviceName, ServiceName AS source, Timestamp AS startTime, Duration AS duration, toString(ifNull(StatusCode, 0)) AS status, StatusMessage AS statusMessage, toInt32OrNull(SpanKind) AS spanKind, CAST(SpanAttributes, 'Map(String, String)') AS attributes, `Events.Timestamp` AS eventTimestamps, `Events.Name` AS eventNames, CAST(`Events.Attributes`, 'Array(Map(String, String))') AS eventAttributes FROM telemetry.otel_traces WHERE TraceId = '" + escapedTraceID + "' ORDER BY Timestamp ASC"
 }
 
 func fetchTraceSpans(ctx context.Context, conn driver.Conn, query string) ([]TraceSpanEntry, error) {
@@ -58,20 +67,28 @@ func fetchTraceSpans(ctx context.Context, conn driver.Conn, query string) ([]Tra
 		var row TraceSpanEntry
 		var duration int64
 		var statusValue string
+		var statusMessage sql.NullString
 		var spanKindValue sql.NullInt32
-		if err := rows.Scan(&row.TraceID, &row.SpanID, &row.ParentSpanID, &row.Name, &row.Service, &row.Source, &row.StartTime, &duration, &statusValue, &spanKindValue, &row.Attributes); err != nil {
+		var eventTimestamps []time.Time
+		var eventNames []string
+		var eventAttributes []map[string]string
+		if err := rows.Scan(&row.TraceID, &row.SpanID, &row.ParentSpanID, &row.Name, &row.Service, &row.Source, &row.StartTime, &duration, &statusValue, &statusMessage, &spanKindValue, &row.Attributes, &eventTimestamps, &eventNames, &eventAttributes); err != nil {
 			return nil, fmt.Errorf("scan trace spans: %w", err)
 		}
 		if duration < 0 {
 			duration = 0
 		}
 		row.Status = normalizeStatus(statusValue)
+		if statusMessage.Valid {
+			row.StatusMessage = statusMessage.String
+		}
 		if spanKindValue.Valid {
 			value := int(spanKindValue.Int32)
 			row.SpanKind = &value
 		} else {
 			row.SpanKind = nil
 		}
+		row.Events = zipSpanEvents(eventTimestamps, eventNames, eventAttributes)
 		row.Duration = duration
 		row.EndTime = row.StartTime.Add(time.Duration(duration))
 		results = append(results, row)
@@ -80,6 +97,35 @@ func fetchTraceSpans(ctx context.Context, conn driver.Conn, query string) ([]Tra
 		return nil, fmt.Errorf("iterate trace spans: %w", err)
 	}
 	return results, nil
+}
+
+func zipSpanEvents(timestamps []time.Time, names []string, attributes []map[string]string) []TraceSpanEvent {
+	maxLen := len(timestamps)
+	if len(names) > maxLen {
+		maxLen = len(names)
+	}
+	if len(attributes) > maxLen {
+		maxLen = len(attributes)
+	}
+	if maxLen == 0 {
+		return nil
+	}
+
+	events := make([]TraceSpanEvent, 0, maxLen)
+	for i := 0; i < maxLen; i++ {
+		event := TraceSpanEvent{}
+		if i < len(names) {
+			event.Name = names[i]
+		}
+		if i < len(timestamps) {
+			event.Timestamp = timestamps[i]
+		}
+		if i < len(attributes) {
+			event.Attributes = attributes[i]
+		}
+		events = append(events, event)
+	}
+	return events
 }
 
 func normalizeStatus(value any) string {

@@ -336,10 +336,10 @@
         </div>
 
         <div class="details-panel">
-          <div class:hidden={activeTab !== "spans"}>
+          <div class:hidden={activeTab !== "spans"} class="spans-pane">
             <TraceSpanTimeline traceId={selectedTrace.traceId} />
           </div>
-          <div class:hidden={activeTab !== "logs"}>
+          <div class:hidden={activeTab !== "logs"} class="logs-pane">
             <CorrelationPanel traceId={selectedTrace.traceId} />
           </div>
         </div>
@@ -662,10 +662,14 @@
     flex-direction: column;
   }
 
-  .details-panel :global(.panel) {
+  .details-panel .spans-pane :global(.panel) {
     padding: 0;
     border: none;
     box-shadow: none;
+    height: 100%;
+  }
+
+  .details-panel .logs-pane :global(.panel) {
     height: 100%;
   }
 

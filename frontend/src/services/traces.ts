@@ -16,7 +16,15 @@ export type TraceSpan = {
   endTime: string;
   duration: number;
   status?: string;
+  statusMessage?: string;
   spanKind?: number | string;
+  attributes?: Record<string, string>;
+  events?: Array<{
+    name?: string;
+    time?: string;
+    timestamp?: string;
+    attributes?: Record<string, string>;
+  }>;
 };
 
 export function fetchRelated(traceId: string): Promise<RelatedTelemetry> {

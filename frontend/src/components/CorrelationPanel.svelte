@@ -45,12 +45,11 @@
   .panel {
     display: flex;
     flex-direction: column;
-    gap: 20px;
-    background: white;
-    border-radius: 16px;
-    padding: 24px;
-    border: 1px solid rgba(148, 163, 184, 0.3);
-    box-shadow: 0 1px 3px rgba(15, 23, 42, 0.08);
+    gap: 12px;
+    background: #f8fafc;
+    border-radius: 12px;
+    padding: 12px;
+    border: 1px solid rgba(148, 163, 184, 0.2);
   }
 
   header {
@@ -60,15 +59,17 @@
   }
 
   h3 {
-    margin: 0 0 6px 0;
-    font-size: 20px;
-    color: #0f172a;
+    margin: 0 0 4px 0;
+    font-size: 14px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: #64748b;
   }
 
   p {
     margin: 0;
-    color: #64748b;
-    font-size: 13px;
+    color: #94a3b8;
+    font-size: 12px;
   }
 
   .grid {
@@ -79,15 +80,16 @@
   .block {
     display: flex;
     flex-direction: column;
-    gap: 12px;
+    gap: 10px;
   }
 
   .block h4 {
     margin: 0;
-    font-size: 14px;
+    font-size: 11px;
     text-transform: uppercase;
     letter-spacing: 0.08em;
-    color: #64748b;
+    color: #94a3b8;
+    font-weight: 600;
   }
 
   .error {
