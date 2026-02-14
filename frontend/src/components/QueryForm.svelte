@@ -3,8 +3,7 @@
 </script>
 
 <script lang="ts">
-  import { createEventDispatcher, onMount } from "svelte";
-  import ConfirmModal from "./common/ConfirmModal.svelte";
+  import { createEventDispatcher, onDestroy, onMount } from "svelte";
   import { page } from "$app/stores";
   import { goto } from "$app/navigation";
   import {
@@ -136,19 +135,21 @@
   let smartLoading = false;
   let smartEnabled = false;
   let lastInitialTraceId = "";
-  let confirmOpen = false;
-  let confirmMessage = "";
-  let confirmAction: "remove-trace" | "clear-dates" | null = null;
   let suppressUrlSync = true;
 
   // Manual filter fields
-  let filterTraceId = "";
-  let filterSpanName = "";
+  let traceSearch = "";
+  let traceSearchExact = false;
 
   // Separate SQL field
   let generatedSql = "";
 
   let showFilterModal = false;
+  const INPUT_IDLE_AUTOSUBMIT_MS = 700;
+  let autoSubmitTimer: ReturnType<typeof setTimeout> | null = null;
+  let autoSubmitReady = false;
+  let lastManualAutoSubmitKey = "";
+  let lastSmartAutoSubmitKey = "";
 
   function openFilters() {
     showFilterModal = true;
@@ -160,14 +161,9 @@
 
   // Dirty tracking for conditional button enabling
   let promptDirty = true;
-  let sqlDirty = false;
 
   function handlePromptChange() {
     promptDirty = true;
-  }
-
-  function handleSqlChange() {
-    sqlDirty = true;
   }
 
   function handlePromptKeydown(event: KeyboardEvent) {
@@ -237,71 +233,22 @@
     }
   }
 
-  function setManualRange(minutes: number) {
-    const now = new Date();
-    const fromDate = new Date(now.getTime() - minutes * 60 * 1000);
-    fromInput = formatDateTimeLocal(fromDate);
-    toInput = formatDateTimeLocal(now);
-  }
-
   function applyTraceIdOverride(traceId: string) {
     if (!traceId) return;
     searchMode = "manual";
-    if (fromInput || toInput) {
-      fromInput = "";
-      toInput = "";
-    }
-    filterTraceId = traceId;
-    filterSpanName = "";
-    if (autoRun) {
-      submit();
-    }
-  }
-
-  function handleDateActivation() {
-    if (!filterTraceId) return;
-    confirmMessage = "Vuoi rimuovere il Trace ID per usare il range date?";
-    confirmAction = "remove-trace";
-    confirmOpen = true;
-  }
-
-  function handleTraceIdActivation() {
-    if (!fromInput && !toInput) return;
-    confirmMessage = "Vuoi svuotare il range date per usare il Trace ID?";
-    confirmAction = "clear-dates";
-    confirmOpen = true;
-  }
-
-  function confirmTraceIdRemoval() {
-    confirmOpen = false;
-    confirmAction = null;
-    filterTraceId = "";
-    filterSpanName = "";
-    if (!fromInput || !toInput) {
-      setManualRange(24 * 60);
-    }
-    clearTraceIdFromUrl();
-  }
-
-  function cancelConfirm() {
-    confirmOpen = false;
-    confirmAction = null;
-  }
-
-  function confirmDateRangeClear() {
-    confirmOpen = false;
-    confirmAction = null;
+    // In trace deep-link flow, clear restrictive filters to guarantee the trace lookup.
+    selectService("Tutti");
+    selectLogLevel("Tutti");
+    advancedFilters = [];
+    filterDurationOperator = ">";
+    filterDurationMs = "";
+    traceErrorScope = "all";
+    traceSearch = traceId;
+    traceSearchExact = true;
     fromInput = "";
     toInput = "";
-  }
-
-  function handleConfirm() {
-    if (confirmAction === "remove-trace") {
-      confirmTraceIdRemoval();
-      return;
-    }
-    if (confirmAction === "clear-dates") {
-      confirmDateRangeClear();
+    if (autoRun) {
+      submit();
     }
   }
 
@@ -355,9 +302,7 @@
 
     const traceParam = params.get("traceId");
     if (traceParam) {
-      filterTraceId = traceParam;
-      fromInput = "";
-      toInput = "";
+      applyTraceIdOverride(traceParam);
     }
 
     if (searchMode === "manual" && !traceParam) {
@@ -373,7 +318,6 @@
       if (promptParam) smartPrompt = promptParam;
       if (sqlParam) {
         generatedSql = sqlParam;
-        sqlDirty = true;
       }
     }
   }
@@ -404,8 +348,8 @@
     }
 
     if (searchMode === "manual") {
-      if (filterTraceId) {
-        params.set("traceId", filterTraceId);
+      if (traceSearch) {
+        params.set("traceId", traceSearch);
       } else {
         if (fromInput) params.set("from", fromInput);
         if (toInput) params.set("to", toInput);
@@ -432,7 +376,8 @@
     }
 
     if (initialTraceId) {
-      filterTraceId = initialTraceId;
+      traceSearch = initialTraceId;
+      traceSearchExact = true;
       lastInitialTraceId = initialTraceId;
       fromInput = "";
       toInput = "";
@@ -441,6 +386,7 @@
     // Caricamento differito per stabilità degli store e della navigazione
     setTimeout(() => {
       suppressUrlSync = false;
+      autoSubmitReady = true;
       if (searchMode === "auto" || autoRun) {
         submit();
       }
@@ -452,6 +398,22 @@
     } catch (e) {
     }
   });
+
+  onDestroy(() => {
+    if (autoSubmitTimer) {
+      clearTimeout(autoSubmitTimer);
+      autoSubmitTimer = null;
+    }
+  });
+
+  function queueAutoSubmit(delayMs = INPUT_IDLE_AUTOSUBMIT_MS) {
+    if (autoSubmitTimer) {
+      clearTimeout(autoSubmitTimer);
+    }
+    autoSubmitTimer = setTimeout(() => {
+      submit();
+    }, delayMs);
+  }
 
   $: if (initialTraceId && initialTraceId !== lastInitialTraceId) {
     lastInitialTraceId = initialTraceId;
@@ -481,8 +443,9 @@
     if (searchMode === nextMode) return;
     searchMode = nextMode;
     smartError = "";
-    if (nextMode !== "manual" && filterTraceId) {
-      filterTraceId = "";
+    if (nextMode !== "manual" && traceSearch) {
+      traceSearch = "";
+      traceSearchExact = false;
       clearTraceIdFromUrl();
     }
     if (searchMode === "auto") {
@@ -515,7 +478,7 @@
       generatedSql = response.sql;
       smartRequest = response.request;
       promptDirty = false;
-      sqlDirty = true; // Mark SQL as ready for execution
+      queueAutoSubmit(0);
     } catch (err) {
       smartError =
         err instanceof Error ? err.message : "Impossibile generare la query.";
@@ -535,15 +498,15 @@
 
     // Add manual filters
     const manualFilters: Record<string, string> = { ...serviceFilter };
-    if (selectedLogLevel && selectedLogLevel !== "Tutti") {
+    if (
+      activeTab === "logs" &&
+      selectedLogLevel &&
+      selectedLogLevel !== "Tutti"
+    ) {
       manualFilters["severity"] = selectedLogLevel;
     }
-    const hasTraceId = activeTab === "tracce" && !!filterTraceId;
-    if (hasTraceId) manualFilters["trace_id"] = filterTraceId;
-
-    if (activeTab === "tracce" && filterSpanName) {
-      manualFilters["span_name"] = filterSpanName;
-    }
+    const traceSearchTerm =
+      activeTab === "tracce" ? String(traceSearch || "").trim() : "";
 
     if (searchMode === "smart") {
       if (!generatedSql) {
@@ -566,7 +529,6 @@
         autoRefreshSeconds: null,
         autoRefreshRangeMinutes: null,
       });
-      sqlDirty = false;
       return;
     }
 
@@ -586,11 +548,9 @@
         to = toIso(toInput) || to;
       }
     } else {
-      if (!hasTraceId) {
-        if (fromInput && toInput) {
-          from = toIso(fromInput) || from;
-          to = toIso(toInput) || to;
-        }
+      if (!traceSearchExact && fromInput && toInput) {
+        from = toIso(fromInput) || from;
+        to = toIso(toInput) || to;
       }
     }
 
@@ -605,13 +565,10 @@
       // Only add if not already present to avoid duplicates
       // Note: This simple check prevents overriding advanced filters with same key
       if (!finalFilterList.some((f) => f.key === k)) {
-        let op = "=";
-        if (k === "span_name") op = "contains";
-
         finalFilterList.push({
           connector: "AND",
           key: k,
-          operator: op,
+          operator: "=",
           value: v,
         });
       }
@@ -644,6 +601,34 @@
       }
     }
 
+    if (activeTab === "tracce" && traceSearchTerm) {
+      if (traceSearchExact) {
+        if (
+          !finalFilterList.some(
+            (f) => f.key === "trace_id" && f.value === traceSearchTerm,
+          )
+        ) {
+          finalFilterList.push({
+            connector: "AND",
+            key: "trace_id",
+            operator: "=",
+            value: traceSearchTerm,
+          });
+        }
+      } else if (
+        !finalFilterList.some(
+          (f) => f.key === "trace_or_span" && f.value === traceSearchTerm,
+        )
+      ) {
+        finalFilterList.push({
+          connector: "AND",
+          key: "trace_or_span",
+          operator: "contains",
+          value: traceSearchTerm,
+        });
+      }
+    }
+
     // Filter out incomplete filters
     finalFilterList = finalFilterList.filter((f) => f.key && f.value);
 
@@ -661,20 +646,49 @@
     });
   }
 
-  $: if (searchMode === "manual" && filterTraceId && (fromInput || toInput)) {
-    fromInput = "";
-    toInput = "";
+  $: if (!traceSearch && $page.url.searchParams.get("traceId")) {
+    clearTraceIdFromUrl();
   }
 
-  $: if (!filterTraceId && $page.url.searchParams.get("traceId")) {
-    clearTraceIdFromUrl();
+  $: if (autoSubmitReady && searchMode === "manual") {
+    const manualAutoSubmitKey = JSON.stringify({
+      tab: activeTab,
+      service: $servicesState.selectedService,
+      level: $servicesState.selectedLogLevel,
+      fromInput,
+      toInput,
+      traceSearch,
+      traceSearchExact,
+      filterDurationOperator,
+      filterDurationMs,
+      traceErrorScope,
+      advancedFilters,
+    });
+    if (manualAutoSubmitKey !== lastManualAutoSubmitKey) {
+      lastManualAutoSubmitKey = manualAutoSubmitKey;
+      queueAutoSubmit();
+    }
+  }
+
+  $: if (autoSubmitReady && searchMode === "smart") {
+    const smartAutoSubmitKey = JSON.stringify({
+      tab: activeTab,
+      generatedSql,
+      smartRequest,
+    });
+    if (smartAutoSubmitKey !== lastSmartAutoSubmitKey) {
+      lastSmartAutoSubmitKey = smartAutoSubmitKey;
+      if (generatedSql) {
+        queueAutoSubmit();
+      }
+    }
   }
 
   function clearManualFilters() {
     fromInput = "";
     toInput = "";
-    filterTraceId = "";
-    filterSpanName = "";
+    traceSearch = "";
+    traceSearchExact = false;
     filterDurationOperator = ">";
     filterDurationMs = "";
     traceErrorScope = "all";
@@ -792,27 +806,21 @@
   {:else if searchMode === "manual"}
     <div class="manual-filters">
       <div class="date-row">
-        <div class="filter-field compact">
+        <div class="filter-field compact date-range-field">
           <label for="query-from">Da</label>
           <input
             id="query-from"
             type="datetime-local"
             bind:value={fromInput}
-            readonly={!!filterTraceId}
-            on:focus={handleDateActivation}
-            on:click={handleDateActivation}
             on:keydown={handleManualEnter}
           />
         </div>
-        <div class="filter-field compact">
+        <div class="filter-field compact date-range-field">
           <label for="query-to">A</label>
           <input
             id="query-to"
             type="datetime-local"
             bind:value={toInput}
-            readonly={!!filterTraceId}
-            on:focus={handleDateActivation}
-            on:click={handleDateActivation}
             on:keydown={handleManualEnter}
           />
         </div>
@@ -820,24 +828,15 @@
 
       {#if activeTab === "tracce"}
         <div class="filter-field">
-          <label for="filter-traceid">Trace ID</label>
+          <label for="filter-trace-search">Ricerca testuale</label>
           <input
-            id="filter-traceid"
+            id="filter-trace-search"
             type="text"
-            placeholder="abc123..."
-            bind:value={filterTraceId}
-            on:focus={handleTraceIdActivation}
-            on:click={handleTraceIdActivation}
-            on:keydown={handleManualEnter}
-          />
-        </div>
-        <div class="filter-field">
-          <label for="filter-spanname">Span Name</label>
-          <input
-            id="filter-spanname"
-            type="text"
-            placeholder="Cerca nome span..."
-            bind:value={filterSpanName}
+            placeholder="Cerca tramite trace id o nome span..."
+            bind:value={traceSearch}
+            on:input={() => {
+              traceSearchExact = false;
+            }}
             on:keydown={handleManualEnter}
           />
         </div>
@@ -892,11 +891,6 @@
             </button>
           </div>
         </div>
-        {#if filterTraceId}
-          <p class="helper">
-            Con Trace ID impostato, il range date viene ignorato.
-          </p>
-        {/if}
       {/if}
 
       {#if activeTab === "logs"}
@@ -995,46 +989,14 @@
             id="smart-sql"
             rows="5"
             bind:value={generatedSql}
-            on:input={handleSqlChange}
             class="sql-editor"
           ></textarea>
-          <p class="helper">Puoi modificare la query prima di eseguirla.</p>
+          <p class="helper">Le modifiche vengono applicate automaticamente.</p>
         </div>
       {/if}
     </div>
   {/if}
-
-  {#if searchMode !== "auto"}
-    <button
-      class="btn-execute"
-      on:click={submit}
-      disabled={searchMode === "smart" && (!generatedSql || !sqlDirty)}
-    >
-      <svg
-        width="16"
-        height="16"
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="currentColor"
-        stroke-width="2"
-      >
-        <polygon points="5 3 19 12 5 21 5 3" />
-      </svg>
-      Esegui Query
-    </button>
-    <div class="spacer"></div>
-  {/if}
 </div>
-
-<ConfirmModal
-  open={confirmOpen}
-  title="Rimuovere Trace ID?"
-  message={confirmMessage}
-  confirmLabel={confirmAction === "clear-dates" ? "Svuota range" : "Rimuovi"}
-  cancelLabel="Annulla"
-  on:confirm={handleConfirm}
-  on:cancel={cancelConfirm}
-/>
 
 <style>
   .query-form {
@@ -1309,35 +1271,6 @@
     color: #64748b;
   }
 
-  .btn-execute {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    gap: 8px;
-    margin-top: 8px;
-    padding: 14px 20px;
-    font-size: 14px;
-    font-weight: 600;
-    border: none;
-    border-radius: 10px;
-    background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
-    color: white;
-    cursor: pointer;
-    transition: all 0.2s ease;
-    box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3);
-  }
-
-  .btn-execute:hover:not([disabled]) {
-    transform: translateY(-1px);
-    box-shadow: 0 6px 16px rgba(99, 102, 241, 0.4);
-  }
-
-  .btn-execute[disabled] {
-    opacity: 0.5;
-    cursor: not-allowed;
-    transform: none;
-  }
-
   .query-form > button {
     margin-top: 8px;
     padding: 14px 20px;
@@ -1364,9 +1297,40 @@
   }
 
   .date-row {
-    display: flex;
-    gap: 12px;
-    flex-wrap: wrap;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+    align-items: end;
+    width: 100%;
+  }
+
+  .date-row .date-range-field {
+    min-width: 0;
+  }
+
+  .date-row .date-range-field label {
+    margin-bottom: 2px;
+    font-size: 12px;
+  }
+
+  .date-row .date-range-field input[type="datetime-local"] {
+    height: 38px;
+    width: 100%;
+    padding: 6px 6px;
+    font-size: 10.5px;
+    font-variant-numeric: tabular-nums;
+    min-width: 0;
+    box-sizing: border-box;
+  }
+
+  .date-row .date-range-field input[type="datetime-local"]::-webkit-datetime-edit {
+    padding: 0;
+  }
+
+  @media (max-width: 760px) {
+    .date-row {
+      grid-template-columns: 1fr;
+    }
   }
 
   .filter-field.compact {
@@ -1458,29 +1422,6 @@
 
   .btn-primary:active {
     transform: translateY(0);
-  }
-
-  .btn-execute {
-    position: fixed;
-    bottom: 20px;
-    right: 24px;
-    width: 272px; /* 320px panel - 48px padding */
-    z-index: 90; /* Lower than Modal (100) */
-    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
-    margin: 0;
-  }
-
-  .spacer {
-    height: 80px;
-    flex-shrink: 0;
-  }
-
-  @media (max-width: 1200px) {
-    .btn-execute {
-      width: auto;
-      right: 20px;
-      left: 20px; /* Full width minus margins on mobile/tablet */
-    }
   }
 
   .actions-row {

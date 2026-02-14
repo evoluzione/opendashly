@@ -12,13 +12,18 @@
   // Form fields
   let enabled = false;
   let apiKey = '';
-  let model = 'gpt-3.5-turbo';
+  let model = 'gpt-4o-mini';
   let provider = 'openai';
 
   const models = [
-    { value: 'gpt-3.5-turbo', label: 'GPT-3.5 Turbo' },
-    { value: 'gpt-4', label: 'GPT-4' },
-    { value: 'gpt-4o', label: 'GPT-4o' }
+    { value: 'gpt-4.1', label: 'GPT-4.1 (Latest, Most Capable)', recommended: true },
+    { value: 'gpt-4.1-mini', label: 'GPT-4.1 Mini (Fast & Cheap)' },
+    { value: 'gpt-4.1-nano', label: 'GPT-4.1 Nano (Fastest)' },
+    { value: 'gpt-4o', label: 'GPT-4o (Multimodal)' },
+    { value: 'gpt-4o-mini', label: 'GPT-4o Mini (Good Balance)' },
+    { value: 'o3-mini', label: 'o3-mini (Reasoning)' },
+    { value: 'o1', label: 'o1 (Advanced Reasoning)' },
+    { value: 'o1-mini', label: 'o1-mini (Fast Reasoning)' }
   ];
 
   onMount(async () => {
@@ -26,9 +31,9 @@
       settings = await getAISettings();
       if (settings) {
         enabled = settings.enabled;
-        model = settings.model || 'gpt-3.5-turbo';
+        model = settings.model || 'gpt-4o-mini';
         provider = settings.provider || 'openai';
-        apiKey = settings.apiKey || ''; // usually masked
+        apiKey = '';
       }
     } catch (err) {
       error = 'Impossibile caricare le impostazioni AI.';
@@ -46,10 +51,10 @@
         enabled,
         provider,
         model,
-        apiKey
+        apiKey: apiKey.trim()
       });
       settings = updated;
-      apiKey = updated.apiKey || '';
+      apiKey = '';
       successMessage = 'Impostazioni salvate con successo.';
     } catch (err) {
       error = 'Errore durante il salvataggio.';
@@ -104,7 +109,7 @@
             placeholder={settings?.apiKey ? '******' : 'sk-...'} 
         />
         <p class="helper">
-            {#if settings?.apiKey && apiKey === settings.apiKey}
+            {#if settings?.apiKey && apiKey.trim() === ''}
                 Chiave salvata (mascherata). Modifica per aggiornare.
             {:else}
                 Inserisci la tua chiave API di OpenAI.
@@ -221,22 +226,27 @@
   }
 
   button {
-    background: #0f172a;
-    color: white;
+    width: fit-content;
+    height: fit-content;
     padding: 12px 24px;
-    border-radius: 8px;
-    font-weight: 600;
+    align-self: flex-end;
+    justify-self: end;
+    border-radius: 10px;
     border: none;
+    background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+    color: #fff;
     cursor: pointer;
-    transition: all 0.2s;
+    font-weight: 600;
+    transition: all 0.2s ease;
+    box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3);
   }
-
   button:hover:not(:disabled) {
-    background: #334155;
+    transform: translateY(-1px);
+    box-shadow: 0 6px 16px rgba(99, 102, 241, 0.4);
+    background: linear-gradient(135deg, #6366f1 0%, #7c3aed 100%);
   }
-
   button:disabled {
-    opacity: 0.7;
+    opacity: 0.6;
     cursor: not-allowed;
   }
 

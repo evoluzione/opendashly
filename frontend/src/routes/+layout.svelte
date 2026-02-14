@@ -3,7 +3,8 @@
   import { page } from '$app/stores';
   import { get } from 'svelte/store';
   import { goto } from '$app/navigation';
-  import { authState, loadSession, logoutUser } from '../lib/stores/auth';
+  import { authState, loadSession } from '../lib/stores/auth';
+  import AIAssistantWidget from '../components/AIAssistantWidget.svelte';
 
   export let params: Record<string, string> = {};
 
@@ -51,6 +52,9 @@
     <main class:unauth={!$authState.user}>
       <slot />
     </main>
+    {#if $authState.user && !isPublicRoute}
+      <AIAssistantWidget />
+    {/if}
   </div>
 {/if}
 

@@ -55,12 +55,23 @@ func NewRouter(cfg RouterConfig) http.Handler {
 	statusHandler := &handlers.StatusHandler{Service: cfg.StatusService}
 	savedHandler := &handlers.SavedQueriesHandler{Repo: cfg.SavedRepo, Runner: cfg.QueryService}
 	smartQuery := &handlers.SmartQueryHandler{AIService: cfg.AIService}
+	aiAvailability := &handlers.AIAvailabilityHandler{Service: cfg.AIService}
+	aiAssistantChat := &handlers.AIAssistantChatHandler{
+		AIService:    cfg.AIService,
+		QueryService: cfg.QueryService,
+	}
+	aiAssistantSession := &handlers.AIAssistantSessionHandler{AIService: cfg.AIService}
 	dashboardHandler := &handlers.DashboardHandler{Service: cfg.DashboardService}
 	aiHandler := &handlers.AISettingsHandler{Service: cfg.AIService}
 	dashboardSettingsHandler := &handlers.DashboardSettingsHandler{Service: cfg.DashboardSettings}
 
 	r.Post("/api/query/run", queryHandler.ServeHTTP)
 	r.Post("/api/query/smart", smartQuery.ServeHTTP)
+	r.Get("/api/ai/availability", aiAvailability.Get)
+	r.Post("/api/ai/assistant/chat", aiAssistantChat.ServeHTTP)
+	r.Get("/api/ai/assistant/session", aiAssistantSession.Get)
+	r.Put("/api/ai/assistant/session", aiAssistantSession.Put)
+	r.Delete("/api/ai/assistant/session", aiAssistantSession.Delete)
 	// New attributes endpoint
 	attributesHandler := &handlers.AttributesHandler{Service: cfg.QueryService}
 	r.Get("/api/query/attributes", attributesHandler.ServeHTTP)

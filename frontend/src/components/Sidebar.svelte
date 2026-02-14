@@ -642,6 +642,16 @@
     color: #e2e8f0;
   }
 
+  .nav-link.selected {
+    background: linear-gradient(
+      135deg,
+      rgba(99, 102, 241, 0.2) 0%,
+      rgba(139, 92, 246, 0.2) 100%
+    );
+    color: #a5b4fc;
+    box-shadow: inset 0 0 0 1px rgba(99, 102, 241, 0.3);
+  }
+
   @keyframes pulse {
     0%,
     100% {
