@@ -131,6 +131,11 @@ func buildSingleClause(k, v, op string, serviceColumn, traceColumn, severityColu
 			}
 			return fmt.Sprintf("SpanName %s %s", sqlOp, sqlValue)
 		}
+	case "trace_or_span":
+		// Unified trace search: match TraceId exactly OR SpanName by substring.
+		if traceColumn != "" && severityColumn == "" {
+			return fmt.Sprintf("(%s = '%s' OR SpanName ILIKE '%%%s%%')", traceColumn, escapedValue, escapedValue)
+		}
 	case "duration_ms":
 		// Trace duration is stored in nanoseconds as Duration.
 		// Expose a manual filter in milliseconds for UX.
