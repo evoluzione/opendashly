@@ -21,6 +21,20 @@ import (
 type Service struct {
 	Storage *storage.Client
 	Debug   bool
+
+	cacheMu          sync.RWMutex
+	servicesCache    cachedStringSlice
+	attributesCache  map[string]cachedStringSlice
+}
+
+const (
+	servicesCacheTTL   = 30 * time.Second
+	attributesCacheTTL = 60 * time.Second
+)
+
+type cachedStringSlice struct {
+	values    []string
+	expiresAt time.Time
 }
 
 // Run executes an ad-hoc query and returns results.
@@ -427,6 +441,67 @@ func decodeCursor(encoded string, dest any) error {
 	return json.Unmarshal(raw, dest)
 }
 
+func (s *Service) getServicesFromCache() ([]string, bool) {
+	now := time.Now()
+	s.cacheMu.RLock()
+	entry := s.servicesCache
+	s.cacheMu.RUnlock()
+	if now.After(entry.expiresAt) || len(entry.values) == 0 {
+		return nil, false
+	}
+	return cloneStringSlice(entry.values), true
+}
+
+func (s *Service) setServicesCache(values []string) {
+	s.cacheMu.Lock()
+	s.servicesCache = cachedStringSlice{
+		values:    cloneStringSlice(values),
+		expiresAt: time.Now().Add(servicesCacheTTL),
+	}
+	s.cacheMu.Unlock()
+}
+
+func (s *Service) getAttributesFromCache(search string) ([]string, bool) {
+	cacheKey := normalizeCacheKey(search)
+	now := time.Now()
+
+	s.cacheMu.RLock()
+	entry, ok := s.attributesCache[cacheKey]
+	s.cacheMu.RUnlock()
+	if !ok || now.After(entry.expiresAt) {
+		return nil, false
+	}
+	return cloneStringSlice(entry.values), true
+}
+
+func (s *Service) setAttributesCache(search string, values []string) {
+	cacheKey := normalizeCacheKey(search)
+	entry := cachedStringSlice{
+		values:    cloneStringSlice(values),
+		expiresAt: time.Now().Add(attributesCacheTTL),
+	}
+
+	s.cacheMu.Lock()
+	if s.attributesCache == nil {
+		s.attributesCache = make(map[string]cachedStringSlice)
+	}
+	s.attributesCache[cacheKey] = entry
+	s.cacheMu.Unlock()
+}
+
+func normalizeCacheKey(value string) string {
+	return strings.ToLower(strings.TrimSpace(value))
+}
+
+func cloneStringSlice(values []string) []string {
+	if len(values) == 0 {
+		return []string{}
+	}
+	out := make([]string, len(values))
+	copy(out, values)
+	return out
+}
+
 func buildMetricSeries(rows []metricRow) []MetricSeries {
 	if len(rows) == 0 {
 		return []MetricSeries{}
@@ -462,6 +537,9 @@ func buildMetricSeries(rows []metricRow) []MetricSeries {
 func (s *Service) GetLogAttributeKeys(ctx context.Context, search string) ([]string, error) {
 	if s.Storage == nil {
 		return []string{}, nil
+	}
+	if keys, ok := s.getAttributesFromCache(search); ok {
+		return keys, nil
 	}
 
 	// Keep this query fast for autocomplete:
@@ -510,6 +588,7 @@ func (s *Service) GetLogAttributeKeys(ctx context.Context, search string) ([]str
 		return nil, err
 	}
 	if len(keys) > 0 {
+		s.setAttributesCache(search, keys)
 		return keys, nil
 	}
 
@@ -531,5 +610,6 @@ func (s *Service) GetLogAttributeKeys(ctx context.Context, search string) ([]str
 			filtered = append(filtered, key)
 		}
 	}
+	s.setAttributesCache(search, filtered)
 	return filtered, nil
 }
