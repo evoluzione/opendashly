@@ -15,6 +15,8 @@ type QueryRequest struct {
 	TimeRange  TimeRange             `json:"timeRange"`
 	Filters    map[string]string     `json:"filters"` // Deprecated: use FilterList
 	FilterList []builders.FilterItem `json:"filterList"`
+	LogsCursor string                `json:"logsCursor,omitempty"`
+	TracesCursor string              `json:"tracesCursor,omitempty"`
 	Page       int                   `json:"page"`
 	Limit      int                   `json:"limit"`
 	OrderBy    string                `json:"orderBy"`
@@ -64,6 +66,8 @@ type Pagination struct {
 	Limit      int `json:"limit"`
 	Total      int `json:"total"`
 	TotalPages int `json:"totalPages"`
+	HasNext    bool `json:"hasNext"`
+	NextCursor string `json:"nextCursor,omitempty"`
 }
 
 // PaginationSet groups paging metadata per signal.

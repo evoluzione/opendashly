@@ -3,7 +3,7 @@
   import { goto } from "$app/navigation";
 
   export let logs: any[] = [];
-  export let pagination: { page: number; totalPages: number } | null = null;
+  export let pagination: { page: number; hasNext: boolean } | null = null;
   export let isLiveUpdate = false;
 
   const dispatch = createEventDispatcher();
@@ -317,14 +317,12 @@
           <polyline points="15 18 9 12 15 6"></polyline>
         </svg>
       </button>
-      <span>Pagina {pagination.page} di {pagination.totalPages || 1}</span>
+      <span>Pagina {pagination.page}</span>
       <button
         type="button"
         class="pager-btn"
         on:click={() => changePage(pagination.page + 1)}
-        disabled={pagination.totalPages > 0
-          ? pagination.page >= pagination.totalPages
-          : logs.length === 0}
+        disabled={!pagination.hasNext}
         title="Pagina successiva"
       >
         <svg
@@ -338,29 +336,6 @@
           stroke-linejoin="round"
         >
           <polyline points="9 18 15 12 9 6"></polyline>
-        </svg>
-      </button>
-      <button
-        type="button"
-        class="pager-btn"
-        on:click={() => changePage(pagination.totalPages || 1)}
-        disabled={pagination.totalPages > 0
-          ? pagination.page >= pagination.totalPages
-          : logs.length === 0}
-        title="Ultima pagina"
-      >
-        <svg
-          width="16"
-          height="16"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          stroke-width="2"
-          stroke-linecap="round"
-          stroke-linejoin="round"
-        >
-          <polyline points="13 17 18 12 13 7"></polyline>
-          <polyline points="6 17 11 12 6 7"></polyline>
         </svg>
       </button>
     </div>

@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onMount } from "svelte";
+  import { get } from "svelte/store";
   import { page } from "$app/stores";
   import { goto } from "$app/navigation";
   import Sidebar from "../components/Sidebar.svelte";
@@ -126,16 +127,25 @@
     if (!dashboardToInput) dashboardToInput = formatDateTimeLocal(now);
   }
 
-  function handleRun(event: CustomEvent) {
-    const { request, autoRefreshSeconds } = event.detail;
-    lastRequest = request;
-    void executeQuery(request);
-    setAutoRefresh(autoRefreshSeconds);
-  }
-
   let lastRequest: any = null;
+  const logsCursorByPage = new Map<number, string>();
+  const tracesCursorByPage = new Map<number, string>();
   let pageSize = "100";
   const pageSizeOptions = ["25", "50", "100", "200"];
+
+  function handleRun(event: CustomEvent) {
+    const { request, autoRefreshSeconds } = event.detail;
+    logsCursorByPage.clear();
+    tracesCursorByPage.clear();
+    lastRequest = {
+      ...request,
+      page: 1,
+      logsCursor: undefined,
+      tracesCursor: undefined,
+    };
+    void executeQuery(lastRequest).then(() => storeNextCursors(1));
+    setAutoRefresh(autoRefreshSeconds);
+  }
 
   async function handlePageChange(
     signal: "logs" | "traces" | "metrics",
@@ -143,17 +153,53 @@
   ) {
     if (!lastRequest) return;
     const page = nextPage < 1 ? 1 : nextPage;
-    const updated = { ...lastRequest, page };
+    const updated = {
+      ...lastRequest,
+      signals: [signal],
+      page,
+      logsCursor:
+        signal === "logs" && page > 1 ? logsCursorByPage.get(page) : undefined,
+      tracesCursor:
+        signal === "traces" && page > 1
+          ? tracesCursorByPage.get(page)
+          : undefined,
+    };
     lastRequest = updated;
     await executeQuery(updated, { retainResult: true });
+    storeNextCursors(page);
   }
 
   async function handlePageSizeChange() {
     if (!lastRequest) return;
     const limit = Number(pageSize) || 100;
-    const updated = { ...lastRequest, limit, page: 1 };
+    logsCursorByPage.clear();
+    tracesCursorByPage.clear();
+    const updated = {
+      ...lastRequest,
+      signals: ["logs", "traces", "metrics"],
+      limit,
+      page: 1,
+      logsCursor: undefined,
+      tracesCursor: undefined,
+    };
     lastRequest = updated;
     await executeQuery(updated, { retainResult: true });
+    storeNextCursors(1);
+  }
+
+  function storeNextCursors(page: number) {
+    const pagination = get(queryState).result?.pagination;
+    if (!pagination) return;
+    if (pagination.logs?.hasNext && pagination.logs.nextCursor) {
+      logsCursorByPage.set(page + 1, pagination.logs.nextCursor);
+    } else {
+      logsCursorByPage.delete(page + 1);
+    }
+    if (pagination.traces?.hasNext && pagination.traces.nextCursor) {
+      tracesCursorByPage.set(page + 1, pagination.traces.nextCursor);
+    } else {
+      tracesCursorByPage.delete(page + 1);
+    }
   }
 
   function handleTabSelect(tab: "logs" | "metriche" | "tracce") {

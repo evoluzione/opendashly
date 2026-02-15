@@ -2,11 +2,13 @@ package query
 
 import (
 	"context"
+	"encoding/base64"
+	"encoding/json"
 	"fmt"
 	"log"
-	"math"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	"opendashly/backend/internal/query/builders"
@@ -32,6 +34,7 @@ func (s *Service) Run(ctx context.Context, req QueryRequest) (*QueryRunResult, e
 		limit = 100
 	}
 	offset := (page - 1) * limit
+	readLimit := limit + 1
 
 	if s.Debug {
 		log.Printf("query.service.run start: page=%d limit=%d offset=%d filters=%d", page, limit, offset, len(req.Filters))
@@ -41,14 +44,19 @@ func (s *Service) Run(ctx context.Context, req QueryRequest) (*QueryRunResult, e
 		return emptyResult(page, limit), nil
 	}
 
-	signals := requestedSignals(req.Signals)
-	logsQuery := builders.BuildLogsQuery(req.Filters, req.FilterList, req.TimeRange.From, req.TimeRange.To, limit, offset)
-	tracesQuery := builders.BuildTracesQuery(req.Filters, req.FilterList, req.TimeRange.From, req.TimeRange.To, limit, offset)
-	metricsQuery := builders.BuildMetricsQuery(req.Filters, req.FilterList, req.TimeRange.From, req.TimeRange.To, limit, offset)
+	logsCursor, err := decodeLogsCursor(req.LogsCursor)
+	if err != nil {
+		return nil, fmt.Errorf("decode logs cursor: %w", err)
+	}
+	tracesCursor, err := decodeTracesCursor(req.TracesCursor)
+	if err != nil {
+		return nil, fmt.Errorf("decode traces cursor: %w", err)
+	}
 
-	logsCountQuery := builders.BuildLogsCountQuery(req.Filters, req.FilterList, req.TimeRange.From, req.TimeRange.To)
-	tracesCountQuery := builders.BuildTracesCountQuery(req.Filters, req.FilterList, req.TimeRange.From, req.TimeRange.To)
-	metricsCountQuery := builders.BuildMetricsCountQuery(req.Filters, req.FilterList, req.TimeRange.From, req.TimeRange.To)
+	signals := requestedSignals(req.Signals)
+	logsQuery := builders.BuildLogsQuery(req.Filters, req.FilterList, req.TimeRange.From, req.TimeRange.To, readLimit, offset, logsCursor)
+	tracesQuery := builders.BuildTracesQuery(req.Filters, req.FilterList, req.TimeRange.From, req.TimeRange.To, readLimit, offset, tracesCursor)
+	metricsQuery := builders.BuildMetricsQuery(req.Filters, req.FilterList, req.TimeRange.From, req.TimeRange.To, readLimit, offset)
 	if s.Debug {
 		log.Printf("DEBUG: executing logsQuery: %s", logsQuery)
 		log.Printf("query.service.run built queries: logs=%q traces=%q metrics=%q", logsQuery, tracesQuery, metricsQuery)
@@ -58,49 +66,109 @@ func (s *Service) Run(ctx context.Context, req QueryRequest) (*QueryRunResult, e
 	var traces []TraceEntry
 	var metrics []MetricSeries
 
-	var logsTotal, tracesTotal, metricsTotal uint64
-	var err error
+	var logsHasNext, tracesHasNext, metricsHasNext bool
+	var logsNextCursor, tracesNextCursor string
+
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+
+	var wg sync.WaitGroup
+	var mu sync.Mutex
+	var firstErr error
+
+	setError := func(err error) {
+		if err == nil {
+			return
+		}
+		mu.Lock()
+		if firstErr == nil {
+			firstErr = err
+			cancel()
+		}
+		mu.Unlock()
+	}
+
 	if signals["logs"] {
-		logs, err = fetchLogs(ctx, s.Storage.Conn, logsQuery)
-		if err != nil {
-			return nil, err
-		}
-		logsTotal, err = fetchCount(ctx, s.Storage.Conn, logsCountQuery)
-		if err != nil {
-			// Log error but don't fail entire request? Or fail?
-			// Let's fail for now to be safe, or just use len(logs) if count fails (fallback).
-			// Robustness: fallback to len(logs) if count query fails, but let's assume it works.
-			return nil, err
-		}
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			signalLogs, err := fetchLogs(ctx, s.Storage.Conn, logsQuery)
+			if err != nil {
+				setError(err)
+				return
+			}
+			signalLogs, signalLogsHasNext := trimToPage(signalLogs, limit)
+			signalLogsNextCursor := ""
+			if signalLogsHasNext {
+				signalLogsNextCursor, err = encodeLogsCursor(signalLogs[len(signalLogs)-1])
+				if err != nil {
+					setError(err)
+					return
+				}
+			}
+
+			mu.Lock()
+			logs = signalLogs
+			logsHasNext = signalLogsHasNext
+			logsNextCursor = signalLogsNextCursor
+			mu.Unlock()
+		}()
 	}
 	if signals["traces"] {
-		traces, err = fetchTraces(ctx, s.Storage.Conn, tracesQuery)
-		if err != nil {
-			return nil, err
-		}
-		tracesTotal, err = fetchCount(ctx, s.Storage.Conn, tracesCountQuery)
-		if err != nil {
-			return nil, err
-		}
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			signalTraces, err := fetchTraces(ctx, s.Storage.Conn, tracesQuery)
+			if err != nil {
+				setError(err)
+				return
+			}
+			signalTraces, signalTracesHasNext := trimToPage(signalTraces, limit)
+			signalTracesNextCursor := ""
+			if signalTracesHasNext {
+				signalTracesNextCursor, err = encodeTracesCursor(signalTraces[len(signalTraces)-1])
+				if err != nil {
+					setError(err)
+					return
+				}
+			}
+
+			mu.Lock()
+			traces = signalTraces
+			tracesHasNext = signalTracesHasNext
+			tracesNextCursor = signalTracesNextCursor
+			mu.Unlock()
+		}()
 	}
 	if signals["metrics"] {
-		metrics, err = fetchMetrics(ctx, s.Storage.Conn, metricsQuery)
-		if err != nil {
-			return nil, err
-		}
-		metricsTotal, err = fetchCount(ctx, s.Storage.Conn, metricsCountQuery)
-		if err != nil {
-			return nil, err
-		}
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			signalMetrics, err := fetchMetrics(ctx, s.Storage.Conn, metricsQuery)
+			if err != nil {
+				setError(err)
+				return
+			}
+			signalMetrics, signalMetricsHasNext := trimToPage(signalMetrics, limit)
+
+			mu.Lock()
+			metrics = signalMetrics
+			metricsHasNext = signalMetricsHasNext
+			mu.Unlock()
+		}()
+	}
+	wg.Wait()
+	if firstErr != nil {
+		return nil, firstErr
 	}
 
 	result := &QueryRunResult{
 		RunID:  fmt.Sprintf("run-%d", time.Now().UnixNano()),
 		Status: "complete",
 		Pagination: PaginationSet{
-			Logs:    buildPagination(page, limit, int(logsTotal)),
-			Traces:  buildPagination(page, limit, int(tracesTotal)),
-			Metrics: buildPagination(page, limit, int(metricsTotal)),
+			Logs:    buildPagination(page, limit, logsHasNext, logsNextCursor),
+			Traces:  buildPagination(page, limit, tracesHasNext, tracesNextCursor),
+			Metrics: buildPagination(page, limit, metricsHasNext, ""),
 		},
 		Results: Results{
 			Logs:    wrapAny(logs),
@@ -119,16 +187,17 @@ func (s *Service) Run(ctx context.Context, req QueryRequest) (*QueryRunResult, e
 	return result, nil
 }
 
-func buildPagination(page, limit, total int) Pagination {
-	totalPages := 0
-	if limit > 0 && total > 0 {
-		totalPages = int(math.Ceil(float64(total) / float64(limit)))
+func buildPagination(page, limit int, hasNext bool, nextCursor string) Pagination {
+	if !hasNext {
+		nextCursor = ""
 	}
 	return Pagination{
 		Page:       page,
 		Limit:      limit,
-		Total:      total,
-		TotalPages: totalPages,
+		Total:      0,
+		TotalPages: 0,
+		HasNext:    hasNext,
+		NextCursor: nextCursor,
 	}
 }
 
@@ -137,9 +206,9 @@ func emptyResult(page, limit int) *QueryRunResult {
 		RunID:  fmt.Sprintf("run-%d", time.Now().UnixNano()),
 		Status: "complete",
 		Pagination: PaginationSet{
-			Logs:    buildPagination(page, limit, 0),
-			Traces:  buildPagination(page, limit, 0),
-			Metrics: buildPagination(page, limit, 0),
+			Logs:    buildPagination(page, limit, false, ""),
+			Traces:  buildPagination(page, limit, false, ""),
+			Metrics: buildPagination(page, limit, false, ""),
 		},
 		Results: Results{
 			Logs:    []any{},
@@ -208,6 +277,17 @@ type metricRow struct {
 	Value     float64
 }
 
+type logsCursorPayload struct {
+	Timestamp time.Time `json:"timestamp"`
+	TraceID   string    `json:"traceId"`
+	SpanID    string    `json:"spanId"`
+}
+
+type tracesCursorPayload struct {
+	LastSeen time.Time `json:"lastSeen"`
+	TraceID  string    `json:"traceId"`
+}
+
 func fetchLogs(ctx context.Context, conn driver.Conn, query string) ([]LogEntry, error) {
 	rows, err := conn.Query(ctx, query)
 	if err != nil {
@@ -271,12 +351,80 @@ func fetchMetrics(ctx context.Context, conn driver.Conn, query string) ([]Metric
 	return buildMetricSeries(metricRows), nil
 }
 
-func fetchCount(ctx context.Context, conn driver.Conn, query string) (uint64, error) {
-	var count uint64
-	if err := conn.QueryRow(ctx, query).Scan(&count); err != nil {
-		return 0, fmt.Errorf("fetch count: %w", err)
+func trimToPage[T any](items []T, limit int) ([]T, bool) {
+	if limit <= 0 {
+		return items, false
 	}
-	return count, nil
+	if len(items) > limit {
+		return items[:limit], true
+	}
+	return items, false
+}
+
+func decodeLogsCursor(value string) (*builders.LogsPageCursor, error) {
+	if strings.TrimSpace(value) == "" {
+		return nil, nil
+	}
+	var payload logsCursorPayload
+	if err := decodeCursor(value, &payload); err != nil {
+		return nil, err
+	}
+	if payload.Timestamp.IsZero() {
+		return nil, nil
+	}
+	return &builders.LogsPageCursor{
+		Timestamp: payload.Timestamp,
+		TraceID:   payload.TraceID,
+		SpanID:    payload.SpanID,
+	}, nil
+}
+
+func decodeTracesCursor(value string) (*builders.TracesPageCursor, error) {
+	if strings.TrimSpace(value) == "" {
+		return nil, nil
+	}
+	var payload tracesCursorPayload
+	if err := decodeCursor(value, &payload); err != nil {
+		return nil, err
+	}
+	if payload.LastSeen.IsZero() {
+		return nil, nil
+	}
+	return &builders.TracesPageCursor{
+		LastSeen: payload.LastSeen,
+		TraceID:  payload.TraceID,
+	}, nil
+}
+
+func encodeLogsCursor(last LogEntry) (string, error) {
+	return encodeCursor(logsCursorPayload{
+		Timestamp: last.Timestamp,
+		TraceID:   last.TraceID,
+		SpanID:    last.SpanID,
+	})
+}
+
+func encodeTracesCursor(last TraceEntry) (string, error) {
+	return encodeCursor(tracesCursorPayload{
+		LastSeen: last.LastSeen,
+		TraceID:  last.TraceID,
+	})
+}
+
+func encodeCursor(payload any) (string, error) {
+	raw, err := json.Marshal(payload)
+	if err != nil {
+		return "", err
+	}
+	return base64.RawURLEncoding.EncodeToString(raw), nil
+}
+
+func decodeCursor(encoded string, dest any) error {
+	raw, err := base64.RawURLEncoding.DecodeString(encoded)
+	if err != nil {
+		return err
+	}
+	return json.Unmarshal(raw, dest)
 }
 
 func buildMetricSeries(rows []metricRow) []MetricSeries {

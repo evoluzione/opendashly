@@ -24,7 +24,7 @@ func (s *RelatedService) Related(ctx context.Context, traceID string) (Results, 
 		}, nil
 	}
 
-	logsQuery := builders.BuildLogsQuery(BuildRelatedFilters(traceID), nil, time.Time{}, time.Time{}, 50, 0)
+	logsQuery := builders.BuildLogsQuery(BuildRelatedFilters(traceID), nil, time.Time{}, time.Time{}, 50, 0, nil)
 	logs, err := fetchLogs(ctx, s.Storage.Conn, logsQuery)
 	if err != nil {
 		return Results{}, err

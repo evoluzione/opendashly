@@ -107,6 +107,55 @@ function mergeResult(
   };
 }
 
+function mergeSingleSignalResult(
+  previous: QueryRunResult,
+  latest: QueryRunResult,
+  signal: 'logs' | 'traces' | 'metrics',
+  request: QueryRequest
+) {
+  const merged: QueryRunResult = {
+    ...previous,
+    runId: latest.runId,
+    status: latest.status,
+    summary: { ...previous.summary },
+    pagination: { ...previous.pagination },
+    results: { ...previous.results }
+  };
+
+  if (signal === 'logs') {
+    const logLimit = request.limit ?? latest.pagination?.logs?.limit;
+    const isFirstPage = request.page === undefined || request.page === 1;
+    merged.results.logs = isFirstPage
+      ? mergeByKey(latest.results.logs ?? [], previous.results.logs ?? [], logKey, logLimit)
+      : (latest.results.logs ?? []);
+    if (latest.pagination?.logs) {
+      merged.pagination = { ...merged.pagination, logs: latest.pagination.logs };
+    }
+    merged.summary.logCount = latest.summary?.logCount ?? merged.results.logs.length;
+    return merged;
+  }
+
+  if (signal === 'traces') {
+    const traceLimit = request.limit ?? latest.pagination?.traces?.limit;
+    const isFirstPage = request.page === undefined || request.page === 1;
+    merged.results.traces = isFirstPage
+      ? mergeByKey(latest.results.traces ?? [], previous.results.traces ?? [], traceKey, traceLimit)
+      : (latest.results.traces ?? []);
+    if (latest.pagination?.traces) {
+      merged.pagination = { ...merged.pagination, traces: latest.pagination.traces };
+    }
+    merged.summary.traceCount = latest.summary?.traceCount ?? merged.results.traces.length;
+    return merged;
+  }
+
+  merged.results.metrics = latest.results.metrics ?? [];
+  if (latest.pagination?.metrics) {
+    merged.pagination = { ...merged.pagination, metrics: latest.pagination.metrics };
+  }
+  merged.summary.metricCount = latest.summary?.metricCount ?? merged.results.metrics.length;
+  return merged;
+}
+
 function resetRefreshTimer() {
   if (refreshTimer) {
     clearInterval(refreshTimer);
@@ -214,11 +263,22 @@ export async function executeQuery(
   try {
     const response = await runQuery(request);
     debugLog('query.execute.success', { runId: response.runId, status: response.status });
-    const shouldMerge =
-      (!!options.retainResult || !!options.isBackground) &&
-      !!previousResult &&
-      (request.page === undefined || request.page === 1);
-    const result = shouldMerge ? mergeResult(previousResult, response, request) : response;
+    const isRetained = !!options.retainResult || !!options.isBackground;
+    const singleSignal =
+      request.signals && request.signals.length === 1
+        ? (request.signals[0] as 'logs' | 'traces' | 'metrics')
+        : null;
+
+    let result = response;
+    if (isRetained && previousResult && singleSignal) {
+      result = mergeSingleSignalResult(previousResult, response, singleSignal, request);
+    } else if (
+      isRetained &&
+      previousResult &&
+      (request.page === undefined || request.page === 1)
+    ) {
+      result = mergeResult(previousResult, response, request);
+    }
     queryState.update((state) => ({ ...state, loading: false, error: null, result, isLiveUpdate: !!options.isBackground }));
     scheduleAutoRefresh();
   } catch (err) {

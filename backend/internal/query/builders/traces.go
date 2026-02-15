@@ -1,13 +1,19 @@
 package builders
 
 import (
+	"fmt"
 	"strconv"
 	"strings"
 	"time"
 )
 
+type TracesPageCursor struct {
+	LastSeen time.Time
+	TraceID  string
+}
+
 // BuildTracesQuery creates a ClickHouse SQL statement for traces.
-func BuildTracesQuery(filters map[string]string, filterList []FilterItem, from, to time.Time, limit, offset int) string {
+func BuildTracesQuery(filters map[string]string, filterList []FilterItem, from, to time.Time, limit, offset int, cursor *TracesPageCursor) string {
 	traceErrorScope, effectiveFilterList := extractTraceErrorScope(filterList)
 	base := "SELECT TraceId AS traceId, argMin(SpanName, Timestamp) AS name, argMin(ServiceName, Timestamp) AS service, count() AS spanCount, countIf(StatusCode = 'STATUS_CODE_ERROR') AS errorCount, max(Timestamp) AS lastSeen, max(Duration) / 1000000 AS durationMs FROM telemetry.otel_traces"
 	clauses := buildOtelClauses("Timestamp", filters, effectiveFilterList, from, to, "ServiceName", "TraceId", "", []string{"ResourceAttributes", "SpanAttributes"})
@@ -22,10 +28,20 @@ func BuildTracesQuery(filters map[string]string, filterList []FilterItem, from, 
 	case "without_errors":
 		query += " HAVING errorCount = 0"
 	}
-	query += " ORDER BY lastSeen DESC"
+	if cursor != nil && !cursor.LastSeen.IsZero() {
+		ts := formatDateTime64(cursor.LastSeen)
+		traceID := EscapeLiteral(cursor.TraceID)
+		cursorClause := fmt.Sprintf("(lastSeen < %s OR (lastSeen = %s AND TraceId < '%s'))", ts, ts, traceID)
+		if strings.Contains(query, " HAVING ") {
+			query += " AND " + cursorClause
+		} else {
+			query += " HAVING " + cursorClause
+		}
+	}
+	query += " ORDER BY lastSeen DESC, TraceId DESC"
 	if limit > 0 {
 		query += " LIMIT " + strconv.Itoa(limit)
-		if offset > 0 {
+		if offset > 0 && cursor == nil {
 			query += " OFFSET " + strconv.Itoa(offset)
 		}
 	}

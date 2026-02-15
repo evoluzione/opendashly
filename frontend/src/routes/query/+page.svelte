@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onDestroy, onMount } from "svelte";
+  import { get } from "svelte/store";
   import { page } from "$app/stores";
   import { goto } from "$app/navigation";
   import QueryForm from "../../components/QueryForm.svelte";
@@ -19,6 +20,8 @@
 
   let queryName = "";
   let lastRequest: QueryRequest | null = null;
+  const logsCursorByPage = new Map<number, string>();
+  const tracesCursorByPage = new Map<number, string>();
   let pageSize = "100";
   const pageSizeOptions = ["25", "50", "100", "200"];
   const activeTab = "tracce";
@@ -33,12 +36,21 @@
 
   async function handleRun(event) {
     const limit = Number(pageSize) || 100;
-    lastRequest = { ...event.detail.request, limit, page: 1 };
+    logsCursorByPage.clear();
+    tracesCursorByPage.clear();
+    lastRequest = {
+      ...event.detail.request,
+      limit,
+      page: 1,
+      logsCursor: undefined,
+      tracesCursor: undefined,
+    };
     setAutoRefresh(
       event.detail.autoRefreshSeconds ?? null,
       event.detail.autoRefreshRangeMinutes ?? null,
     );
     await executeQuery(lastRequest);
+    storeNextCursors(1);
   }
 
   function handleModeChange(event) {
@@ -48,20 +60,41 @@
   }
 
   async function handlePageChange(
-    _signal: "logs" | "traces" | "metrics",
+    signal: "logs" | "traces" | "metrics",
     nextPage: number,
   ) {
     if (!lastRequest) return;
     const page = nextPage < 1 ? 1 : nextPage;
-    lastRequest = { ...lastRequest, page };
+    lastRequest = {
+      ...lastRequest,
+      signals: [signal],
+      page,
+      logsCursor:
+        signal === "logs" && page > 1 ? logsCursorByPage.get(page) : undefined,
+      tracesCursor:
+        signal === "traces" && page > 1
+          ? tracesCursorByPage.get(page)
+          : undefined,
+    };
     await executeQuery(lastRequest, { retainResult: true });
+    storeNextCursors(page);
   }
 
   async function handlePageSizeChange() {
     if (!lastRequest) return;
     const limit = Number(pageSize) || 100;
-    lastRequest = { ...lastRequest, limit, page: 1 };
+    logsCursorByPage.clear();
+    tracesCursorByPage.clear();
+    lastRequest = {
+      ...lastRequest,
+      signals: ["logs", "traces", "metrics"],
+      limit,
+      page: 1,
+      logsCursor: undefined,
+      tracesCursor: undefined,
+    };
     await executeQuery(lastRequest, { retainResult: true });
+    storeNextCursors(1);
   }
 
   async function handleSave() {
@@ -76,6 +109,21 @@
   onDestroy(() => {
     stopAutoRefresh();
   });
+
+  function storeNextCursors(page: number) {
+    const pagination = get(queryState).result?.pagination;
+    if (!pagination) return;
+    if (pagination.logs?.hasNext && pagination.logs.nextCursor) {
+      logsCursorByPage.set(page + 1, pagination.logs.nextCursor);
+    } else {
+      logsCursorByPage.delete(page + 1);
+    }
+    if (pagination.traces?.hasNext && pagination.traces.nextCursor) {
+      tracesCursorByPage.set(page + 1, pagination.traces.nextCursor);
+    } else {
+      tracesCursorByPage.delete(page + 1);
+    }
+  }
 </script>
 
 <QueryForm

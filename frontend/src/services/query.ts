@@ -12,6 +12,8 @@ export type QueryRequest = {
   timeRange: { from: string; to: string };
   filters: Record<string, string>;
   filterList?: FilterItem[];
+  logsCursor?: string;
+  tracesCursor?: string;
   page?: number;
   limit?: number;
   orderBy?: string;
@@ -22,6 +24,8 @@ export type Pagination = {
   limit: number;
   total: number;
   totalPages: number;
+  hasNext: boolean;
+  nextCursor?: string;
 };
 
 export type QueryRunResult = {
