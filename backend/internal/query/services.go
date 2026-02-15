@@ -11,6 +11,9 @@ func (s *Service) ListServices(ctx context.Context) ([]string, error) {
 	if s.Storage == nil {
 		return []string{}, nil
 	}
+	if services, ok := s.getServicesFromCache(); ok {
+		return services, nil
+	}
 	query := `SELECT DISTINCT ServiceName FROM (
 		SELECT ServiceName FROM telemetry.otel_logs
 		UNION ALL
@@ -39,5 +42,6 @@ func (s *Service) ListServices(ctx context.Context) ([]string, error) {
 		return nil, fmt.Errorf("iterate services: %w", err)
 	}
 	sort.Strings(services)
+	s.setServicesCache(services)
 	return services, nil
 }

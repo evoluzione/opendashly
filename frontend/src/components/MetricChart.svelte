@@ -5,7 +5,7 @@
   import 'uplot/dist/uPlot.min.css';
 
   export let series: { name?: string; unit?: string; points: { timestamp: string; value: number }[] }[] = [];
-  export let pagination: { page: number; totalPages: number } | null = null;
+  export let pagination: { page: number; hasNext: boolean } | null = null;
 
   let containerEl: HTMLDivElement;
   let chartEl: HTMLDivElement;
@@ -195,11 +195,11 @@
     >
       Precedente
     </button>
-    <span>Pagina {pagination.page} di {pagination.totalPages || 1}</span>
+    <span>Pagina {pagination.page}</span>
     <button
       type="button"
       on:click={() => changePage(pagination.page + 1)}
-      disabled={pagination.totalPages > 0 ? pagination.page >= pagination.totalPages : series.length === 0}
+      disabled={!pagination.hasNext}
     >
       Successiva
     </button>
