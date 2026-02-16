@@ -42,13 +42,14 @@
     filterDurationOperator: string;
     filterDurationMs: string;
     traceErrorScope: "all" | "with_errors" | "without_errors";
+    logTextSearch: string;
   }
 
   const defaultState: TabState = {
     searchMode: "auto",
     fromInput: "",
     toInput: "",
-    autoRangeMinutes: null,
+    autoRangeMinutes: 30,
     autoRefreshSeconds: 10,
     smartPrompt: "",
     smartError: "",
@@ -57,6 +58,7 @@
     filterDurationOperator: ">",
     filterDurationMs: "",
     traceErrorScope: "all",
+    logTextSearch: "",
   };
 
   let tabStates: Record<string, TabState> = persistedStates || {
@@ -70,7 +72,7 @@
   let searchMode: SearchMode = "auto";
   let fromInput = "";
   let toInput = "";
-  let autoRangeMinutes: number | null = null;
+  let autoRangeMinutes: number | null = 30;
   let autoRefreshSeconds: number | null = 10;
   let smartPrompt = "";
   let smartError = "";
@@ -79,6 +81,7 @@
   let filterDurationOperator = ">";
   let filterDurationMs = "";
   let traceErrorScope: "all" | "with_errors" | "without_errors" = "all";
+  let logTextSearch = "";
 
   // Track previous tab to save state before switching
   let previousTab = "";
@@ -113,6 +116,7 @@
       filterDurationOperator,
       filterDurationMs,
       traceErrorScope,
+      logTextSearch,
     };
   }
 
@@ -130,6 +134,7 @@
     filterDurationOperator = state.filterDurationOperator || ">";
     filterDurationMs = state.filterDurationMs || "";
     traceErrorScope = state.traceErrorScope || "all";
+    logTextSearch = state.logTextSearch || "";
   }
 
   let smartLoading = false;
@@ -157,6 +162,21 @@
 
   function closeFilters() {
     showFilterModal = false;
+  }
+
+  function getEffectiveAdvancedFilters(): FilterItem[] {
+    return advancedFilters
+      .map((f) => ({
+        ...f,
+        key: String(f.key ?? "").trim(),
+        value: String(f.value ?? "").trim(),
+      }))
+      .filter((f) => f.key && f.value);
+  }
+
+  function applyAdvancedFilters() {
+    advancedFilters = getEffectiveAdvancedFilters();
+    closeFilters();
   }
 
   // Dirty tracking for conditional button enabling
@@ -193,22 +213,7 @@
     { label: "Tutto", minutes: null },
   ];
 
-  function formatDateTimeLocal(date: Date) {
-    const pad = (value: number) => String(value).padStart(2, "0");
-    return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
-  }
-
-  function applyQuickRange(minutes: number | null, defaultRefresh?: number) {
-    const now = new Date();
-    if (minutes === null) {
-      fromInput = "";
-      toInput = "";
-      return;
-    }
-    const fromDate = new Date(now.getTime() - minutes * 60 * 1000);
-    fromInput = formatDateTimeLocal(fromDate);
-    toInput = formatDateTimeLocal(now);
-
+  function applyQuickRange(_minutes: number | null, defaultRefresh?: number) {
     if (defaultRefresh) {
       autoRefreshSeconds = defaultRefresh;
     }
@@ -449,7 +454,6 @@
       clearTraceIdFromUrl();
     }
     if (searchMode === "auto") {
-      applyQuickRange(autoRangeMinutes);
       submit();
     }
     dispatch("modeChange", { mode: searchMode });
@@ -535,17 +539,16 @@
     const rangeMinutes = searchMode === "auto" ? autoRangeMinutes : null;
     const refreshSeconds =
       searchMode === "auto" ? (autoRefreshSeconds ?? 10) : 0;
-    if (searchMode === "auto") {
-      applyQuickRange(autoRangeMinutes);
-    }
     const zeroTime = "1970-01-01T00:00:00Z";
     let from = zeroTime;
     let to = new Date().toISOString();
 
     if (searchMode === "auto") {
       if (rangeMinutes !== null) {
-        from = toIso(fromInput) || from;
-        to = toIso(toInput) || to;
+        const now = new Date();
+        const fromDate = new Date(now.getTime() - rangeMinutes * 60 * 1000);
+        from = fromDate.toISOString();
+        to = now.toISOString();
       }
     } else {
       if (!traceSearchExact && fromInput && toInput) {
@@ -560,7 +563,7 @@
       to = zeroTime;
     }
     // Merge manual filters into filterList (always, to assume control over operators)
-    let finalFilterList = [...advancedFilters];
+    let finalFilterList = [...getEffectiveAdvancedFilters()];
     for (const [k, v] of Object.entries(manualFilters)) {
       // Only add if not already present to avoid duplicates
       // Note: This simple check prevents overriding advanced filters with same key
@@ -629,6 +632,22 @@
       }
     }
 
+    const logTextTerm = activeTab === "logs" ? String(logTextSearch || "").trim() : "";
+    if (logTextTerm) {
+      if (
+        !finalFilterList.some(
+          (f) => f.key === "body" && f.operator === "contains" && f.value === logTextTerm,
+        )
+      ) {
+        finalFilterList.push({
+          connector: "AND",
+          key: "body",
+          operator: "contains",
+          value: logTextTerm,
+        });
+      }
+    }
+
     // Filter out incomplete filters
     finalFilterList = finalFilterList.filter((f) => f.key && f.value);
 
@@ -651,6 +670,7 @@
   }
 
   $: if (autoSubmitReady && searchMode === "manual") {
+    const effectiveAdvancedFilters = getEffectiveAdvancedFilters();
     const manualAutoSubmitKey = JSON.stringify({
       tab: activeTab,
       service: $servicesState.selectedService,
@@ -659,10 +679,11 @@
       toInput,
       traceSearch,
       traceSearchExact,
+      logTextSearch,
       filterDurationOperator,
       filterDurationMs,
       traceErrorScope,
-      advancedFilters,
+      advancedFilters: effectiveAdvancedFilters,
     });
     if (manualAutoSubmitKey !== lastManualAutoSubmitKey) {
       lastManualAutoSubmitKey = manualAutoSubmitKey;
@@ -684,15 +705,35 @@
     }
   }
 
-  function clearManualFilters() {
-    fromInput = "";
-    toInput = "";
+  export function resetFiltersToDefault() {
+    searchMode = defaultState.searchMode;
+    fromInput = defaultState.fromInput;
+    toInput = defaultState.toInput;
+    autoRangeMinutes = defaultState.autoRangeMinutes;
+    autoRefreshSeconds = defaultState.autoRefreshSeconds;
+    smartPrompt = defaultState.smartPrompt;
+    smartError = defaultState.smartError;
+    smartRequest = defaultState.smartRequest;
+    generatedSql = "";
+    promptDirty = true;
     traceSearch = "";
     traceSearchExact = false;
-    filterDurationOperator = ">";
-    filterDurationMs = "";
-    traceErrorScope = "all";
+    logTextSearch = "";
+    filterDurationOperator = defaultState.filterDurationOperator;
+    filterDurationMs = defaultState.filterDurationMs;
+    traceErrorScope = defaultState.traceErrorScope;
     advancedFilters = [];
+    showFilterModal = false;
+    selectService("Tutti");
+    selectLogLevel("Tutti");
+    tabStates[activeTab] = { ...defaultState };
+    persistedStates = tabStates;
+    dispatch("modeChange", { mode: searchMode });
+    submit();
+  }
+
+  export function refreshCurrentQuery() {
+    submit();
   }
 </script>
 
@@ -894,6 +935,17 @@
       {/if}
 
       {#if activeTab === "logs"}
+        <div class="filter-field">
+          <label for="filter-log-text-search">Ricerca testuale</label>
+          <input
+            id="filter-log-text-search"
+            type="text"
+            placeholder="Cerca nel messaggio del log..."
+            bind:value={logTextSearch}
+            on:keydown={handleManualEnter}
+          />
+        </div>
+
         <div class="advanced-filters-trigger">
           <button type="button" class="btn-secondary" on:click={openFilters}>
             <svg
@@ -910,8 +962,8 @@
               ></polygon></svg
             >
             Filtri Avanzati
-            {#if advancedFilters.length > 0}
-              <span class="badge">{advancedFilters.length}</span>
+            {#if getEffectiveAdvancedFilters().length > 0}
+              <span class="badge">{getEffectiveAdvancedFilters().length}</span>
             {/if}
           </button>
         </div>
@@ -923,23 +975,13 @@
         >
           <FilterBuilder bind:filters={advancedFilters} />
           <div class="modal-actions">
-            <button class="btn-primary" on:click={closeFilters}
+            <button class="btn-primary" on:click={applyAdvancedFilters}
               >Applica Filtri</button
             >
           </div>
         </Modal>
       {/if}
 
-      <div class="actions-row bottom">
-        <button
-          type="button"
-          class="btn-text"
-          on:click={clearManualFilters}
-          title="Svuota tutti i campi"
-        >
-          Pulisci filtri
-        </button>
-      </div>
     </div>
   {:else}
     <div class="smart-box">
@@ -1422,31 +1464,6 @@
 
   .btn-primary:active {
     transform: translateY(0);
-  }
-
-  .actions-row {
-    display: flex;
-    justify-content: flex-end;
-  }
-
-  .actions-row.bottom {
-    margin-top: 8px;
-    padding-top: 8px;
-    border-top: 1px dashed rgba(148, 163, 184, 0.35);
-  }
-
-  .btn-text {
-    background: none;
-    border: none;
-    padding: 4px 8px;
-    font-size: 12px;
-    color: #64748b;
-    cursor: pointer;
-    text-decoration: underline;
-  }
-
-  .btn-text:hover {
-    color: #334155;
   }
 
   .log-level-filter {

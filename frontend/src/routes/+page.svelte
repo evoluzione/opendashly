@@ -54,6 +54,12 @@
   let showDashboardFilters = false;
   let activeDashboardFilters = 0;
   let dashboardFiltersRef: HTMLDivElement | null = null;
+  let queryFormRef:
+    | {
+        resetFiltersToDefault: () => void;
+        refreshCurrentQuery: () => void;
+      }
+    | null = null;
 
   $: {
     const params = $page.url.searchParams;
@@ -279,6 +285,14 @@
     showDashboardFilters = false;
   }
 
+  function handleResetQueryFilters() {
+    queryFormRef?.resetFiltersToDefault();
+  }
+
+  function handleRefreshQueryFilters() {
+    queryFormRef?.refreshCurrentQuery();
+  }
+
   $: activeDashboardFilters =
     (dashboardAllTime ? 0 : 1) + ($dashboardState.selectedService ? 1 : 0);
 
@@ -325,6 +339,8 @@
               class="refresh-btn"
               on:click={handleRefresh}
               disabled={$dashboardState.loading}
+              title="Aggiorna metriche"
+              aria-label="Aggiorna metriche"
             >
               <svg
                 class="refresh-icon"
@@ -561,8 +577,43 @@
   {#if activeTab !== "metriche"}
     <aside class="filters">
       <div class="panel">
-        <h3>Filtri query</h3>
+        <div class="filters-panel-header">
+          <h3>Filtri query</h3>
+          <div class="query-header-actions">
+            <button
+              type="button"
+              class="query-refresh-btn"
+              on:click={handleRefreshQueryFilters}
+              disabled={$queryState.loading}
+              title="Aggiorna risultati con i filtri correnti"
+              aria-label="Aggiorna risultati"
+            >
+              <svg
+                class="refresh-icon"
+                class:spinning={$queryState.loading}
+                viewBox="0 0 20 20"
+                fill="currentColor"
+                aria-hidden="true"
+              >
+                <path
+                  fill-rule="evenodd"
+                  d="M15.312 11.424a5.5 5.5 0 01-9.201 2.466l-.312-.311h2.433a.75.75 0 000-1.5H3.989a.75.75 0 00-.75.75v4.242a.75.75 0 001.5 0v-2.43l.31.31a7 7 0 0011.712-3.138.75.75 0 00-1.449-.389zm1.23-7.424a.75.75 0 00-.75.75v2.43l-.31-.31A7 7 0 003.77 9.89a.75.75 0 101.45.388 5.5 5.5 0 019.201-2.466l.312.311h-2.433a.75.75 0 000 1.5h4.243a.75.75 0 00.75-.75V4.75a.75.75 0 00-.75-.75z"
+                  clip-rule="evenodd"
+                />
+              </svg>
+            </button>
+            <button
+              type="button"
+              class="query-reset-btn"
+              on:click={handleResetQueryFilters}
+              title="Resetta tutti i filtri ai valori di default"
+            >
+              Reset filtri
+            </button>
+          </div>
+        </div>
         <QueryForm
+          bind:this={queryFormRef}
           {activeTab}
           {initialTraceId}
           {forceMode}
@@ -675,12 +726,82 @@
   }
 
   .filters h3 {
-    margin: 0 0 20px 0;
+    margin: 0;
     font-size: 14px;
     font-weight: 600;
     text-transform: uppercase;
     letter-spacing: 0.05em;
     color: #64748b;
+  }
+
+  .filters-panel-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 20px;
+  }
+
+  .query-header-actions {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .query-refresh-btn {
+    width: 28px;
+    height: 28px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border: none;
+    border-radius: 8px;
+    background: #6366f1;
+    color: #ffffff;
+    cursor: pointer;
+    transition:
+      background 0.15s ease,
+      transform 0.15s ease;
+  }
+
+  .query-refresh-btn .refresh-icon {
+    width: 12px;
+    height: 12px;
+  }
+
+  .query-refresh-btn:hover:not(:disabled) {
+    background: #4f46e5;
+  }
+
+  .query-refresh-btn:active:not(:disabled) {
+    transform: scale(0.98);
+  }
+
+  .query-refresh-btn:disabled {
+    opacity: 0.7;
+    cursor: not-allowed;
+  }
+
+  .query-reset-btn {
+    padding: 7px 11px;
+    border: 1px solid #cbd5e1;
+    border-radius: 8px;
+    background: #ffffff;
+    color: #475569;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    white-space: nowrap;
+    transition:
+      background 0.15s ease,
+      border-color 0.15s ease,
+      color 0.15s ease;
+  }
+
+  .query-reset-btn:hover {
+    background: #f8fafc;
+    border-color: #94a3b8;
+    color: #334155;
   }
 
   .status {
@@ -711,7 +832,7 @@
   .metrics-controls {
     display: flex;
     align-items: flex-end;
-    gap: 20px;
+    gap: 10px;
     flex-wrap: wrap;
   }
 
@@ -723,7 +844,9 @@
     display: inline-flex;
     align-items: center;
     gap: 8px;
+    height: 34px;
     padding: 8px 12px;
+    box-sizing: border-box;
     border-radius: 8px;
     border: 1px solid #cbd5e1;
     background: #ffffff;
@@ -900,13 +1023,16 @@
   .refresh-btn {
     display: inline-flex;
     align-items: center;
-    gap: 6px;
-    padding: 8px 16px;
-    background: #2563eb;
+    justify-content: center;
+    gap: 8px;
+    height: 34px;
+    padding: 8px 12px;
+    box-sizing: border-box;
+    background: #6366f1;
     color: white;
     border: none;
     border-radius: 8px;
-    font-size: 13px;
+    font-size: 12px;
     font-weight: 500;
     cursor: pointer;
     transition:
@@ -915,7 +1041,7 @@
   }
 
   .refresh-btn:hover:not(:disabled) {
-    background: #1d4ed8;
+    background: #4f46e5;
   }
 
   .refresh-btn:active:not(:disabled) {
@@ -927,9 +1053,9 @@
     cursor: not-allowed;
   }
 
-  .refresh-icon {
-    width: 16px;
-    height: 16px;
+  .refresh-btn .refresh-icon {
+    width: 12px;
+    height: 12px;
   }
 
   .refresh-icon.spinning {
