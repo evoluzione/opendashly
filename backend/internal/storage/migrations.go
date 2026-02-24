@@ -5,12 +5,16 @@ import (
 	"embed"
 	"fmt"
 	"log"
+	"regexp"
 	"sort"
 	"strings"
 	"time"
 
 	"github.com/ClickHouse/clickhouse-go/v2/lib/driver"
 )
+
+// isAlterTableStatement checks if the SQL statement is an ALTER TABLE command
+var alterTableRegex = regexp.MustCompile(`(?i)^\s*ALTER\s+TABLE`)
 
 //go:embed migrations/*.sql
 var migrationsFS embed.FS
@@ -78,6 +82,12 @@ func ApplyMigrations(ctx context.Context, conn driver.Conn) error {
 				continue
 			}
 			if err := conn.Exec(ctx, stmt); err != nil {
+				// ALTER TABLE statements may fail if referenced table doesn't exist yet
+				// (e.g., tables created by the OTel collector). Treat as warning, not error.
+				if alterTableRegex.MatchString(stmt) && strings.Contains(err.Error(), "Could not find table") {
+					log.Printf("migration %s: skipping ALTER TABLE (table not yet created by collector): %s", file, err.Error())
+					continue
+				}
 				return fmt.Errorf("apply migration %s statement %q: %w", file, stmt, err)
 			}
 			log.Printf("migration applied: %s", stmt)
