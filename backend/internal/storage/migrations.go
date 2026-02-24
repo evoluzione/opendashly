@@ -14,7 +14,7 @@ import (
 )
 
 // isAlterTableStatement checks if the SQL statement is an ALTER TABLE command
-var alterTableRegex = regexp.MustCompile(`(?i)^\s*ALTER\s+TABLE`)
+var alterTableRegex = regexp.MustCompile(`(?i)ALTER\s+TABLE`)
 
 //go:embed migrations/*.sql
 var migrationsFS embed.FS
