@@ -23,10 +23,21 @@ export function logout(): Promise<void> {
   return apiRequest<void>('/api/auth/logout', { method: 'POST' });
 }
 
-export function changePassword(currentPassword: string, newPassword: string): Promise<AuthSession> {
+export function changePassword(newPassword: string, currentPassword?: string): Promise<AuthSession> {
+  const body: { newPassword: string; currentPassword?: string } = { newPassword };
+  if (currentPassword) {
+    body.currentPassword = currentPassword;
+  }
   return apiRequest<AuthSession>('/api/auth/change-password', {
     method: 'POST',
-    body: JSON.stringify({ currentPassword, newPassword })
+    body: JSON.stringify(body)
+  });
+}
+
+export function firstLoginChangePassword(newPassword: string): Promise<AuthSession> {
+  return apiRequest<AuthSession>('/api/auth/first-login-change-password', {
+    method: 'POST',
+    body: JSON.stringify({ newPassword })
   });
 }
 

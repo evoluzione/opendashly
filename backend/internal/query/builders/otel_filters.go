@@ -154,41 +154,50 @@ func buildSingleClause(k, v, op string, serviceColumn, traceColumn, severityColu
 		}
 	case "severity":
 		if severityColumn != "" && v != "Tutti" {
-			// Special handling for severity still useful?
-			// If custom operator is used, we might skip the special handling or adapt it.
-			// For now, if simple equality, keep special handling?
 			if op == "=" || op == "" {
-				upperValue := strings.ToUpper(escapedValue)
-				allowed := []string{upperValue}
-				switch upperValue {
-				case "TRACE":
-					allowed = append(allowed, "VERBOSE", "TRACE1", "TRACE2", "TRACE3", "TRACE4")
-				case "DEBUG":
-					allowed = append(allowed, "DBG", "DEBUG1", "DEBUG2", "DEBUG3", "DEBUG4")
-				case "INFO":
-					allowed = append(allowed, "INFORMATION", "INFO1", "INFO2", "INFO3", "INFO4")
-				case "WARN":
-					allowed = append(allowed, "WARNING", "WARNINGS", "WARN1", "WARN2", "WARN3", "WARN4")
-				case "ERROR":
-					allowed = append(allowed, "ERR", "ERRORS", "SEVERE", "ERROR1", "ERROR2", "ERROR3", "ERROR4")
-				case "FATAL":
-					allowed = append(allowed, "CRITICAL", "CRIT", "ALERT", "EMERG", "EMERGENCY", "FATAL1", "FATAL2", "FATAL3", "FATAL4")
-				}
-				allowedList := "'" + strings.Join(allowed, "','") + "'"
+				parts := strings.Split(v, ",")
+				severityClauses := make([]string, 0, len(parts))
+				for _, part := range parts {
+					raw := strings.TrimSpace(part)
+					if raw == "" || strings.EqualFold(raw, "Tutti") {
+						continue
+					}
+					upperValue := strings.ToUpper(EscapeLiteral(raw))
+					allowed := []string{upperValue}
+					switch upperValue {
+					case "TRACE":
+						allowed = append(allowed, "VERBOSE", "TRACE1", "TRACE2", "TRACE3", "TRACE4")
+					case "DEBUG":
+						allowed = append(allowed, "DBG", "DEBUG1", "DEBUG2", "DEBUG3", "DEBUG4")
+					case "INFO":
+						allowed = append(allowed, "INFORMATION", "INFO1", "INFO2", "INFO3", "INFO4")
+					case "WARN":
+						allowed = append(allowed, "WARNING", "WARNINGS", "WARN1", "WARN2", "WARN3", "WARN4")
+					case "ERROR":
+						allowed = append(allowed, "ERR", "ERRORS", "SEVERE", "ERROR1", "ERROR2", "ERROR3", "ERROR4")
+					case "FATAL":
+						allowed = append(allowed, "CRITICAL", "CRIT", "ALERT", "EMERG", "EMERGENCY", "FATAL1", "FATAL2", "FATAL3", "FATAL4")
+					}
+					allowedList := "'" + strings.Join(allowed, "','") + "'"
 
-				clauses := []string{
-					fmt.Sprintf("upper(%s) IN (%s)", severityColumn, allowedList),
+					singleSeverityClauses := []string{
+						fmt.Sprintf("upper(%s) IN (%s)", severityColumn, allowedList),
+					}
+					if upperValue == "INFO" {
+						singleSeverityClauses = append(singleSeverityClauses, fmt.Sprintf("(%s = '' OR isNull(%s))", severityColumn, severityColumn))
+					}
+					for _, column := range attributeColumns {
+						singleSeverityClauses = append(singleSeverityClauses,
+							fmt.Sprintf("upper(%s['severity']) IN (%s)", column, allowedList),
+							fmt.Sprintf("upper(%s['level']) IN (%s)", column, allowedList),
+						)
+					}
+					severityClauses = append(severityClauses, "("+strings.Join(singleSeverityClauses, " OR ")+")")
 				}
-				if upperValue == "INFO" {
-					clauses = append(clauses, fmt.Sprintf("(%s = '' OR isNull(%s))", severityColumn, severityColumn))
+				if len(severityClauses) == 0 {
+					return ""
 				}
-				for _, column := range attributeColumns {
-					clauses = append(clauses,
-						fmt.Sprintf("upper(%s['severity']) IN (%s)", column, allowedList),
-						fmt.Sprintf("upper(%s['level']) IN (%s)", column, allowedList),
-					)
-				}
-				return "(" + strings.Join(clauses, " OR ") + ")"
+				return "(" + strings.Join(severityClauses, " OR ") + ")"
 			} else {
 				return fmt.Sprintf("%s %s %s", severityColumn, sqlOp, sqlValue)
 			}

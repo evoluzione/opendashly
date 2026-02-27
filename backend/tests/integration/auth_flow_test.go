@@ -119,8 +119,8 @@ func TestAuthFlowIntegration(t *testing.T) {
 		t.Fatalf("expected login cookie")
 	}
 
-	changePayload, _ := json.Marshal(map[string]string{"currentPassword": "admin", "newPassword": "newpass"})
-	changeReq := httptest.NewRequest(http.MethodPost, "/api/auth/change-password", bytes.NewReader(changePayload))
+	changePayload, _ := json.Marshal(map[string]string{"newPassword": "newpass"})
+	changeReq := httptest.NewRequest(http.MethodPost, "/api/auth/first-login-change-password", bytes.NewReader(changePayload))
 	changeReq.AddCookie(cookies[0])
 	changeRec := httptest.NewRecorder()
 	router.ServeHTTP(changeRec, changeReq)

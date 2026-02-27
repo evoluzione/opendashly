@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onDestroy, onMount } from "svelte";
+  import { onMount } from "svelte";
   import { get } from "svelte/store";
   import { page } from "$app/stores";
   import { goto } from "$app/navigation";
@@ -10,8 +10,6 @@
   import {
     queryState,
     executeQuery,
-    setAutoRefresh,
-    stopAutoRefresh,
   } from "../../lib/stores/query";
   import { saveQuery } from "../../services/saved_queries";
   import type { QueryRequest } from "../../services/query";
@@ -45,18 +43,8 @@
       logsCursor: undefined,
       tracesCursor: undefined,
     };
-    setAutoRefresh(
-      event.detail.autoRefreshSeconds ?? null,
-      event.detail.autoRefreshRangeMinutes ?? null,
-    );
     await executeQuery(lastRequest);
     storeNextCursors(1);
-  }
-
-  function handleModeChange(event) {
-    if (event.detail.mode !== "auto") {
-      stopAutoRefresh();
-    }
   }
 
   async function handlePageChange(
@@ -106,9 +94,6 @@
     });
   }
 
-  onDestroy(() => {
-    stopAutoRefresh();
-  });
 
   function storeNextCursors(page: number) {
     const pagination = get(queryState).result?.pagination;
@@ -132,7 +117,6 @@
   forceMode={traceIdParam ? "manual" : null}
   autoRun={!!traceIdParam}
   on:run={handleRun}
-  on:modeChange={handleModeChange}
 />
 
 {#if $queryState.error}

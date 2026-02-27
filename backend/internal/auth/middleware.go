@@ -115,6 +115,8 @@ func isAllowedDuringPasswordChange(path string) bool {
 	switch path {
 	case "/api/auth/logout", "/api/auth/change-password", "/api/auth/session":
 		return true
+	case "/api/auth/first-login-change-password":
+		return true
 	default:
 		return false
 	}

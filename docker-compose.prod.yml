@@ -24,7 +24,7 @@ services:
     restart: unless-stopped
 
   clickhouse:
-    image: clickhouse/clickhouse-server:24.8
+    image: clickhouse/clickhouse-server:25.1
     container_name: opendashly-clickhouse
     ports:
       - "8123:8123"
@@ -49,7 +49,7 @@ services:
     restart: unless-stopped
 
   otel-collector:
-    image: otel/opentelemetry-collector-contrib:0.99.0
+    image: otel/opentelemetry-collector-contrib:0.122.0
     container_name: opendashly-otel-collector
     command: ["--config=/etc/otelcol/config.yaml"]
     ports:

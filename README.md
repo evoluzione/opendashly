@@ -48,6 +48,16 @@ If you want custom secrets or a non-default ClickHouse password, copy `.env.exam
 docker compose up --build
 ```
 
+Telemetry schema is now managed by backend migrations (`backend/internal/storage/migrations/000_otel_schema_baseline.sql`).
+The collector is configured with `create_schema: false` and only writes data.
+
+For a **fresh bootstrap** after this change (or if you want to rebuild from zero), reset volumes once:
+
+```bash
+docker compose down -v
+docker compose up --build
+```
+
 This starts:
 - **Frontend** → [http://localhost:5173](http://localhost:5173)
 - **Backend API** → [http://localhost:8080](http://localhost:8080)
@@ -162,7 +172,7 @@ In the query form, type natural language prompts like:
 - **Testing**: Vitest (unit), Playwright (E2E)
 
 #### Infrastructure
-- **Telemetry**: OpenTelemetry Collector Contrib 0.99.0
+- **Telemetry**: OpenTelemetry Collector Contrib 0.122.0
 - **Protocol**: OTLP (OpenTelemetry Protocol)
 - **Containerization**: Docker + Docker Compose
 

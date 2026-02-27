@@ -27,6 +27,10 @@ type changePasswordRequest struct {
 	NewPassword     string `json:"newPassword"`
 }
 
+type firstLoginChangePasswordRequest struct {
+	NewPassword string `json:"newPassword"`
+}
+
 type sessionResponse struct {
 	User               userResponse `json:"user"`
 	MustChangePassword bool         `json:"mustChangePassword"`
@@ -124,6 +128,57 @@ func (h *AuthHandler) ChangePassword(w http.ResponseWriter, r *http.Request) {
 	token, err := auth.GenerateToken(h.Secret, updated.ID, updated.Role, h.SessionTTL)
 	if err != nil {
 		log.Printf("auth.change_password: generate token failed user=%s err=%v", updated.ID, err)
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+	setSessionCookie(w, h.CookieName, token, h.SessionTTL, r.TLS != nil)
+	writeJSON(w, sessionResponse{User: toUserResponse(*updated), MustChangePassword: updated.MustChangePassword})
+}
+
+func (h *AuthHandler) FirstLoginChangePassword(w http.ResponseWriter, r *http.Request) {
+	var req firstLoginChangePasswordRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+	userID := auth.UserID(r.Context())
+	if userID == "" {
+		w.WriteHeader(http.StatusUnauthorized)
+		return
+	}
+	user, err := h.Repo.GetByID(r.Context(), userID)
+	if err != nil {
+		w.WriteHeader(http.StatusUnauthorized)
+		return
+	}
+	if !user.MustChangePassword {
+		w.WriteHeader(http.StatusForbidden)
+		return
+	}
+	if err := auth.ComparePassword(user.PasswordHash, "admin"); err != nil {
+		w.WriteHeader(http.StatusForbidden)
+		return
+	}
+	newHash, err := auth.HashPassword(req.NewPassword)
+	if err != nil {
+		log.Printf("auth.first_login_change_password: hash failed user=%s err=%v", user.ID, err)
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+	if err := h.Repo.UpdatePassword(r.Context(), user.ID, newHash, false); err != nil {
+		log.Printf("auth.first_login_change_password: update password failed user=%s err=%v", user.ID, err)
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+	updated, err := h.Repo.GetByID(r.Context(), user.ID)
+	if err != nil {
+		log.Printf("auth.first_login_change_password: reload user failed user=%s err=%v", user.ID, err)
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+	token, err := auth.GenerateToken(h.Secret, updated.ID, updated.Role, h.SessionTTL)
+	if err != nil {
+		log.Printf("auth.first_login_change_password: generate token failed user=%s err=%v", updated.ID, err)
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}

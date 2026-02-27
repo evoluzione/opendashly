@@ -97,6 +97,7 @@ func NewRouter(cfg RouterConfig) http.Handler {
 		r.Post("/api/auth/login", cfg.AuthHandler.Login)
 		r.Post("/api/auth/logout", cfg.AuthHandler.Logout)
 		r.Post("/api/auth/change-password", cfg.AuthHandler.ChangePassword)
+		r.Post("/api/auth/first-login-change-password", cfg.AuthHandler.FirstLoginChangePassword)
 		r.Get("/api/auth/session", cfg.AuthHandler.Session)
 	}
 	if cfg.UsersHandler != nil {
