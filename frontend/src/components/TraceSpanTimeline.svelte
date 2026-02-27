@@ -833,7 +833,7 @@
 
   .span-header {
     display: grid;
-    grid-template-columns: 220px 1fr 80px;
+    grid-template-columns: minmax(260px, 320px) 1fr 80px;
     gap: 12px;
     align-items: center;
     font-size: 11px;
@@ -859,7 +859,7 @@
     background: white;
     border-radius: 10px;
     display: grid;
-    grid-template-columns: 220px 1fr 80px;
+    grid-template-columns: minmax(260px, 320px) 1fr 80px;
     gap: 12px;
     align-items: center;
     text-align: left;
@@ -881,7 +881,7 @@
     flex-direction: column;
     gap: 4px;
     min-width: 0;
-    padding-left: calc(var(--depth, 0) * 14px);
+    padding-left: min(calc(var(--depth, 0) * 10px), 48px);
   }
 
   .meta-title {
@@ -979,7 +979,7 @@
   .service {
     font-size: 11px;
     color: #64748b;
-    padding-left: 24px;
+    padding-left: 16px;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
