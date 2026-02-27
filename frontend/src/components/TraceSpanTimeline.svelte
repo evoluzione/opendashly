@@ -524,7 +524,7 @@
                   <span class="depth-branch" style={`opacity:${row.depth > 0 ? 1 : 0}`}>↳</span>
                   <span class="source-dot" style={`background:${color}`}></span>
                   <span class="name">{span.name || "Span"}</span>
-                  {#if kind}
+                  {#if kind && kind.kind !== "internal"}
                     <span
                       class="kind-badge"
                       title={kind.label}
@@ -532,33 +532,44 @@
                     >
                       {#if kind.kind === "producer"}
                         <svg class="kind-icon-svg" viewBox="0 0 14 14" aria-hidden="true" focusable="false">
-                          <path d="M2 7h7" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
-                          <path d="M7.5 3.5 11 7l-3.5 3.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+                          <rect x="1.75" y="3" width="5.5" height="8" rx="1.2" fill="none" stroke="currentColor" stroke-width="1.3"/>
+                          <path d="M6.5 7h5" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+                          <path d="M9.5 4.5 12 7 9.5 9.5" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
                         </svg>
                       {:else if kind.kind === "consumer"}
                         <svg class="kind-icon-svg" viewBox="0 0 14 14" aria-hidden="true" focusable="false">
-                          <path d="M12 7H5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
-                          <path d="M6.5 3.5 3 7l3.5 3.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+                          <rect x="6.75" y="3" width="5.5" height="8" rx="1.2" fill="none" stroke="currentColor" stroke-width="1.3"/>
+                          <path d="M7.5 7h-5" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+                          <path d="M4.5 9.5 2 7l2.5-2.5" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
                         </svg>
                       {:else}
                         {kind.icon}
                       {/if}
                     </span>
                   {/if}
-                  {#if isErrorStatus(span.status)}
-                    <span class="row-error" title="Span in errore">⚠️</span>
-                  {/if}
                   {#if externalIp}
                     <span
                       class="external-ip-badge"
                       title={`Chiamata verso IP esterno: ${externalIp.ip} (${externalIp.sourceKey})`}
-                    >🌍</span>
+                    >
+                      <svg class="external-ip-icon" viewBox="0 0 14 14" aria-hidden="true" focusable="false">
+                        <path d="M2.5 11.5 11.5 2.5" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+                        <path d="M8.5 2.5h3v3" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                        <circle cx="4" cy="10" r="2.2" fill="none" stroke="currentColor" stroke-width="1.3"/>
+                      </svg>
+                    </span>
                   {/if}
                   {#if row.parallelSiblingCount > 0}
                     <span
                       class="parallel-badge"
                       title={`Span parallelo con ${row.parallelSiblingCount} sibling nello stesso ramo`}
-                    >∥{row.parallelSiblingCount + 1}</span>
+                    >
+                      <svg class="parallel-icon" viewBox="0 0 14 14" aria-hidden="true" focusable="false">
+                        <path d="M4 2v10M10 2v10" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
+                        <path d="M4 4h3M10 10H7" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
+                      </svg>
+                      <span>x{row.parallelSiblingCount + 1}</span>
+                    </span>
                   {/if}
                 </div>
                 <span class="service">{span.service || "servizio sconosciuto"}</span>
@@ -922,20 +933,6 @@
     display: block;
   }
 
-  .row-error {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    min-width: 22px;
-    font-size: 11px;
-    color: #b91c1c;
-    background: #fee2e2;
-    border: 1px solid #fecaca;
-    padding: 2px 6px;
-    border-radius: 999px;
-    line-height: 1;
-  }
-
   .external-ip-badge {
     display: inline-flex;
     align-items: center;
@@ -950,19 +947,33 @@
     line-height: 1;
   }
 
+  .external-ip-icon {
+    width: 11px;
+    height: 11px;
+    display: block;
+  }
+
   .parallel-badge {
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    min-width: 24px;
+    gap: 4px;
+    min-width: 30px;
     font-size: 10px;
     font-weight: 700;
-    color: #0f766e;
-    background: #ccfbf1;
-    border: 1px solid #99f6e4;
-    padding: 2px 6px;
+    color: #334155;
+    background: #f8fafc;
+    border: 1px solid #cbd5e1;
+    padding: 2px 7px;
     border-radius: 999px;
     line-height: 1;
+  }
+
+  .parallel-icon {
+    width: 11px;
+    height: 11px;
+    display: block;
+    opacity: 0.85;
   }
 
   .service {
