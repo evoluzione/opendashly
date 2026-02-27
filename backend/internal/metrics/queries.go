@@ -2,6 +2,7 @@ package metrics
 
 import (
 	"fmt"
+	"strings"
 	"time"
 )
 
@@ -36,7 +37,8 @@ func serviceFilter(serviceName string) string {
 	if serviceName == "" {
 		return ""
 	}
-	return fmt.Sprintf(" AND ServiceName = '%s'", serviceName)
+	escaped := strings.ReplaceAll(serviceName, "'", "\\'")
+	return fmt.Sprintf(" AND ServiceName = '%s'", escaped)
 }
 
 func serverSpanFilter() string {
@@ -45,7 +47,11 @@ func serverSpanFilter() string {
 }
 
 func errorStatusClause() string {
-	return "toString(StatusCode) = 'Error' OR toString(StatusCode) = '2' OR toString(StatusCode) = 'STATUS_CODE_ERROR'"
+	return "StatusCode IN ('Error', '2', 'STATUS_CODE_ERROR')"
+}
+
+func endpointSpanFilter() string {
+	return "(startsWith(SpanName, 'GET ') OR startsWith(SpanName, 'POST ') OR startsWith(SpanName, 'PUT ') OR startsWith(SpanName, 'PATCH ') OR startsWith(SpanName, 'DELETE ') OR startsWith(SpanName, 'OPTIONS ') OR startsWith(SpanName, 'HEAD '))"
 }
 
 func timeBucketInterval(from, to time.Time) string {
@@ -108,14 +114,14 @@ func BuildSlowestEndpointsQuery(from, to time.Time, serviceName string, limit in
 			count() AS cnt
 		FROM telemetry.otel_traces
 		WHERE Timestamp >= '%s' AND Timestamp <= '%s'
-				AND match(SpanName, '^(GET|POST|PUT|PATCH|DELETE|OPTIONS|HEAD)\\s+\\S')
+				AND %s
 				%s
 				%s
 		GROUP BY endpoint, service
 		HAVING cnt >= 5
 		ORDER BY p95 DESC
 		LIMIT %d
-		`, formatTime(from), formatTime(to), serverSpanFilter(), serviceFilter(serviceName), limit)
+		`, formatTime(from), formatTime(to), endpointSpanFilter(), serverSpanFilter(), serviceFilter(serviceName), limit)
 }
 
 // BuildErrorHotspotsQuery builds a query to get endpoints with highest error rates.
@@ -125,19 +131,19 @@ func BuildErrorHotspotsQuery(from, to time.Time, serviceName string, limit int) 
 		SELECT
 			SpanName AS endpoint,
 			ServiceName AS service,
-			countIf(toString(StatusCode) = 'Error' OR toString(StatusCode) = '2' OR toString(StatusCode) = 'STATUS_CODE_ERROR') AS error_count,
+			countIf(%s) AS error_count,
 			count() AS total_count,
-			if(count() > 0, (countIf(toString(StatusCode) = 'Error' OR toString(StatusCode) = '2' OR toString(StatusCode) = 'STATUS_CODE_ERROR') / count()) * 100, 0) AS error_rate
+			if(count() > 0, (countIf(%s) / count()) * 100, 0) AS error_rate
 		FROM telemetry.otel_traces
 		WHERE Timestamp >= '%s' AND Timestamp <= '%s'
-				AND match(SpanName, '^(GET|POST|PUT|PATCH|DELETE|OPTIONS|HEAD)\\s+\\S')
+				AND %s
 				%s
 				%s
 		GROUP BY endpoint, service
 		HAVING total_count >= 5 AND error_count > 0
 		ORDER BY error_rate DESC, error_count DESC
 		LIMIT %d
-		`, formatTime(from), formatTime(to), serverSpanFilter(), serviceFilter(serviceName), limit)
+		`, errorStatusClause(), errorStatusClause(), formatTime(from), formatTime(to), endpointSpanFilter(), serverSpanFilter(), serviceFilter(serviceName), limit)
 }
 
 // BuildApdexQuery builds a query to calculate APDEX score.
@@ -165,28 +171,28 @@ func BuildThroughputQuery(from, to time.Time, serviceName string) string {
 		SELECT
 			toStartOfInterval(Timestamp, INTERVAL %s) AS bucket,
 			count() AS request_count,
-			countIf(toString(StatusCode) = 'Error' OR toString(StatusCode) = '2' OR toString(StatusCode) = 'STATUS_CODE_ERROR') AS error_count
+			countIf(%s) AS error_count
 		FROM telemetry.otel_traces
 		WHERE Timestamp >= '%s' AND Timestamp <= '%s'
 				%s
 				%s
 		GROUP BY bucket
 		ORDER BY bucket
-		`, interval, formatTime(from), formatTime(to), serverSpanFilter(), serviceFilter(serviceName))
+		`, interval, errorStatusClause(), formatTime(from), formatTime(to), serverSpanFilter(), serviceFilter(serviceName))
 }
 
 // BuildErrorRateQuery builds a query to get overall error rate.
 func BuildErrorRateQuery(from, to time.Time, serviceName string) string {
 	return fmt.Sprintf(`
 		SELECT
-			countIf(toString(StatusCode) = 'Error' OR toString(StatusCode) = '2' OR toString(StatusCode) = 'STATUS_CODE_ERROR') AS error_count,
+			countIf(%s) AS error_count,
 			count() AS total_count,
-			if(count() > 0, (countIf(toString(StatusCode) = 'Error' OR toString(StatusCode) = '2' OR toString(StatusCode) = 'STATUS_CODE_ERROR') / count()) * 100, 0) AS error_rate
+			if(count() > 0, (countIf(%s) / count()) * 100, 0) AS error_rate
 		FROM telemetry.otel_traces
 		WHERE Timestamp >= '%s' AND Timestamp <= '%s'
 				%s
 				%s
-		`, formatTime(from), formatTime(to), serverSpanFilter(), serviceFilter(serviceName))
+		`, errorStatusClause(), errorStatusClause(), formatTime(from), formatTime(to), serverSpanFilter(), serviceFilter(serviceName))
 }
 
 // BuildLatencyPercentilesQuery builds a query for latency percentiles over time.
@@ -256,13 +262,13 @@ func BuildTopEndpointsThroughputQuery(from, to time.Time, serviceName string, li
 			if(count() > 0, (countIf(%s) / count()) * 100, 0) AS error_rate
 		FROM telemetry.otel_traces
 		WHERE Timestamp >= '%s' AND Timestamp <= '%s'
-			AND match(SpanName, '^(GET|POST|PUT|PATCH|DELETE|OPTIONS|HEAD)\\s+\\S')
+			AND %s
 			%s
 			%s
 		GROUP BY endpoint, service
 		ORDER BY request_count DESC
 		LIMIT %d
-	`, errorStatusClause(), errorStatusClause(), formatTime(from), formatTime(to), serverSpanFilter(), serviceFilter(serviceName), limit)
+	`, errorStatusClause(), errorStatusClause(), formatTime(from), formatTime(to), endpointSpanFilter(), serverSpanFilter(), serviceFilter(serviceName), limit)
 }
 
 // BuildLogVolumeQuery builds a query for log volume over time.

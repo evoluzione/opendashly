@@ -19,6 +19,14 @@ func BuildMetricsQuery(filters map[string]string, filterList []FilterItem, from,
 		sumQuery += where
 		gaugeQuery += where
 	}
+	if limit > 0 {
+		neededRows := limit
+		if offset > 0 {
+			neededRows += offset
+		}
+		sumQuery += " ORDER BY TimeUnix DESC LIMIT " + strconv.Itoa(neededRows)
+		gaugeQuery += " ORDER BY TimeUnix DESC LIMIT " + strconv.Itoa(neededRows)
+	}
 	query := "SELECT name, unit, timestamp, value FROM (" + sumQuery + " UNION ALL " + gaugeQuery + ")"
 	query += " ORDER BY timestamp DESC"
 	if limit > 0 {
@@ -44,7 +52,7 @@ func BuildMetricsCountQuery(filters map[string]string, filterList []FilterItem, 
 		sumQuery += where
 		gaugeQuery += where
 	}
-	// We count distinct series (Name + Unit)
-	query := "SELECT uniqExact(tuple(MetricName, MetricUnit)) FROM (" + sumQuery + " UNION ALL " + gaugeQuery + ")"
+	// We count distinct series (Name + Unit) using approximate aggregate for better performance on large datasets.
+	query := "SELECT uniqCombined64(tuple(MetricName, MetricUnit)) FROM (" + sumQuery + " UNION ALL " + gaugeQuery + ")"
 	return query
 }
