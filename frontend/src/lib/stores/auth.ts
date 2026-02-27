@@ -1,6 +1,6 @@
 import { writable } from 'svelte/store';
 import type { AuthSession, User } from '../../services/auth';
-import { changePassword, fetchSession, login, logout } from '../../services/auth';
+import { changePassword, fetchSession, firstLoginChangePassword, login, logout } from '../../services/auth';
 
 type AuthState = {
   user: User | null;
@@ -41,10 +41,23 @@ export async function loginUser(username: string, password: string): Promise<Aut
   }
 }
 
-export async function changePasswordForUser(currentPassword: string, newPassword: string): Promise<AuthSession | null> {
+export async function changePasswordForUser(newPassword: string, currentPassword?: string): Promise<AuthSession | null> {
   authState.update((state) => ({ ...state, loading: true, error: null }));
   try {
-    const session = await changePassword(currentPassword, newPassword);
+    const session = await changePassword(newPassword, currentPassword);
+    authState.set({ user: session.user, mustChangePassword: session.mustChangePassword, loading: false, error: null });
+    return session;
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Cambio password non riuscito';
+    authState.update((state) => ({ ...state, loading: false, error: message }));
+    return null;
+  }
+}
+
+export async function changePasswordForFirstLogin(newPassword: string): Promise<AuthSession | null> {
+  authState.update((state) => ({ ...state, loading: true, error: null }));
+  try {
+    const session = await firstLoginChangePassword(newPassword);
     authState.set({ user: session.user, mustChangePassword: session.mustChangePassword, loading: false, error: null });
     return session;
   } catch (err) {

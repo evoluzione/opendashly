@@ -10,7 +10,6 @@
   import {
     executeQuery,
     queryState,
-    setAutoRefresh,
     servicesState,
     loadServices,
   } from "../lib/stores/query";
@@ -43,7 +42,7 @@
   let activeTab: "logs" | "metriche" | "tracce" = "metriche";
   let dashboardLoaded = false;
   let initialTraceId: string | null = null;
-  let forceMode: "auto" | "manual" | "smart" | null = null;
+  let forceMode: "manual" | null = null;
   let autoRun = false;
   let tabFromUrl = "";
   let tabFromUrlApplied = false;
@@ -66,8 +65,7 @@
     initialTraceId = params.get("traceId");
     autoRun = params.get("autorun") === "1";
     const mode = params.get("mode");
-    forceMode =
-      mode === "auto" || mode === "manual" || mode === "smart" ? mode : null;
+    forceMode = mode === "manual" ? "manual" : null;
     const tabParam = params.get("tab") ?? "";
     if (tabParam && tabParam !== tabFromUrl) {
       tabFromUrl = tabParam;
@@ -140,7 +138,7 @@
   const pageSizeOptions = ["25", "50", "100", "200"];
 
   function handleRun(event: CustomEvent) {
-    const { request, autoRefreshSeconds } = event.detail;
+    const { request } = event.detail;
     logsCursorByPage.clear();
     tracesCursorByPage.clear();
     lastRequest = {
@@ -150,7 +148,6 @@
       tracesCursor: undefined,
     };
     void executeQuery(lastRequest).then(() => storeNextCursors(1));
-    setAutoRefresh(autoRefreshSeconds);
   }
 
   async function handlePageChange(
