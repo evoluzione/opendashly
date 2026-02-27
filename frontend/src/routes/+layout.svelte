@@ -6,8 +6,6 @@
   import { authState, loadSession } from '../lib/stores/auth';
   import AIAssistantWidget from '../components/AIAssistantWidget.svelte';
 
-  export let params: Record<string, string> = {};
-
   const publicRoutes = ['/login'];
 
   onMount(() => {

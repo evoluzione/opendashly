@@ -13,9 +13,6 @@
   } from "../../lib/stores/query";
   import { saveQuery } from "../../services/saved_queries";
   import type { QueryRequest } from "../../services/query";
-
-  export let params: Record<string, string> = {};
-
   let queryName = "";
   let lastRequest: QueryRequest | null = null;
   const logsCursorByPage = new Map<number, string>();

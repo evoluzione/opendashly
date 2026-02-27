@@ -1,9 +1,6 @@
 <script lang="ts">
   import { goto } from '$app/navigation';
   import { authState, loginUser } from '../../lib/stores/auth';
-
-  export let params: Record<string, string> = {};
-
   let username = '';
   let password = '';
 

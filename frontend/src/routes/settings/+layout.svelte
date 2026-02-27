@@ -2,10 +2,8 @@
   import { goto } from "$app/navigation";
   import Sidebar from "../../components/Sidebar.svelte";
 
-  export let params: Record<string, string> = {};
-
   function handleSelect(tab: string) {
-    void goto(`/?tab=${tab}&autorun=1`);
+    void goto(`/?tab=${tab}`);
   }
 </script>
 

@@ -170,23 +170,61 @@ INSERT INTO otel_traces (
 )
 SELECT
     ts AS Timestamp,
-    lower(hex(MD5(concat('trace-', toString(number))))) AS TraceId,
+        lower(hex(MD5(concat('trace-', toString(traceBucket))))) AS TraceId,
     substring(lower(hex(MD5(concat('span-', toString(number))))), 1, 16) AS SpanId,
-    if(number % 5 = 0, substring(lower(hex(MD5(concat('parent-', toString(number))))), 1, 16), '') AS ParentSpanId,
+        if(number % 4 = 0, substring(lower(hex(MD5(concat('trace-parent-', toString(traceBucket), '-', toString(number % 37))))), 1, 16), '') AS ParentSpanId,
     '' AS TraceState,
-    concat(multiIf(number % 2 = 0, 'GET ', 'POST '), '/api/v1/resource/', toString(number % 200)) AS SpanName,
-    'SERVER' AS SpanKind,
-    concat('svc-', toString(number % 30)) AS ServiceName,
-    map('service.name', concat('svc-', toString(number % 30)), 'k8s.namespace.name', if(number % 2 = 0, 'prod', 'stage')) AS ResourceAttributes,
+        multiIf(
+            kindSelector = 0, concat(if(number % 2 = 0, 'GET ', 'POST '), '/api/v1/resource/', toString(number % 200)),
+            kindSelector = 1, concat('HTTP GET https://ext-', toString(number % 40), '.example.net/api/', toString(number % 120)),
+            kindSelector = 2, concat('publish topic-', toString(number % 16)),
+            kindSelector = 3, concat('consume topic-', toString(number % 16)),
+            concat('internal.step.', toString(number % 60))
+        ) AS SpanName,
+        multiIf(
+            kindSelector = 0, 'SERVER',
+            kindSelector = 1, 'CLIENT',
+            kindSelector = 2, 'PRODUCER',
+            kindSelector = 3, 'CONSUMER',
+            'INTERNAL'
+        ) AS SpanKind,
+        concat('svc-', toString(traceBucket % 30)) AS ServiceName,
+        map('service.name', concat('svc-', toString(traceBucket % 30)), 'k8s.namespace.name', if(number % 2 = 0, 'prod', 'stage')) AS ResourceAttributes,
     'opendashly-loadtest' AS ScopeName,
     '1.0.0' AS ScopeVersion,
-    map('http.method', if(number % 2 = 0, 'GET', 'POST'), 'http.route', concat('/api/v1/resource/', toString(number % 200))) AS SpanAttributes,
-    toUInt64((number % 4000 + 10) * 1000000) AS Duration,
-    if(number % 20 = 0, 'STATUS_CODE_ERROR', 'STATUS_CODE_OK') AS StatusCode,
-    if(number % 20 = 0, 'synthetic error', '') AS StatusMessage,
-    [ts + toIntervalMillisecond(5)] AS ``Events.Timestamp``,
-    ['db.query'] AS ``Events.Name``,
-    [map('sql.table', 'orders')] AS ``Events.Attributes``,
+        map(
+            'http.method', if(number % 2 = 0, 'GET', 'POST'),
+            'http.route', concat('/api/v1/resource/', toString(number % 200)),
+            'messaging.system', if(kindSelector IN (2, 3), 'kafka', ''),
+            'messaging.operation', if(kindSelector = 2, 'publish', if(kindSelector = 3, 'process', '')),
+            'net.peer.ip', if(kindSelector IN (1, 2, 3), concat('34.', toString(number % 250 + 1), '.', toString(number % 240 + 10), '.', toString(number % 220 + 20)), concat('10.', toString(number % 250 + 1), '.', toString(number % 240 + 10), '.', toString(number % 220 + 20)))
+        ) AS SpanAttributes,
+        toUInt64((
+            multiIf(
+                kindSelector = 0, (number % 2200 + 20),
+                kindSelector = 1, (number % 3000 + 30),
+                kindSelector = 2, (number % 1200 + 10),
+                kindSelector = 3, (number % 1400 + 10),
+                (number % 700 + 5)
+            )
+        ) * 1000000) AS Duration,
+        if(number % 19 = 0, 'STATUS_CODE_ERROR', 'STATUS_CODE_OK') AS StatusCode,
+        if(number % 19 = 0, concat('synthetic error in ', toString(SpanKind)), '') AS StatusMessage,
+        [ts + toIntervalMillisecond(number % 800 + 5)] AS ``Events.Timestamp``,
+        [multiIf(number % 19 = 0, 'exception', kindSelector = 2, 'queue.publish', kindSelector = 3, 'queue.consume', kindSelector = 1, 'http.client', 'app.step')] AS ``Events.Name``,
+        [
+            multiIf(
+                number % 19 = 0,
+                map('exception.type', 'SyntheticError', 'exception.message', concat('boom-', toString(number))),
+                kindSelector = 2,
+                map('messaging.system', 'kafka', 'messaging.destination', concat('topic-', toString(number % 16))),
+                kindSelector = 3,
+                map('messaging.system', 'kafka', 'messaging.destination', concat('topic-', toString(number % 16))),
+                kindSelector = 1,
+                map('http.url', concat('https://ext-', toString(number % 40), '.example.net/api/', toString(number % 120)), 'http.status_code', if(number % 19 = 0, '500', '200')),
+                map('component', 'handler', 'step', toString(number % 12))
+            )
+        ] AS ``Events.Attributes``,
     [] AS ``Links.TraceId``,
     [] AS ``Links.SpanId``,
     [] AS ``Links.TraceState``,
@@ -195,6 +233,10 @@ FROM
 (
     SELECT
         number,
+                cityHash64(number) % toUInt64(greatest(1, intDiv($Rows, 14))) AS normalBucket,
+                cityHash64(number) % toUInt64(greatest(1, intDiv($Rows, 120))) AS hotspotBucket,
+                if(number % 7 = 0, hotspotBucket, normalBucket) AS traceBucket,
+                cityHash64(number + 17) % 5 AS kindSelector,
         now64(9) - toIntervalSecond(number % 604800) AS ts
     FROM numbers($Rows)
 )

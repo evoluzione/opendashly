@@ -31,6 +31,12 @@
     title: string;
   };
 
+  type DisplaySpanRow = {
+    span: TraceSpan;
+    depth: number;
+    parallelSiblingCount: number;
+  };
+
   let spans: TraceSpan[] = [];
   let relatedLogs: RelatedLog[] = [];
   let loading = true;
@@ -137,6 +143,7 @@
   $: selectedSpanLogs = selectedSpan ? relatedLogsForSpan(selectedSpan) : [];
   $: selectedExceptions = selectedSpan ? collectSpanExceptions(selectedSpan) : [];
   $: selectedEvents = selectedSpan ? collectSpanEvents(selectedSpan) : [];
+  $: displayRows = buildDisplayRows(spans);
 
   function barStyle(span: TraceSpan) {
     const color = colorForSource(spanSource(span));
@@ -296,29 +303,14 @@
     return String(value);
   }
 
-  function isDbSpan(span: TraceSpan): boolean {
-    const attrs = span.attributes ?? {};
-    return !!(attrs["db.system"] || attrs["db.name"] || attrs["db.type"]);
-  }
-
   interface SpanKindResult {
+    kind: string;
     label: string;
-    short: string;
+    icon: string;
     color: string;
   }
 
   function spanKindInfo(span: TraceSpan): SpanKindResult | null {
-    if (isDbSpan(span)) {
-      const attrs = span.attributes ?? {};
-      const dbSystem = attrs["db.system"] || attrs["db.type"] || "DB";
-      const dbOp = attrs["db.operation"] || "query";
-      return {
-        label: `${dbSystem} ${dbOp}`,
-        short: "DB",
-        color: "#0891b2",
-      };
-    }
-
     const raw = span.spanKind;
     if (raw === null || raw === undefined || raw === "") {
       return null;
@@ -326,31 +318,169 @@
 
     if (typeof raw === "number") {
       const map: Record<number, SpanKindResult> = {
-        0: { label: "Internal", short: "I", color: "#64748b" },
-        1: { label: "Server", short: "S", color: "#16a34a" },
-        2: { label: "Client", short: "CL", color: "#2563eb" },
-        3: { label: "Producer", short: "P", color: "#9333ea" },
-        4: { label: "Consumer", short: "C", color: "#ea580c" },
+        0: { kind: "internal", label: "Internal", icon: "⚙️", color: "#64748b" },
+        1: { kind: "server", label: "Server", icon: "🖥️", color: "#16a34a" },
+        2: { kind: "client", label: "Client", icon: "🌐", color: "#2563eb" },
+        3: { kind: "producer", label: "Producer", icon: "📤", color: "#9333ea" },
+        4: { kind: "consumer", label: "Consumer", icon: "📥", color: "#ea580c" },
       };
-      return map[raw] ?? { label: `Kind ${raw}`, short: "K", color: "#94a3b8" };
+      return map[raw] ?? { kind: "unknown", label: `Kind ${raw}`, icon: "🏷️", color: "#94a3b8" };
     }
 
     const normalized = String(raw).toUpperCase();
-    if (normalized.includes("PRODUCER")) return { label: "Producer", short: "P", color: "#9333ea" };
-    if (normalized.includes("CONSUMER")) return { label: "Consumer", short: "C", color: "#ea580c" };
-    if (normalized.includes("SERVER")) return { label: "Server", short: "S", color: "#16a34a" };
-    if (normalized.includes("CLIENT")) return { label: "Client", short: "CL", color: "#2563eb" };
-    if (normalized.includes("INTERNAL")) return { label: "Internal", short: "I", color: "#64748b" };
+    if (normalized.includes("PRODUCER")) return { kind: "producer", label: "Producer", icon: "📤", color: "#9333ea" };
+    if (normalized.includes("CONSUMER")) return { kind: "consumer", label: "Consumer", icon: "📥", color: "#ea580c" };
+    if (normalized.includes("SERVER")) return { kind: "server", label: "Server", icon: "🖥️", color: "#16a34a" };
+    if (normalized.includes("CLIENT")) return { kind: "client", label: "Client", icon: "🌐", color: "#2563eb" };
+    if (normalized.includes("INTERNAL")) return { kind: "internal", label: "Internal", icon: "⚙️", color: "#64748b" };
 
     return {
+      kind: "unknown",
       label: normalized,
-      short: normalized.slice(0, 2),
+      icon: "🏷️",
       color: "#94a3b8",
     };
   }
 
+  function extractIpv4Candidates(value: string): string[] {
+    if (!value) return [];
+    const matches = value.match(/\b(?:\d{1,3}\.){3}\d{1,3}\b/g) ?? [];
+    return matches.filter((ip) => {
+      const parts = ip.split(".").map((part) => Number(part));
+      return parts.length === 4 && parts.every((part) => Number.isInteger(part) && part >= 0 && part <= 255);
+    });
+  }
+
+  function isPrivateOrReservedIpv4(ip: string): boolean {
+    const [a, b] = ip.split(".").map((part) => Number(part));
+    if (a === 10) return true;
+    if (a === 127) return true;
+    if (a === 0) return true;
+    if (a === 169 && b === 254) return true;
+    if (a === 172 && b >= 16 && b <= 31) return true;
+    if (a === 192 && b === 168) return true;
+    if (a === 100 && b >= 64 && b <= 127) return true;
+    if (a >= 224) return true;
+    return false;
+  }
+
+  function externalIpInfo(span: TraceSpan): { ip: string; sourceKey: string } | null {
+    const attrs = span.attributes ?? {};
+    const candidateKeys = [
+      "net.peer.ip",
+      "peer.ip",
+      "network.peer.address",
+      "server.address",
+      "http.host",
+      "client.address",
+      "url.full",
+      "http.url",
+      "http.target",
+    ];
+
+    for (const key of candidateKeys) {
+      const raw = attrs[key];
+      if (!raw) continue;
+      const candidates = extractIpv4Candidates(String(raw));
+      const externalIp = candidates.find((ip) => !isPrivateOrReservedIpv4(ip));
+      if (externalIp) {
+        return { ip: externalIp, sourceKey: key };
+      }
+    }
+
+    return null;
+  }
+
   function toggleSpanDetails(spanId: string) {
     selectedSpanId = selectedSpanId === spanId ? "" : spanId;
+  }
+
+  function normalizedParentId(span: TraceSpan): string | null {
+    const value = (span.parentSpanId || "").trim();
+    return value ? value : null;
+  }
+
+  function hasTimeOverlap(a: TraceSpan, b: TraceSpan): boolean {
+    const aStart = toMs(a.startTime);
+    const aEnd = toMs(a.endTime);
+    const bStart = toMs(b.startTime);
+    const bEnd = toMs(b.endTime);
+    return aStart < bEnd && bStart < aEnd;
+  }
+
+  function buildDisplayRows(input: TraceSpan[]): DisplaySpanRow[] {
+    if (input.length === 0) return [];
+
+    const byId = new Map<string, TraceSpan>();
+    for (const span of input) {
+      if (span.spanId) byId.set(span.spanId, span);
+    }
+
+    const children = new Map<string, TraceSpan[]>();
+    const roots: TraceSpan[] = [];
+    for (const span of input) {
+      const parentId = normalizedParentId(span);
+      if (!parentId || !byId.has(parentId)) {
+        roots.push(span);
+        continue;
+      }
+      const siblings = children.get(parentId) ?? [];
+      siblings.push(span);
+      children.set(parentId, siblings);
+    }
+
+    const byStartThenDuration = (left: TraceSpan, right: TraceSpan) => {
+      const startDiff = toMs(left.startTime) - toMs(right.startTime);
+      if (startDiff !== 0) return startDiff;
+      const durDiff = durationMs(right) - durationMs(left);
+      if (durDiff !== 0) return durDiff;
+      return (left.spanId || "").localeCompare(right.spanId || "");
+    };
+
+    roots.sort(byStartThenDuration);
+    for (const [, siblingList] of children) {
+      siblingList.sort(byStartThenDuration);
+    }
+
+    const parallelCounts = new Map<string, number>();
+    for (const [, siblingList] of children) {
+      for (let i = 0; i < siblingList.length; i += 1) {
+        let overlaps = 0;
+        for (let j = 0; j < siblingList.length; j += 1) {
+          if (i === j) continue;
+          if (hasTimeOverlap(siblingList[i], siblingList[j])) overlaps += 1;
+        }
+        parallelCounts.set(siblingList[i].spanId, overlaps);
+      }
+    }
+
+    const result: DisplaySpanRow[] = [];
+    const visited = new Set<string>();
+    const walk = (span: TraceSpan, depth: number) => {
+      if (!span.spanId || visited.has(span.spanId)) return;
+      visited.add(span.spanId);
+      result.push({
+        span,
+        depth,
+        parallelSiblingCount: parallelCounts.get(span.spanId) ?? 0,
+      });
+      const nested = children.get(span.spanId) ?? [];
+      for (const child of nested) {
+        walk(child, depth + 1);
+      }
+    };
+
+    for (const root of roots) {
+      walk(root, 0);
+    }
+
+    for (const span of input.sort(byStartThenDuration)) {
+      if (span.spanId && !visited.has(span.spanId)) {
+        walk(span, 0);
+      }
+    }
+
+    return result;
   }
 </script>
 
@@ -376,9 +506,11 @@
         </div>
 
         <div class="span-grid">
-          {#each spans as span}
+          {#each displayRows as row}
+            {@const span = row.span}
             {@const source = spanSource(span)}
             {@const kind = spanKindInfo(span)}
+            {@const externalIp = externalIpInfo(span)}
             {@const color = colorForSource(source)}
             {@const eventMarkers = errorEventMarkers(span)}
             <button
@@ -387,8 +519,9 @@
               class:selected={span.spanId === selectedSpanId}
               on:click={() => toggleSpanDetails(span.spanId)}
             >
-              <div class="meta">
+              <div class="meta" style={`--depth:${row.depth}`}>
                 <div class="meta-title">
+                  <span class="depth-branch" style={`opacity:${row.depth > 0 ? 1 : 0}`}>↳</span>
                   <span class="source-dot" style={`background:${color}`}></span>
                   <span class="name">{span.name || "Span"}</span>
                   {#if kind}
@@ -396,11 +529,36 @@
                       class="kind-badge"
                       title={kind.label}
                       style={`background:${kind.color}20;color:${kind.color};border-color:${kind.color}40`}
-                      >{kind.short}</span
                     >
+                      {#if kind.kind === "producer"}
+                        <svg class="kind-icon-svg" viewBox="0 0 14 14" aria-hidden="true" focusable="false">
+                          <path d="M2 7h7" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+                          <path d="M7.5 3.5 11 7l-3.5 3.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+                        </svg>
+                      {:else if kind.kind === "consumer"}
+                        <svg class="kind-icon-svg" viewBox="0 0 14 14" aria-hidden="true" focusable="false">
+                          <path d="M12 7H5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+                          <path d="M6.5 3.5 3 7l3.5 3.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+                        </svg>
+                      {:else}
+                        {kind.icon}
+                      {/if}
+                    </span>
                   {/if}
                   {#if isErrorStatus(span.status)}
-                    <span class="row-error">ERR</span>
+                    <span class="row-error" title="Span in errore">⚠️</span>
+                  {/if}
+                  {#if externalIp}
+                    <span
+                      class="external-ip-badge"
+                      title={`Chiamata verso IP esterno: ${externalIp.ip} (${externalIp.sourceKey})`}
+                    >🌍</span>
+                  {/if}
+                  {#if row.parallelSiblingCount > 0}
+                    <span
+                      class="parallel-badge"
+                      title={`Span parallelo con ${row.parallelSiblingCount} sibling nello stesso ramo`}
+                    >∥{row.parallelSiblingCount + 1}</span>
                   {/if}
                 </div>
                 <span class="service">{span.service || "servizio sconosciuto"}</span>
@@ -712,6 +870,7 @@
     flex-direction: column;
     gap: 4px;
     min-width: 0;
+    padding-left: calc(var(--depth, 0) * 14px);
   }
 
   .meta-title {
@@ -719,6 +878,12 @@
     align-items: center;
     gap: 6px;
     min-width: 0;
+  }
+
+  .depth-branch {
+    font-size: 10px;
+    color: #94a3b8;
+    flex-shrink: 0;
   }
 
   .source-dot {
@@ -741,32 +906,69 @@
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    min-width: 18px;
+    min-width: 22px;
     padding: 2px 6px;
     border-radius: 999px;
     border: 1px solid;
-    font-size: 9px;
+    font-size: 11px;
     font-weight: 700;
-    text-transform: uppercase;
     white-space: nowrap;
+    line-height: 1;
+  }
+
+  .kind-icon-svg {
+    width: 12px;
+    height: 12px;
+    display: block;
   }
 
   .row-error {
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    font-size: 9px;
-    font-weight: 800;
+    min-width: 22px;
+    font-size: 11px;
     color: #b91c1c;
     background: #fee2e2;
     border: 1px solid #fecaca;
-    padding: 2px 4px;
+    padding: 2px 6px;
     border-radius: 999px;
+    line-height: 1;
+  }
+
+  .external-ip-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 22px;
+    font-size: 11px;
+    color: #7c3aed;
+    background: #f3e8ff;
+    border: 1px solid #ddd6fe;
+    padding: 2px 6px;
+    border-radius: 999px;
+    line-height: 1;
+  }
+
+  .parallel-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 24px;
+    font-size: 10px;
+    font-weight: 700;
+    color: #0f766e;
+    background: #ccfbf1;
+    border: 1px solid #99f6e4;
+    padding: 2px 6px;
+    border-radius: 999px;
+    line-height: 1;
   }
 
   .service {
     font-size: 11px;
     color: #64748b;
+    padding-left: 24px;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
