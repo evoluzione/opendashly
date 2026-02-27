@@ -1,8 +1,6 @@
 <script lang="ts">
   import { page } from '$app/stores';
   import CorrelationPanel from '../../../components/CorrelationPanel.svelte';
-
-  export let params: Record<string, string> = {};
 </script>
 
 <section class="trace-detail">

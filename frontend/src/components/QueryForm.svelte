@@ -80,6 +80,7 @@
   let lastInitialTraceId = "";
   let suppressUrlSync = true;
   let autoSubmitReady = false;
+  let suppressNextAutoSubmit = false;
   let autoSubmitTimer: ReturnType<typeof setTimeout> | null = null;
   let lastAutoSubmitKey = "";
 
@@ -125,6 +126,9 @@
     const oldTab = previousTab;
     if (oldTab) saveState(oldTab);
     loadState(activeTab);
+    if (oldTab) {
+      suppressNextAutoSubmit = true;
+    }
     previousTab = activeTab;
     persistedStates = tabStates;
   }
@@ -595,7 +599,11 @@
     });
     if (autoSubmitKey !== lastAutoSubmitKey) {
       lastAutoSubmitKey = autoSubmitKey;
-      queueAutoSubmit();
+      if (suppressNextAutoSubmit) {
+        suppressNextAutoSubmit = false;
+      } else {
+        queueAutoSubmit();
+      }
     }
   }
 
