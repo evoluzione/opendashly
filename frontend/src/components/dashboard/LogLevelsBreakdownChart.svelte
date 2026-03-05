@@ -4,43 +4,44 @@
 
   export let data: LogLevelCount[] = [];
 
-  function colorFor(level: string) {
-    switch (level) {
-      case 'ERROR':
-        return '#ef4444';
-      case 'WARN':
-      case 'WARNING':
-        return '#f59e0b';
-      case 'INFO':
-        return '#0ea5e9';
-      case 'DEBUG':
-        return '#94a3b8';
-      default:
-        return '#64748b';
-    }
+  const colors: Record<string, string> = {
+    error: '#ef4444',
+    warn: '#f59e0b',
+    warning: '#f59e0b',
+    info: '#3b82f6',
+    debug: '#8b5cf6',
+    trace: '#06b6d4',
+    fatal: '#b91c1c'
+  };
+
+  function colorFor(level: string): string {
+    return colors[level.toLowerCase()] ?? '#94a3b8';
   }
 </script>
 
 <div class="table-card">
   <div class="table-header">
     <span class="table-title">
-      Distribuzione Log
-      <InfoTooltip text="Ripartizione dei log per livello di severita." />
+      Livelli Log
+      <InfoTooltip text="Distribuzione dei log per livello (ERROR/WARN/INFO/DEBUG/TRACE)." />
     </span>
-    <span class="table-subtitle">Per livello di log</span>
+    <span class="table-subtitle">Qualita e severita del rumore applicativo</span>
   </div>
 
   {#if data.length === 0}
     <div class="empty">Nessun dato disponibile</div>
   {:else}
-    <div class="levels">
+    <div class="breakdown">
       {#each data as row}
-        <div class="level-row">
-          <div class="level-label">{row.level || 'UNKNOWN'}</div>
-          <div class="level-bar">
+        <div class="breakdown-row">
+          <div class="breakdown-label">
+            <span class="dot" style="background: {colorFor(row.level)}"></span>
+            <span>{row.level.toUpperCase()}</span>
+          </div>
+          <div class="breakdown-bar">
             <span class="bar" style="width: {Math.min(row.percentage, 100)}%; background: {colorFor(row.level)}"></span>
           </div>
-          <div class="level-value">
+          <div class="breakdown-value">
             <span>{row.count.toLocaleString()}</span>
             <span class="pct">{row.percentage.toFixed(1)}%</span>
           </div>
@@ -58,6 +59,9 @@
     box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05), 0 4px 12px rgba(0, 0, 0, 0.03);
     border: 1px solid rgba(15, 23, 42, 0.06);
     min-width: 0;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
   }
 
   .table-header {
@@ -85,26 +89,36 @@
     font-size: 14px;
   }
 
-  .levels {
+  .breakdown {
     display: flex;
     flex-direction: column;
     gap: 12px;
+    flex: 1;
+    min-height: 0;
   }
 
-  .level-row {
+  .breakdown-row {
     display: grid;
-    grid-template-columns: minmax(80px, 1fr) minmax(120px, 2fr) auto;
+    grid-template-columns: minmax(100px, 1fr) minmax(120px, 2fr) auto;
     align-items: center;
     gap: 12px;
   }
 
-  .level-label {
-    font-size: 12px;
-    font-weight: 600;
+  .breakdown-label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 13px;
     color: #0f172a;
   }
 
-  .level-bar {
+  .dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+  }
+
+  .breakdown-bar {
     height: 8px;
     background: #f1f5f9;
     border-radius: 999px;
@@ -117,7 +131,7 @@
     border-radius: 999px;
   }
 
-  .level-value {
+  .breakdown-value {
     display: flex;
     flex-direction: column;
     align-items: flex-end;

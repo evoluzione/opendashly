@@ -96,6 +96,8 @@
     display: flex;
     flex-direction: column;
     gap: 16px;
+    min-height: 0;
+    container-type: inline-size;
   }
 
   .gauge-header {
@@ -119,8 +121,8 @@
 
   .gauge-container {
     position: relative;
-    width: 120px;
-    height: 120px;
+    width: clamp(92px, 38cqw, 140px);
+    aspect-ratio: 1 / 1;
     margin: 0 auto;
   }
 
@@ -143,14 +145,14 @@
 
   .gauge-value .score {
     display: block;
-    font-size: 24px;
+    font-size: clamp(18px, 7cqw, 24px);
     font-weight: 700;
     line-height: 1.2;
   }
 
   .gauge-value .label {
     display: block;
-    font-size: 10px;
+    font-size: clamp(9px, 3cqw, 10px);
     font-weight: 600;
     text-transform: uppercase;
     letter-spacing: 0.05em;
@@ -168,7 +170,7 @@
     display: flex;
     align-items: center;
     gap: 8px;
-    font-size: 12px;
+    font-size: clamp(11px, 3.2cqw, 12px);
   }
 
   .dot {

@@ -56,6 +56,9 @@
     box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05), 0 4px 12px rgba(0, 0, 0, 0.03);
     border: 1px solid rgba(15, 23, 42, 0.06);
     min-width: 0;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
   }
 
   .table-header {
@@ -84,7 +87,9 @@
   }
 
   .table-wrapper {
-    overflow-x: auto;
+    overflow: auto;
+    flex: 1;
+    min-height: 0;
   }
 
   table {
