@@ -43,7 +43,10 @@ func serviceFilter(serviceName string) string {
 
 func serverSpanFilter() string {
 	return `
-			AND toString(SpanKind) IN ('SERVER', 'SPAN_KIND_SERVER', '2')`
+			AND (
+				upper(toString(SpanKind)) IN ('SERVER', 'SPAN_KIND_SERVER')
+				OR toString(SpanKind) = '2'
+			)`
 }
 
 func errorStatusClause() string {
