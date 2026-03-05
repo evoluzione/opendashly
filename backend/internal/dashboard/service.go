@@ -20,13 +20,15 @@ var defaultChartOrder = []ChartSetting{
 	{Key: "latency_distribution", Enabled: true, Order: 40, X: 0, Y: 2, W: 3, H: 2},
 	{Key: "latency_percentiles", Enabled: true, Order: 50, X: 3, Y: 2, W: 3, H: 2},
 	{Key: "throughput_timeseries", Enabled: true, Order: 60, X: 0, Y: 4, W: 3, H: 2},
-	{Key: "error_rate_timeseries", Enabled: true, Order: 70, X: 3, Y: 4, W: 3, H: 2},
-	{Key: "status_codes", Enabled: true, Order: 80, X: 0, Y: 6, W: 3, H: 2},
-	{Key: "slowest_endpoints", Enabled: true, Order: 90, X: 3, Y: 6, W: 3, H: 2},
-	{Key: "top_endpoints_throughput", Enabled: true, Order: 100, X: 0, Y: 8, W: 3, H: 2},
-	{Key: "error_hotspots", Enabled: true, Order: 110, X: 3, Y: 8, W: 3, H: 2},
-	{Key: "log_volume", Enabled: true, Order: 120, X: 0, Y: 10, W: 3, H: 2},
-	{Key: "log_levels", Enabled: true, Order: 130, X: 3, Y: 10, W: 3, H: 2},
+	{Key: "slowest_endpoints", Enabled: true, Order: 70, X: 3, Y: 4, W: 3, H: 2},
+	{Key: "top_endpoints_throughput", Enabled: true, Order: 80, X: 0, Y: 6, W: 3, H: 2},
+	{Key: "error_hotspots", Enabled: true, Order: 90, X: 3, Y: 6, W: 3, H: 2},
+	{Key: "availability_trend", Enabled: false, Order: 100, X: 0, Y: 8, W: 3, H: 2},
+	{Key: "error_budget_burn", Enabled: false, Order: 110, X: 3, Y: 8, W: 3, H: 2},
+	{Key: "error_rate_timeseries", Enabled: false, Order: 120, X: 0, Y: 10, W: 3, H: 2},
+	{Key: "service_latency_rank", Enabled: false, Order: 130, X: 3, Y: 10, W: 3, H: 2},
+	{Key: "slo_compliance", Enabled: false, Order: 140, X: 0, Y: 12, W: 3, H: 2},
+	{Key: "service_throughput", Enabled: false, Order: 150, X: 3, Y: 12, W: 3, H: 2},
 }
 
 func normalizeLayout(setting ChartSetting, fallback ChartSetting) ChartSetting {

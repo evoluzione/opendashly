@@ -26,11 +26,15 @@ export const defaultDashboardSettings: DashboardChartSetting[] = [
   { key: 'latency_distribution', enabled: true, order: 40, x: 0, y: 2, w: 3, h: 2 },
   { key: 'latency_percentiles', enabled: true, order: 50, x: 3, y: 2, w: 3, h: 2 },
   { key: 'throughput_timeseries', enabled: true, order: 60, x: 0, y: 4, w: 3, h: 2 },
-  { key: 'error_rate_timeseries', enabled: true, order: 70, x: 3, y: 4, w: 3, h: 2 },
-  { key: 'status_codes', enabled: true, order: 80, x: 0, y: 6, w: 3, h: 2 },
-  { key: 'slowest_endpoints', enabled: true, order: 90, x: 3, y: 6, w: 3, h: 2 },
-  { key: 'top_endpoints_throughput', enabled: true, order: 100, x: 0, y: 8, w: 3, h: 2 },
-  { key: 'error_hotspots', enabled: true, order: 110, x: 3, y: 8, w: 3, h: 2 }
+  { key: 'slowest_endpoints', enabled: true, order: 70, x: 3, y: 4, w: 3, h: 2 },
+  { key: 'top_endpoints_throughput', enabled: true, order: 80, x: 0, y: 6, w: 3, h: 2 },
+  { key: 'error_hotspots', enabled: true, order: 90, x: 3, y: 6, w: 3, h: 2 },
+  { key: 'availability_trend', enabled: false, order: 100, x: 0, y: 8, w: 3, h: 2 },
+  { key: 'error_budget_burn', enabled: false, order: 110, x: 3, y: 8, w: 3, h: 2 },
+  { key: 'error_rate_timeseries', enabled: false, order: 120, x: 0, y: 10, w: 3, h: 2 },
+  { key: 'service_latency_rank', enabled: false, order: 130, x: 3, y: 10, w: 3, h: 2 },
+  { key: 'slo_compliance', enabled: false, order: 140, x: 0, y: 12, w: 3, h: 2 },
+  { key: 'service_throughput', enabled: false, order: 150, x: 3, y: 12, w: 3, h: 2 }
 ];
 
 const defaultSettingByKey = new Map(defaultDashboardSettings.map((setting) => [setting.key, setting]));

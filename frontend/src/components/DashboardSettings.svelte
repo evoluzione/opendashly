@@ -74,9 +74,29 @@
       description: 'Serie temporale percentuale errori.'
     },
     {
-      key: 'status_codes',
-      label: 'Livelli Log',
-      description: 'Distribuzione severita log (error/warn/info/debug).'
+      key: 'slo_compliance',
+      label: 'SLO Compliance',
+      description: 'Percentuale finestre conformi a target P95.'
+    },
+    {
+      key: 'error_budget_burn',
+      label: 'Error Budget Burn',
+      description: 'Consumo budget errori su finestre 1h/6h.'
+    },
+    {
+      key: 'service_latency_rank',
+      label: 'Latenza per Servizio',
+      description: 'Ranking servizi con P95 peggiore.'
+    },
+    {
+      key: 'service_throughput',
+      label: 'Throughput per Servizio',
+      description: 'Volume richieste aggregato per servizio.'
+    },
+    {
+      key: 'availability_trend',
+      label: 'Disponibilita nel Tempo',
+      description: 'Trend availability = 100% - error rate.'
     },
     {
       key: 'slowest_endpoints',
@@ -269,30 +289,41 @@
   }
 
   function reorderEnabledWidget(key: string, targetKey: string | null, overCanvas: boolean) {
-    const enabledKeys = getEnabledOrderKeys();
-    const fromIndex = enabledKeys.indexOf(key);
+    const currentEnabledKeys = getEnabledOrderKeys();
+    const fromIndex = currentEnabledKeys.indexOf(key);
     if (fromIndex < 0) return;
 
-    enabledKeys.splice(fromIndex, 1);
-    if (!overCanvas) {
-      enabledKeys.splice(fromIndex, 0, key);
-      return;
-    }
-
-    let targetIndex = enabledKeys.length;
-    if (targetKey) {
-      const originalTargetIndex = getEnabledOrderKeys().indexOf(targetKey);
-      if (originalTargetIndex >= 0) {
-        // After removing source, indices at/after source shift left by one.
-        const adjustedTargetIndex =
-          originalTargetIndex > fromIndex ? originalTargetIndex - 1 : originalTargetIndex;
-        // Direction-aware insert: moving forward => after target, backward => before target.
-        targetIndex = fromIndex < originalTargetIndex ? adjustedTargetIndex + 1 : adjustedTargetIndex;
+    let patchByKey: Map<string, Partial<DashboardChartSetting>> | undefined;
+    if (targetKey && targetKey !== key) {
+      const sourceSetting = localSettings.find((item) => item.key === key);
+      const targetSetting = localSettings.find((item) => item.key === targetKey);
+      if (sourceSetting?.enabled && targetSetting?.enabled) {
+        const sourceW = normalizedW(sourceSetting.w, defaultByKey.get(sourceSetting.key)?.w ?? 3);
+        const targetW = normalizedW(targetSetting.w, defaultByKey.get(targetSetting.key)?.w ?? 3);
+        patchByKey = new Map<string, Partial<DashboardChartSetting>>();
+        patchByKey.set(key, { w: targetW, h: FIXED_H });
+        patchByKey.set(targetKey, { w: sourceW, h: FIXED_H });
       }
     }
 
-    enabledKeys.splice(targetIndex, 0, key);
-    commitEnabledOrder(enabledKeys);
+    if (!overCanvas) {
+      return;
+    }
+
+    if (targetKey && targetKey !== key) {
+      const targetIndex = currentEnabledKeys.indexOf(targetKey);
+      if (targetIndex >= 0) {
+        // Exact index swap: only source/target exchange slots.
+        const swapped = [...currentEnabledKeys];
+        const targetValue = swapped[targetIndex];
+        swapped[targetIndex] = swapped[fromIndex];
+        swapped[fromIndex] = targetValue;
+        commitEnabledOrder(swapped, patchByKey);
+        return;
+      }
+    }
+
+    commitEnabledOrder(currentEnabledKeys, patchByKey);
   }
 
   function resetLayout() {
@@ -672,6 +703,8 @@
   }
 
   .btn.primary:hover:not(:disabled) {
+    background: linear-gradient(135deg, #5558ee 0%, #7c56ee 100%);
+    border-color: transparent;
     transform: translateY(-1px);
     box-shadow: 0 6px 16px rgba(99, 102, 241, 0.4);
     color: #fff;
@@ -686,7 +719,6 @@
     display: grid;
     grid-template-columns: minmax(0, 1fr) 320px;
     gap: 14px;
-    min-height: 760px;
     align-items: stretch;
   }
 
@@ -696,9 +728,8 @@
     background: var(--panel-bg);
     box-shadow: var(--panel-shadow);
     padding: 12px;
-    height: 100%;
-    max-height: 760px;
-    overflow-y: auto;
+    height: auto;
+    overflow: visible;
   }
 
   .canvas {
@@ -844,9 +875,8 @@
     display: flex;
     flex-direction: column;
     gap: 10px;
-    overflow-y: auto;
-    height: 100%;
-    max-height: 760px;
+    overflow: visible;
+    height: auto;
     transition: box-shadow 0.15s ease, border-color 0.15s ease;
   }
 
@@ -948,7 +978,7 @@
     }
 
     .controls {
-      max-height: none;
+      height: auto;
     }
   }
 

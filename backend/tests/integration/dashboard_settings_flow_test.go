@@ -110,7 +110,7 @@ func TestDashboardSettingsAdminFlowIntegration(t *testing.T) {
 				"x":       1,
 				"y":       2,
 				"w":       5,
-				"h":       3,
+				"h":       2,
 			},
 		},
 	}
@@ -146,7 +146,7 @@ func TestDashboardSettingsAdminFlowIntegration(t *testing.T) {
 	if apdex == nil {
 		t.Fatalf("expected apdex_gauge in settings")
 	}
-	if apdex.X != 1 || apdex.Y != 2 || apdex.W != 5 || apdex.H != 3 {
+	if apdex.X != 1 || apdex.Y != 2 || apdex.W != 5 || apdex.H != 2 {
 		t.Fatalf("unexpected layout values: %+v", *apdex)
 	}
 }

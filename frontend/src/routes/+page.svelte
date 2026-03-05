@@ -31,7 +31,11 @@
   import ThroughputChart from "../components/dashboard/ThroughputChart.svelte";
   import LatencyPercentilesChart from "../components/dashboard/LatencyPercentilesChart.svelte";
   import ErrorRateChart from "../components/dashboard/ErrorRateChart.svelte";
-  import LogLevelsBreakdownChart from "../components/dashboard/LogLevelsBreakdownChart.svelte";
+  import SloComplianceCard from "../components/dashboard/SloComplianceCard.svelte";
+  import ErrorBudgetBurnCard from "../components/dashboard/ErrorBudgetBurnCard.svelte";
+  import ServiceLatencyRankCard from "../components/dashboard/ServiceLatencyRankCard.svelte";
+  import ServiceThroughputCard from "../components/dashboard/ServiceThroughputCard.svelte";
+  import AvailabilityTrendCard from "../components/dashboard/AvailabilityTrendCard.svelte";
   import TopEndpointsThroughputTable from "../components/dashboard/TopEndpointsThroughputTable.svelte";
   import SlowestEndpointsTable from "../components/dashboard/SlowestEndpointsTable.svelte";
   import ErrorHotspotsTable from "../components/dashboard/ErrorHotspotsTable.svelte";
@@ -568,13 +572,49 @@
                     data={$dashboardState.data.hotspots.errorHotspots}
                   />
                   </div>
-                {:else if chartSetting.key === "status_codes"}
+                {:else if chartSetting.key === "slo_compliance"}
                   <div
                     class="dashboard-item"
                     style={`grid-column:${(chartSetting.x ?? 0) + 1} / span ${chartSetting.w ?? 6};grid-row:${(chartSetting.y ?? 0) + 1} / span ${chartSetting.h ?? 3};`}
                   >
-                    <LogLevelsBreakdownChart
-                      data={$dashboardState.data.logs.levels}
+                    <SloComplianceCard
+                      data={$dashboardState.data.satisfaction.latencySeries}
+                    />
+                  </div>
+                {:else if chartSetting.key === "error_budget_burn"}
+                  <div
+                    class="dashboard-item"
+                    style={`grid-column:${(chartSetting.x ?? 0) + 1} / span ${chartSetting.w ?? 6};grid-row:${(chartSetting.y ?? 0) + 1} / span ${chartSetting.h ?? 3};`}
+                  >
+                    <ErrorBudgetBurnCard
+                      data={$dashboardState.data.satisfaction.errorRateSeries}
+                    />
+                  </div>
+                {:else if chartSetting.key === "service_latency_rank"}
+                  <div
+                    class="dashboard-item"
+                    style={`grid-column:${(chartSetting.x ?? 0) + 1} / span ${chartSetting.w ?? 6};grid-row:${(chartSetting.y ?? 0) + 1} / span ${chartSetting.h ?? 3};`}
+                  >
+                    <ServiceLatencyRankCard
+                      data={$dashboardState.data.hotspots.slowestEndpoints}
+                    />
+                  </div>
+                {:else if chartSetting.key === "service_throughput"}
+                  <div
+                    class="dashboard-item"
+                    style={`grid-column:${(chartSetting.x ?? 0) + 1} / span ${chartSetting.w ?? 6};grid-row:${(chartSetting.y ?? 0) + 1} / span ${chartSetting.h ?? 3};`}
+                  >
+                    <ServiceThroughputCard
+                      data={$dashboardState.data.hotspots.topEndpoints}
+                    />
+                  </div>
+                {:else if chartSetting.key === "availability_trend"}
+                  <div
+                    class="dashboard-item"
+                    style={`grid-column:${(chartSetting.x ?? 0) + 1} / span ${chartSetting.w ?? 6};grid-row:${(chartSetting.y ?? 0) + 1} / span ${chartSetting.h ?? 3};`}
+                  >
+                    <AvailabilityTrendCard
+                      data={$dashboardState.data.satisfaction.errorRateSeries}
                     />
                   </div>
                 {/if}
