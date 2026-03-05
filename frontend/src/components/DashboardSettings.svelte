@@ -26,6 +26,7 @@
     baseW: number;
     didDrag: boolean;
     targetKey: string | null;
+    targetMode: 'card' | 'slot' | null;
     overCanvas: boolean;
     overDisabledSidebar: boolean;
     captureEl: HTMLElement | null;
@@ -288,13 +289,18 @@
     commitEnabledOrder(enabledKeys);
   }
 
-  function reorderEnabledWidget(key: string, targetKey: string | null, overCanvas: boolean) {
+  function reorderEnabledWidget(
+    key: string,
+    targetKey: string | null,
+    targetMode: 'card' | 'slot' | null,
+    overCanvas: boolean
+  ) {
     const currentEnabledKeys = getEnabledOrderKeys();
     const fromIndex = currentEnabledKeys.indexOf(key);
     if (fromIndex < 0) return;
 
     let patchByKey: Map<string, Partial<DashboardChartSetting>> | undefined;
-    if (targetKey && targetKey !== key) {
+    if (targetMode === 'card' && targetKey && targetKey !== key) {
       const sourceSetting = localSettings.find((item) => item.key === key);
       const targetSetting = localSettings.find((item) => item.key === targetKey);
       if (sourceSetting?.enabled && targetSetting?.enabled) {
@@ -310,7 +316,7 @@
       return;
     }
 
-    if (targetKey && targetKey !== key) {
+    if (targetMode === 'card' && targetKey && targetKey !== key) {
       const targetIndex = currentEnabledKeys.indexOf(targetKey);
       if (targetIndex >= 0) {
         // Exact index swap: only source/target exchange slots.
@@ -319,6 +325,18 @@
         swapped[targetIndex] = swapped[fromIndex];
         swapped[fromIndex] = targetValue;
         commitEnabledOrder(swapped, patchByKey);
+        return;
+      }
+    }
+
+    if (targetMode === 'slot' && targetKey && targetKey !== key) {
+      const targetIndex = currentEnabledKeys.indexOf(targetKey);
+      if (targetIndex >= 0) {
+        const reordered = [...currentEnabledKeys];
+        reordered.splice(fromIndex, 1);
+        const adjustedTarget = fromIndex < targetIndex ? targetIndex - 1 : targetIndex;
+        reordered.splice(adjustedTarget, 0, key);
+        commitEnabledOrder(reordered);
         return;
       }
     }
@@ -374,6 +392,7 @@
       baseW: current?.w ?? 3,
       didDrag: false,
       targetKey: null,
+      targetMode: null,
       overCanvas: false,
       overDisabledSidebar: false,
       captureEl: event.currentTarget as HTMLElement | null
@@ -403,14 +422,39 @@
     }
 
     dragState.targetKey = null;
+    dragState.targetMode = null;
     if (dragState.overCanvas && editorEl) {
       const cards = editorEl.querySelectorAll<HTMLElement>('[data-widget-key]');
+      const candidates: Array<{ key: string; rect: DOMRect }> = [];
       for (const card of cards) {
         const key = card.dataset.widgetKey;
         if (!key || (dragState.source === 'grid' && key === dragState.key)) continue;
-        if (pointInsideRect(clientX, clientY, card.getBoundingClientRect())) {
+        const rect = card.getBoundingClientRect();
+        candidates.push({ key, rect });
+        if (pointInsideRect(clientX, clientY, rect)) {
           dragState.targetKey = key;
+          dragState.targetMode = 'card';
           break;
+        }
+      }
+
+      if (!dragState.targetKey && candidates.length > 0) {
+        candidates.sort((a, b) => {
+          const topDelta = a.rect.top - b.rect.top;
+          if (Math.abs(topDelta) > 8) return topDelta;
+          return a.rect.left - b.rect.left;
+        });
+
+        const slot = candidates.find(({ rect }) => {
+          const beforeRow = clientY < rect.top;
+          const sameRow = clientY >= rect.top && clientY <= rect.bottom;
+          const beforeColInRow = sameRow && clientX < rect.left + rect.width / 2;
+          return beforeRow || beforeColInRow;
+        });
+
+        if (slot) {
+          dragState.targetKey = slot.key;
+          dragState.targetMode = 'slot';
         }
       }
     }
@@ -460,7 +504,7 @@
       if (dragState.overDisabledSidebar) {
         disableWidget(dragState.key);
       } else {
-        reorderEnabledWidget(dragState.key, dragState.targetKey, dragState.overCanvas);
+        reorderEnabledWidget(dragState.key, dragState.targetKey, dragState.targetMode, dragState.overCanvas);
       }
     } else if (dragState.mode === 'move' && dragState.source === 'disabled' && dragState.overCanvas) {
       activateWidgetByDrop(dragState.key, dragState.targetKey);
