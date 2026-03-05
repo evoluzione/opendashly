@@ -54,6 +54,8 @@
     display: flex;
     flex-direction: column;
     gap: 16px;
+    min-height: 0;
+    container-type: inline-size;
   }
 
   .gauge-header {
@@ -72,12 +74,16 @@
 
   .main-stat {
     text-align: center;
-    padding: 24px 0;
+    padding: clamp(8px, 3cqw, 24px) 0;
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
   }
 
   .main-stat .value {
     display: block;
-    font-size: 36px;
+    font-size: clamp(26px, 9cqw, 36px);
     font-weight: 700;
     color: #2563eb;
     line-height: 1.1;
@@ -85,7 +91,7 @@
 
   .main-stat .unit {
     display: block;
-    font-size: 12px;
+    font-size: clamp(10px, 3cqw, 12px);
     font-weight: 600;
     color: #64748b;
     text-transform: uppercase;
@@ -97,7 +103,7 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    gap: 16px;
+    gap: clamp(10px, 3cqw, 16px);
     padding-top: 16px;
     border-top: 1px solid #f1f5f9;
   }
@@ -108,7 +114,7 @@
 
   .stat-value {
     display: block;
-    font-size: 16px;
+    font-size: clamp(14px, 4.4cqw, 16px);
     font-weight: 700;
     color: #0f172a;
     font-variant-numeric: tabular-nums;
@@ -116,7 +122,7 @@
 
   .stat-label {
     display: block;
-    font-size: 10px;
+    font-size: clamp(9px, 2.8cqw, 10px);
     color: #94a3b8;
     text-transform: uppercase;
     letter-spacing: 0.05em;

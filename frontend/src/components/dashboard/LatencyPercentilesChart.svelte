@@ -11,9 +11,11 @@
   let chartEl: HTMLDivElement;
   let chart: uPlot | null = null;
   let containerWidth = 0;
+  let containerHeight = 0;
   let resizeObserver: ResizeObserver | null = null;
   let lastDataLength = 0;
   let lastWidth = 0;
+  let lastHeight = 0;
 
   function toEpochSeconds(value: unknown): number | null {
     if (value instanceof Date) {
@@ -65,7 +67,12 @@
     return [xValues, p50Values, p95Values, p99Values];
   }
 
-  function renderChart(points: LatencyPercentilePoint[], width: number) {
+  function getPlotHeight(containerH: number): number {
+    const available = containerH - 110;
+    return Math.max(180, Math.min(420, Math.floor(available)));
+  }
+
+  function renderChart(points: LatencyPercentilePoint[], width: number, height: number) {
     if (!chartEl || !width || points.length === 0) return;
     if (chart) {
       chart.destroy();
@@ -79,7 +86,7 @@
       {
         title: 'Latenza percentili',
         width,
-        height: 220,
+        height,
         series: [
           {},
           { label: 'P50', stroke: '#0ea5e9', width: 2 },
@@ -90,10 +97,7 @@
           x: { time: true },
           y: { min: 0 }
         },
-        axes: [
-          {},
-          { label: 'ms', labelSize: 12, size: 50 }
-        ],
+        axes: [{}, { label: 'ms', labelSize: 12, size: 50 }],
         legend: { show: true }
       },
       chartData,
@@ -101,7 +105,7 @@
     );
 
     requestAnimationFrame(() => {
-      chart?.setSize({ width, height: 220 });
+      chart?.setSize({ width, height });
       const canvases = chartEl.querySelectorAll('canvas');
       canvases.forEach((canvas) => {
         canvas.style.width = '100%';
@@ -116,14 +120,17 @@
       resizeObserver = new ResizeObserver((entries) => {
         for (const entry of entries) {
           containerWidth = Math.max(320, Math.floor(entry.contentRect.width));
+          containerHeight = Math.max(260, Math.floor(entry.contentRect.height));
         }
       });
       if (containerEl) {
         resizeObserver.observe(containerEl);
         containerWidth = Math.max(320, Math.floor(containerEl.clientWidth));
+        containerHeight = Math.max(260, Math.floor(containerEl.clientHeight));
       }
     } else if (containerEl) {
       containerWidth = Math.max(320, Math.floor(containerEl.clientWidth));
+      containerHeight = Math.max(260, Math.floor(containerEl.clientHeight));
     }
   });
 
@@ -138,12 +145,18 @@
   });
 
   afterUpdate(() => {
-    if (chartEl && containerWidth > 0 && data.length > 0) {
-      const needsRender = !chart || lastDataLength !== data.length || lastWidth !== containerWidth;
+    if (chartEl && containerWidth > 0 && containerHeight > 0 && data.length > 0) {
+      const nextHeight = getPlotHeight(containerHeight);
+      const needsRender =
+        !chart ||
+        lastDataLength !== data.length ||
+        lastWidth !== containerWidth ||
+        lastHeight !== nextHeight;
       if (needsRender) {
         lastDataLength = data.length;
         lastWidth = containerWidth;
-        renderChart(data, Math.max(320, containerWidth - 40));
+        lastHeight = nextHeight;
+        renderChart(data, Math.max(320, containerWidth - 40), nextHeight);
       }
     }
   });
@@ -176,6 +189,9 @@
     padding: 20px;
     box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05), 0 4px 12px rgba(0, 0, 0, 0.03);
     border: 1px solid rgba(15, 23, 42, 0.06);
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
   }
 
   .chart-header {
@@ -204,7 +220,9 @@
   }
 
   .chart-container {
-    min-height: 220px;
+    width: 100%;
+    flex: 1;
+    min-height: 180px;
   }
 
   .chart-container.hidden {

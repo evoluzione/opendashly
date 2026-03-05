@@ -75,8 +75,8 @@
     },
     {
       key: 'status_codes',
-      label: 'Status Code',
-      description: 'Distribuzione OK/Error/Unset/Other.'
+      label: 'Livelli Log',
+      description: 'Distribuzione severita log (error/warn/info/debug).'
     },
     {
       key: 'slowest_endpoints',

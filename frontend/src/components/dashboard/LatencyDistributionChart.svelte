@@ -59,10 +59,14 @@
     padding: 20px;
     box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05), 0 4px 12px rgba(0, 0, 0, 0.03);
     border: 1px solid rgba(15, 23, 42, 0.06);
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    container-type: inline-size;
   }
 
   .chart-header {
-    margin-bottom: 20px;
+    margin-bottom: 16px;
   }
 
   .chart-title {
@@ -90,7 +94,8 @@
     display: flex;
     align-items: flex-end;
     gap: 8px;
-    height: 200px;
+    flex: 1;
+    min-height: 170px;
     padding-top: 20px;
   }
 
@@ -112,7 +117,7 @@
 
   .bar {
     width: 100%;
-    max-width: 48px;
+    max-width: 56px;
     min-height: 4px;
     border-radius: 4px 4px 0 0;
     transition: height 0.3s ease-out;
@@ -131,7 +136,7 @@
   }
 
   .bar-label {
-    font-size: 10px;
+    font-size: clamp(9px, 2.6cqw, 10px);
     color: #64748b;
     margin-top: 8px;
     text-align: center;
@@ -139,7 +144,7 @@
   }
 
   .bar-count {
-    font-size: 10px;
+    font-size: clamp(9px, 2.8cqw, 10px);
     font-weight: 600;
     color: #0f172a;
     margin-top: 2px;
@@ -153,6 +158,21 @@
 
     .bar-label {
       font-size: 8px;
+    }
+
+    .bar-value {
+      display: none;
+    }
+  }
+
+  @container (max-width: 460px) {
+    .histogram {
+      gap: 4px;
+      min-height: 150px;
+    }
+
+    .bar {
+      max-width: 28px;
     }
 
     .bar-value {

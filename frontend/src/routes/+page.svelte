@@ -31,7 +31,7 @@
   import ThroughputChart from "../components/dashboard/ThroughputChart.svelte";
   import LatencyPercentilesChart from "../components/dashboard/LatencyPercentilesChart.svelte";
   import ErrorRateChart from "../components/dashboard/ErrorRateChart.svelte";
-  import StatusCodeBreakdownChart from "../components/dashboard/StatusCodeBreakdownChart.svelte";
+  import LogLevelsBreakdownChart from "../components/dashboard/LogLevelsBreakdownChart.svelte";
   import TopEndpointsThroughputTable from "../components/dashboard/TopEndpointsThroughputTable.svelte";
   import SlowestEndpointsTable from "../components/dashboard/SlowestEndpointsTable.svelte";
   import ErrorHotspotsTable from "../components/dashboard/ErrorHotspotsTable.svelte";
@@ -573,9 +573,9 @@
                     class="dashboard-item"
                     style={`grid-column:${(chartSetting.x ?? 0) + 1} / span ${chartSetting.w ?? 6};grid-row:${(chartSetting.y ?? 0) + 1} / span ${chartSetting.h ?? 3};`}
                   >
-                  <StatusCodeBreakdownChart
-                    data={$dashboardState.data.hotspots.statusCodes}
-                  />
+                    <LogLevelsBreakdownChart
+                      data={$dashboardState.data.logs.levels}
+                    />
                   </div>
                 {/if}
               {/if}
@@ -761,6 +761,7 @@
     min-width: 0;
     height: 100%;
     display: flex;
+    min-height: 0;
   }
 
   .dashboard-item :global(.gauge-card),
@@ -771,6 +772,7 @@
     display: flex;
     flex-direction: column;
     box-sizing: border-box;
+    min-height: 0;
   }
 
   .dashboard-item :global(.chart-container),
@@ -779,6 +781,10 @@
   .dashboard-item :global(.breakdown) {
     flex: 1;
     min-height: 0;
+  }
+
+  .dashboard-item :global(.table-wrapper) {
+    overflow: auto;
   }
 
   .dashboard-item :global(.empty) {
@@ -1276,4 +1282,3 @@
     box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
   }
 </style>
-
