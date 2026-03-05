@@ -27,9 +27,7 @@ const defaultOrderKeys = [
   'status_codes',
   'slowest_endpoints',
   'top_endpoints_throughput',
-  'error_hotspots',
-  'log_volume',
-  'log_levels'
+  'error_hotspots'
 ];
 
 export async function loadDashboardSettings() {

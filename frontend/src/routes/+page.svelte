@@ -34,8 +34,6 @@
   import ErrorRateChart from "../components/dashboard/ErrorRateChart.svelte";
   import StatusCodeBreakdownChart from "../components/dashboard/StatusCodeBreakdownChart.svelte";
   import TopEndpointsThroughputTable from "../components/dashboard/TopEndpointsThroughputTable.svelte";
-  import LogVolumeChart from "../components/dashboard/LogVolumeChart.svelte";
-  import LogLevelDistributionChart from "../components/dashboard/LogLevelDistributionChart.svelte";
   import SlowestEndpointsTable from "../components/dashboard/SlowestEndpointsTable.svelte";
   import ErrorHotspotsTable from "../components/dashboard/ErrorHotspotsTable.svelte";
 
@@ -508,14 +506,6 @@
                 {:else if chartKey === "error_rate_timeseries"}
                   <ErrorRateChart
                     data={$dashboardState.data.satisfaction.errorRateSeries}
-                  />
-                {:else if chartKey === "log_volume"}
-                  <LogVolumeChart
-                    data={$dashboardState.data.logs.volumeSeries}
-                  />
-                {:else if chartKey === "log_levels"}
-                  <LogLevelDistributionChart
-                    data={$dashboardState.data.logs.levels}
                   />
                 {:else if chartKey === "slowest_endpoints"}
                   <SlowestEndpointsTable
@@ -1195,3 +1185,4 @@
     box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
   }
 </style>
+

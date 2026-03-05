@@ -68,16 +68,6 @@
       key: 'error_hotspots',
       label: 'Hotspot Errori',
       description: 'Endpoint con piu errori o error rate elevato.'
-    },
-    {
-      key: 'log_volume',
-      label: 'Log nel Tempo',
-      description: 'Volume dei log nel tempo.'
-    },
-    {
-      key: 'log_levels',
-      label: 'Distribuzione Log',
-      description: 'Ripartizione per livello di severita.'
     }
   ];
 
