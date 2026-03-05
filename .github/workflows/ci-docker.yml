@@ -8,9 +8,13 @@ on:
       - 'hotfix/**'
   workflow_dispatch:
 
+concurrency:
+  group: ci-docker-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
-  test:
-    name: 🧪 Test & Lint
+  backend-test:
+    name: 🧪 Backend Tests
     runs-on: ubuntu-latest
     steps:
       - name: 📥 Checkout Code
@@ -23,6 +27,13 @@ jobs:
       - name: 🏃 Run Backend Tests
         working-directory: backend
         run: go test ./...
+
+  frontend-test:
+    name: 🧪 Frontend Tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: 📥 Checkout Code
+        uses: actions/checkout@v4
       - name: 🟢 Set up Node.js Environment
         uses: actions/setup-node@v4
         with:
@@ -37,8 +48,25 @@ jobs:
         run: npm test
 
   docker:
-    name: 🐳 Build & Push Docker Image
+    name: 🐳 Build & Push (${{ matrix.name }})
     runs-on: ubuntu-latest
+    needs: [backend-test, frontend-test]
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: app
+            image: ghcr.io/evoluzione/opendashly
+            context: .
+            file: Dockerfile
+          - name: clickhouse
+            image: ghcr.io/evoluzione/opendashly-clickhouse
+            context: ./docker/clickhouse
+            file: ./docker/clickhouse/Dockerfile
+          - name: otel-collector
+            image: ghcr.io/evoluzione/opendashly-otel-collector
+            context: ./docker/otel-collector
+            file: ./docker/otel-collector/Dockerfile
     permissions:
       contents: read
       packages: write
@@ -52,52 +80,22 @@ jobs:
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
-          password: ${{ secrets.REGISTRY_HUB_SECRET }}
+          password: ${{ secrets.GITHUB_TOKEN }}
       - name: 🏷️ Generate Docker Metadata
         id: meta
         uses: docker/metadata-action@v5
         with:
-          images: ghcr.io/evoluzione/opendashly
-          tags: |
-            type=ref,event=tag
-            type=raw,value=latest
-      - name: 🏷️ Generate ClickHouse Metadata
-        id: meta_clickhouse
-        uses: docker/metadata-action@v5
-        with:
-          images: ghcr.io/evoluzione/opendashly-clickhouse
-          tags: |
-            type=ref,event=tag
-            type=raw,value=latest
-      - name: 🏷️ Generate OTEL Collector Metadata
-        id: meta_collector
-        uses: docker/metadata-action@v5
-        with:
-          images: ghcr.io/evoluzione/opendashly-otel-collector
+          images: ${{ matrix.image }}
           tags: |
             type=ref,event=tag
             type=raw,value=latest
       - name: 🚀 Build and Push image to GHCR
         uses: docker/build-push-action@v6
         with:
-          context: .
-          file: Dockerfile
+          context: ${{ matrix.context }}
+          file: ${{ matrix.file }}
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-      - name: 🚀 Build and Push ClickHouse image to GHCR
-        uses: docker/build-push-action@v6
-        with:
-          context: ./docker/clickhouse
-          file: ./docker/clickhouse/Dockerfile
-          push: true
-          tags: ${{ steps.meta_clickhouse.outputs.tags }}
-          labels: ${{ steps.meta_clickhouse.outputs.labels }}
-      - name: 🚀 Build and Push OTEL Collector image to GHCR
-        uses: docker/build-push-action@v6
-        with:
-          context: ./docker/otel-collector
-          file: ./docker/otel-collector/Dockerfile
-          push: true
-          tags: ${{ steps.meta_collector.outputs.tags }}
-          labels: ${{ steps.meta_collector.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
