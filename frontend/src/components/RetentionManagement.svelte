@@ -39,6 +39,8 @@
     running: "In corso",
     failed: "Fallito",
   };
+  const MAX_RETENTION_DAYS = 365;
+  const MAX_TRACES_RETENTION_DAYS = 15;
 
   function labelForSignal(signal: SignalType) {
     return signalLabels[signal] ?? signal;
@@ -50,6 +52,10 @@
 
   function labelForStatus(status: string) {
     return statusLabels[status] ?? status;
+  }
+
+  function maxRetentionForSignal(signal: SignalType) {
+    return signal === "traces" ? MAX_TRACES_RETENTION_DAYS : MAX_RETENTION_DAYS;
   }
 
   async function loadSettings() {
@@ -96,6 +102,12 @@
 
   async function saveEdit() {
     if (!editingSignal) return;
+
+    const maxRetentionDays = maxRetentionForSignal(editingSignal);
+    if (editRetentionDays < 1 || editRetentionDays > maxRetentionDays) {
+      error = `La conservazione per ${labelForSignal(editingSignal)} deve essere tra 1 e ${maxRetentionDays} giorni`;
+      return;
+    }
 
     loading = true;
     error = "";
@@ -202,6 +214,7 @@
       <p class="help-text">
         I dati piu vecchi del periodo di conservazione verranno eliminati
         automaticamente ogni 24 ore.
+        Le tracce hanno un massimo di 15 giorni.
       </p>
 
       {#if loading && settings.length === 0}
@@ -226,7 +239,7 @@
                       type="number"
                       bind:value={editRetentionDays}
                       min="1"
-                      max="365"
+                      max={maxRetentionForSignal(setting.signalType)}
                       class="edit-input"
                     />
                   {:else}

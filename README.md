@@ -197,11 +197,15 @@ In the query form, type natural language prompts like:
 │   │   ├── lib/stores/      # State management
 │   │   └── services/        # API client functions
 │   └── tests/               # Unit & E2E tests
-├── collector-config.yaml     # OTLP Collector configuration
 ├── docker-compose.yml        # Multi-container orchestration
 ├── docker-compose.prod.yml   # Production compose (single app image)
 ├── Dockerfile                # Combined backend+frontend image build
-├── docker/                   # Runtime helpers
+├── docker/
+│   ├── clickhouse/
+│   │   └── config.d/
+│   ├── otel-collector/
+│   │   ├── Dockerfile
+│   │   └── collector-config.yaml
 │   └── entrypoint.sh         # Starts backend + frontend
 ├── .env.example              # Environment variable template
 ├── .github/workflows/        # CI pipelines
@@ -223,7 +227,14 @@ In the query form, type natural language prompts like:
 
 ### Setup Guide
 
-1) Copy `docker-compose.prod.yml` and `collector-config.yaml` to the target host.
+1) Copy only `docker-compose.prod.yml` to the target host.
+
+The production stack uses prebuilt GHCR images:
+- `ghcr.io/evoluzione/opendashly:latest`
+- `ghcr.io/evoluzione/opendashly-clickhouse:latest`
+- `ghcr.io/evoluzione/opendashly-otel-collector:latest`
+
+No repository clone and no manual config file creation are required on the host.
 
 2) Create a `.env` file alongside `docker-compose.prod.yml`:
 
@@ -251,6 +262,34 @@ curl http://localhost:8123/ping
 - Frontend: http://localhost:5173
 - Default credentials: `admin` / `admin`
 - You will be prompted to change the password on first login.
+
+### Swap Safety Net (Recommended on 4 GB hosts)
+
+If the host has no swap configured, add a 2 GiB swapfile to reduce OOM risk during ClickHouse spikes.
+
+```bash
+sudo fallocate -l 2G /swapfile
+sudo chmod 600 /swapfile
+sudo mkswap /swapfile
+sudo swapon /swapfile
+echo '/swapfile none swap sw 0 0' | sudo tee -a /etc/fstab
+```
+
+Verify and monitor:
+
+```bash
+swapon --show
+free -h
+grep /swapfile /etc/fstab
+```
+
+Rollback if needed:
+
+```bash
+sudo swapoff /swapfile
+sudo sed -i '\|/swapfile|d' /etc/fstab
+sudo rm -f /swapfile
+```
 
 ### Security Checklist
 

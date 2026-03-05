@@ -28,6 +28,12 @@ type updateRetentionRequest struct {
 	RetentionDays uint32 `json:"retentionDays"`
 }
 
+const (
+	minRetentionDays      uint32 = 1
+	maxRetentionDays      uint32 = 365
+	maxTraceRetentionDays uint32 = 15
+)
+
 type cleanupRequest struct {
 	SignalTypes []string `json:"signalTypes"`
 	ServiceName string   `json:"serviceName"`
@@ -94,7 +100,11 @@ func (h *RetentionHandler) UpdateSettings(w http.ResponseWriter, r *http.Request
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
-	if req.RetentionDays < 1 || req.RetentionDays > 365 {
+	if req.RetentionDays < minRetentionDays || req.RetentionDays > maxRetentionDays {
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+	if req.SignalType == "traces" && req.RetentionDays > maxTraceRetentionDays {
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
