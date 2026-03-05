@@ -61,6 +61,22 @@ jobs:
           tags: |
             type=ref,event=tag
             type=raw,value=latest
+      - name: 🏷️ Generate ClickHouse Metadata
+        id: meta_clickhouse
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/evoluzione/opendashly-clickhouse
+          tags: |
+            type=ref,event=tag
+            type=raw,value=latest
+      - name: 🏷️ Generate OTEL Collector Metadata
+        id: meta_collector
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/evoluzione/opendashly-otel-collector
+          tags: |
+            type=ref,event=tag
+            type=raw,value=latest
       - name: 🚀 Build and Push image to GHCR
         uses: docker/build-push-action@v6
         with:
@@ -69,3 +85,19 @@ jobs:
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+      - name: 🚀 Build and Push ClickHouse image to GHCR
+        uses: docker/build-push-action@v6
+        with:
+          context: ./docker/clickhouse
+          file: ./docker/clickhouse/Dockerfile
+          push: true
+          tags: ${{ steps.meta_clickhouse.outputs.tags }}
+          labels: ${{ steps.meta_clickhouse.outputs.labels }}
+      - name: 🚀 Build and Push OTEL Collector image to GHCR
+        uses: docker/build-push-action@v6
+        with:
+          context: ./docker/otel-collector
+          file: ./docker/otel-collector/Dockerfile
+          push: true
+          tags: ${{ steps.meta_collector.outputs.tags }}
+          labels: ${{ steps.meta_collector.outputs.labels }}

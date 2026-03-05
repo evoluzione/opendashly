@@ -24,7 +24,7 @@ services:
     restart: unless-stopped
 
   clickhouse:
-    image: clickhouse/clickhouse-server:25.1
+    image: ghcr.io/evoluzione/opendashly-clickhouse:latest
     container_name: opendashly-clickhouse
     ports:
       - "8123:8123"
@@ -49,7 +49,7 @@ services:
     restart: unless-stopped
 
   otel-collector:
-    image: otel/opentelemetry-collector-contrib:0.122.0
+    image: ghcr.io/evoluzione/opendashly-otel-collector:latest
     container_name: opendashly-otel-collector
     command: ["--config=/etc/otelcol/config.yaml"]
     ports:
@@ -57,8 +57,6 @@ services:
       - "4318:4318"
     environment:
       - CLICKHOUSE_PASSWORD=${CLICKHOUSE_PASSWORD}
-    volumes:
-      - ./collector-config.yaml:/etc/otelcol/config.yaml
     depends_on:
       clickhouse:
         condition: service_healthy

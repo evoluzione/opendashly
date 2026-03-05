@@ -1,0 +1,49 @@
+receivers:
+  otlp:
+    protocols:
+      grpc:
+      http:
+
+processors:
+  memory_limiter:
+    check_interval: 1s
+    limit_mib: 350
+    spike_limit_mib: 50
+  batch:
+    send_batch_size: 5000
+    timeout: 5s
+
+exporters:
+  clickhouse:
+    endpoint: tcp://clickhouse:9000
+    database: telemetry
+    timeout: 5s
+    username: otel
+    password: ${env:CLICKHOUSE_PASSWORD}
+    sending_queue:
+      enabled: true
+      queue_size: 100
+      num_consumers: 2
+    retry_on_failure:
+      enabled: true
+      initial_interval: 1s
+      max_interval: 30s
+      max_elapsed_time: 300s
+
+service:
+  telemetry:
+    logs:
+      level: warn
+  pipelines:
+    traces:
+      receivers: [otlp]
+      processors: [memory_limiter, batch]
+      exporters: [clickhouse]
+    metrics:
+      receivers: [otlp]
+      processors: [memory_limiter, batch]
+      exporters: [clickhouse]
+    logs:
+      receivers: [otlp]
+      processors: [memory_limiter, batch]
+      exporters: [clickhouse]

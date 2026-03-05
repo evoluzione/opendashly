@@ -48,5 +48,5 @@ Guidelines for agents working in this repository.
 ## Repository layout
 - backend: services and application logic
 - frontend: user interface
-- collector-config.yaml and docker-compose.yml: local configuration
+- docker/otel-collector/collector-config.yaml and docker-compose.yml: local configuration
 

@@ -2,7 +2,8 @@ services:
 
   clickhouse:
     container_name: clickhouse
-    image: clickhouse/clickhouse-server:25.1
+    build:
+      context: ./docker/clickhouse
     ports:
       - "8123:8123"
       - "9000:9000"
@@ -18,6 +19,7 @@ services:
       interval: 5s
       timeout: 3s
       retries: 10
+    restart: unless-stopped
     logging:
       driver: json-file
       options:
@@ -26,18 +28,18 @@ services:
 
   otel-collector:
     container_name: otel-collector
-    image: otel/opentelemetry-collector-contrib:0.122.0
+    build:
+      context: ./docker/otel-collector
     command: ["--config=/etc/otelcol/config.yaml"]
     ports:
       - "4317:4317"
       - "4318:4318"
     environment:
       - CLICKHOUSE_PASSWORD=${CLICKHOUSE_PASSWORD:-otelpass}
-    volumes:
-      - ./collector-config.yaml:/etc/otelcol/config.yaml
     depends_on:
       clickhouse:
         condition: service_healthy
+    restart: unless-stopped
     logging:
       driver: json-file
       options:
@@ -63,6 +65,7 @@ services:
     depends_on:
       - clickhouse
       - otel-collector
+    restart: unless-stopped
     logging:
       driver: json-file
       options:
