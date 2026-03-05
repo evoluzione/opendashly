@@ -1,9 +1,12 @@
 <script lang="ts">
-  import { onMount, onDestroy } from 'svelte';
+  import { onDestroy, onMount } from 'svelte';
   import type { DashboardChartSetting } from '../services/dashboard_settings';
   import {
+    DASHBOARD_GRID_COLUMNS,
     dashboardSettingsState,
+    getDefaultDashboardSettings,
     loadDashboardSettings,
+    mergeWithDefaultDashboardSettings,
     saveDashboardSettings
   } from '../lib/stores/dashboard_settings';
 
@@ -12,6 +15,27 @@
     label: string;
     description: string;
   };
+
+  type DragState = {
+    key: string;
+    source: 'grid' | 'disabled';
+    mode: 'move' | 'resizeWidth';
+    pointerId: number;
+    startClientX: number;
+    startClientY: number;
+    baseW: number;
+    didDrag: boolean;
+    targetKey: string | null;
+    overCanvas: boolean;
+    overDisabledSidebar: boolean;
+    captureEl: HTMLElement | null;
+  };
+
+  const GRID_GAP = 10;
+  const ROW_HEIGHT = 64;
+  const FIXED_H = 2;
+  const MIN_W = 1;
+  const MAX_W = DASHBOARD_GRID_COLUMNS;
 
   const chartCatalog: ChartDefinition[] = [
     {
@@ -71,376 +95,875 @@
     }
   ];
 
+  const chartByKey = new Map(chartCatalog.map((chart) => [chart.key, chart]));
+  const defaultByKey = new Map(getDefaultDashboardSettings().map((setting) => [setting.key, setting]));
+
   let localSettings: DashboardChartSetting[] = [];
+  let savedSnapshot: DashboardChartSetting[] = [];
+  let enabledSettings: DashboardChartSetting[] = [];
+  let disabledSettings: DashboardChartSetting[] = [];
+  let editorGridRows = 1;
+
   let isDirty = false;
-  let saveTimer: ReturnType<typeof setTimeout> | null = null;
+  let saving = false;
+  let viewportWidth = 1200;
+  let canEdit = true;
 
-  const defaultOrderMap = new Map<string, number>(
-    chartCatalog.map((chart, index) => [chart.key, (index + 1) * 10])
-  );
+  let editorEl: HTMLDivElement | null = null;
+  let controlsEl: HTMLDivElement | null = null;
 
-  function applySettings(settings: DashboardChartSetting[]) {
-    const stored = new Map(settings.map((setting) => [setting.key, setting]));
-    localSettings = chartCatalog.map((chart, index) => {
-      const fallbackOrder = (index + 1) * 10;
-      const existing = stored.get(chart.key);
-      return {
-        key: chart.key,
-        enabled: existing?.enabled ?? true,
-        order: existing?.order ?? fallbackOrder
-      };
-    });
+  let dragState: DragState | null = null;
+  let hasLoadedInitialSettings = false;
+
+  function cloneSettings(settings: DashboardChartSetting[]): DashboardChartSetting[] {
+    return settings.map((setting) => ({ ...setting }));
   }
 
-  function getLocalSetting(key: string): DashboardChartSetting {
-    const existing = localSettings.find((setting) => setting.key === key);
-    if (existing) return existing;
-    return { key, enabled: true, order: defaultOrderMap.get(key) ?? 0 };
+  function serializeSettings(settings: DashboardChartSetting[]): string {
+    return JSON.stringify(
+      [...settings]
+        .sort((a, b) => a.key.localeCompare(b.key))
+        .map((setting) => ({
+          key: setting.key,
+          enabled: setting.enabled,
+          order: setting.order,
+          x: setting.x,
+          y: setting.y,
+          w: setting.w,
+          h: setting.h
+        }))
+    );
   }
 
-  function toggleSetting(key: string) {
-    const current = getLocalSetting(key);
-    const updated = { ...current, enabled: !current.enabled };
-    localSettings = localSettings.filter((setting) => setting.key !== key);
-    localSettings = [...localSettings, updated];
-    isDirty = true;
+  function syncDirty() {
+    isDirty = serializeSettings(localSettings) !== serializeSettings(savedSnapshot);
   }
 
-  let draggingKey: string | null = null;
-  let dragOverKey: string | null = null;
-  let autoScrollInterval: ReturnType<typeof setInterval> | null = null;
-  let lastDragY = 0;
+  function normalizedW(value: number | undefined, fallbackW: number): number {
+    if (!Number.isFinite(value)) return fallbackW;
+    return Math.max(MIN_W, Math.min(MAX_W, Number(value)));
+  }
 
-  const SCROLL_ZONE = 80;
-  const SCROLL_SPEED = 12;
+  function getSettingWidth(key: string, settingMap: Map<string, DashboardChartSetting>): number {
+    const fallback = defaultByKey.get(key);
+    const current = settingMap.get(key);
+    return normalizedW(current?.w, fallback?.w ?? 3);
+  }
 
-  function startAutoScroll() {
-    if (autoScrollInterval) return;
-    autoScrollInterval = setInterval(() => {
-      const viewportHeight = window.innerHeight;
-      if (lastDragY < SCROLL_ZONE) {
-        const intensity = 1 - lastDragY / SCROLL_ZONE;
-        window.scrollBy(0, -SCROLL_SPEED * intensity);
-      } else if (lastDragY > viewportHeight - SCROLL_ZONE) {
-        const intensity = 1 - (viewportHeight - lastDragY) / SCROLL_ZONE;
-        window.scrollBy(0, SCROLL_SPEED * intensity);
+  function applyNormalized(settings: DashboardChartSetting[]) {
+    localSettings = mergeWithDefaultDashboardSettings(settings).map((setting) => ({
+      ...setting,
+      w: normalizedW(setting.w, defaultByKey.get(setting.key)?.w ?? 3),
+      h: FIXED_H
+    }));
+    syncDirty();
+  }
+
+  function initLocalSettings(settings: DashboardChartSetting[]) {
+    localSettings = mergeWithDefaultDashboardSettings(settings).map((setting) => ({
+      ...setting,
+      w: normalizedW(setting.w, defaultByKey.get(setting.key)?.w ?? 3),
+      h: FIXED_H
+    }));
+    savedSnapshot = cloneSettings(localSettings);
+    isDirty = false;
+  }
+
+  function getEnabledOrderKeys(source?: DashboardChartSetting[]): string[] {
+    return [...(source ?? localSettings)]
+      .filter((setting) => setting.enabled && chartByKey.has(setting.key))
+      .sort((a, b) => {
+        if ((a.y ?? 0) !== (b.y ?? 0)) return (a.y ?? 0) - (b.y ?? 0);
+        if ((a.x ?? 0) !== (b.x ?? 0)) return (a.x ?? 0) - (b.x ?? 0);
+        return (a.order ?? 0) - (b.order ?? 0);
+      })
+      .map((setting) => setting.key);
+  }
+
+  function packEnabledOrder(enabledKeys: string[], settingMap: Map<string, DashboardChartSetting>) {
+    const out = new Map<string, { x: number; y: number; w: number; h: number }>();
+    let row = 0;
+    let col = 0;
+
+    // Keep the exact order chosen by drag&drop; only wrap rows when needed.
+    for (const key of enabledKeys) {
+      const width = getSettingWidth(key, settingMap);
+
+      if (col + width > DASHBOARD_GRID_COLUMNS) {
+        row += 1;
+        col = 0;
       }
-    }, 16);
-  }
 
-  function stopAutoScroll() {
-    if (autoScrollInterval) {
-      clearInterval(autoScrollInterval);
-      autoScrollInterval = null;
+      out.set(key, {
+        x: col,
+        y: row * FIXED_H,
+        w: width,
+        h: FIXED_H
+      });
+      col += width;
     }
+
+    return out;
   }
 
-  function handleWindowDragOver(event: DragEvent) {
-    lastDragY = event.clientY;
-  }
+  function commitEnabledOrder(enabledKeys: string[], patchByKey?: Map<string, Partial<DashboardChartSetting>>) {
+    const base = mergeWithDefaultDashboardSettings(localSettings);
+    const map = new Map(base.map((setting) => [setting.key, setting]));
 
-  function reorderCharts(sourceKey: string, targetKey: string) {
-    const orderedKeys = sortedCatalog.map((chart) => chart.key);
-    const fromIndex = orderedKeys.indexOf(sourceKey);
-    const toIndex = orderedKeys.indexOf(targetKey);
-    if (fromIndex < 0 || toIndex < 0 || fromIndex === toIndex) return;
+    if (patchByKey) {
+      for (const [key, patch] of patchByKey.entries()) {
+        const current = map.get(key);
+        if (!current) continue;
+        map.set(key, { ...current, ...patch });
+      }
+    }
 
-    orderedKeys.splice(fromIndex, 1);
-    orderedKeys.splice(toIndex, 0, sourceKey);
+    const packed = packEnabledOrder(enabledKeys, map);
+    if (!packed) return;
 
-    localSettings = orderedKeys.map((key, index) => {
-      const current = getLocalSetting(key);
-      return { ...current, order: (index + 1) * 10 };
+    const enabledSet = new Set(enabledKeys);
+    const orderMap = new Map(enabledKeys.map((key, index) => [key, (index + 1) * 10]));
+
+    let disabledOrder = (enabledKeys.length + 1) * 10;
+    const next = base.map((setting) => {
+      const current = map.get(setting.key) ?? setting;
+      if (enabledSet.has(setting.key)) {
+        const pos = packed.get(setting.key);
+        if (!pos) return current;
+        return {
+          ...current,
+          enabled: true,
+          order: orderMap.get(setting.key) ?? current.order,
+          x: pos.x,
+          y: pos.y,
+          w: pos.w,
+          h: FIXED_H
+        };
+      }
+
+      const out = { ...current, enabled: false, order: disabledOrder, h: FIXED_H };
+      disabledOrder += 10;
+      return out;
     });
-    isDirty = true;
+
+    applyNormalized(next);
   }
 
-  function handleDragStart(event: DragEvent, key: string) {
-    draggingKey = key;
-    if (event.dataTransfer) {
-      event.dataTransfer.setData('text/plain', key);
-      event.dataTransfer.effectAllowed = 'move';
-    }
-    lastDragY = event.clientY;
-    window.addEventListener('dragover', handleWindowDragOver);
-    startAutoScroll();
+  function disableWidget(key: string) {
+    const enabledKeys = getEnabledOrderKeys().filter((item) => item !== key);
+    commitEnabledOrder(enabledKeys);
   }
 
-  function handleDragOver(event: DragEvent, key: string) {
-    event.preventDefault();
-    if (event.dataTransfer) {
-      event.dataTransfer.dropEffect = 'move';
+  function activateWidgetByDrop(key: string, targetKey: string | null) {
+    const enabledKeys = getEnabledOrderKeys();
+    if (enabledKeys.includes(key)) return;
+
+    let targetIndex = enabledKeys.length;
+    if (targetKey) {
+      const idx = enabledKeys.indexOf(targetKey);
+      if (idx >= 0) targetIndex = idx;
     }
-    if (!draggingKey || draggingKey === key) {
-      dragOverKey = null;
+
+    enabledKeys.splice(targetIndex, 0, key);
+    commitEnabledOrder(enabledKeys);
+  }
+
+  function reorderEnabledWidget(key: string, targetKey: string | null, overCanvas: boolean) {
+    const enabledKeys = getEnabledOrderKeys();
+    const fromIndex = enabledKeys.indexOf(key);
+    if (fromIndex < 0) return;
+
+    enabledKeys.splice(fromIndex, 1);
+    if (!overCanvas) {
+      enabledKeys.splice(fromIndex, 0, key);
       return;
     }
-    dragOverKey = key;
-  }
 
-  function handleDrop(event: DragEvent, key: string) {
-    event.preventDefault();
-    const sourceKey = event.dataTransfer?.getData('text/plain') || draggingKey;
-    if (sourceKey) {
-      reorderCharts(sourceKey, key);
+    let targetIndex = enabledKeys.length;
+    if (targetKey) {
+      const originalTargetIndex = getEnabledOrderKeys().indexOf(targetKey);
+      if (originalTargetIndex >= 0) {
+        // After removing source, indices at/after source shift left by one.
+        const adjustedTargetIndex =
+          originalTargetIndex > fromIndex ? originalTargetIndex - 1 : originalTargetIndex;
+        // Direction-aware insert: moving forward => after target, backward => before target.
+        targetIndex = fromIndex < originalTargetIndex ? adjustedTargetIndex + 1 : adjustedTargetIndex;
+      }
     }
-    draggingKey = null;
-    dragOverKey = null;
+
+    enabledKeys.splice(targetIndex, 0, key);
+    commitEnabledOrder(enabledKeys);
   }
 
-  function handleDragEnd() {
-    draggingKey = null;
-    dragOverKey = null;
-    stopAutoScroll();
-    window.removeEventListener('dragover', handleWindowDragOver);
+  function resetLayout() {
+    applyNormalized(getDefaultDashboardSettings());
   }
 
-  function handleDragLeave(event: DragEvent) {
-    const relatedTarget = event.relatedTarget as HTMLElement | null;
-    if (!relatedTarget?.closest('.setting-card')) {
-      dragOverKey = null;
-    }
-  }
-
-  function scheduleAutoSave() {
-    if (!isDirty) return;
-    if (saveTimer) {
-      clearTimeout(saveTimer);
-    }
-    saveTimer = setTimeout(async () => {
+  async function handleSave() {
+    saving = true;
+    try {
+      const snapshot = cloneSettings(localSettings);
       await saveDashboardSettings(localSettings);
+      savedSnapshot = snapshot;
       isDirty = false;
-      applySettings($dashboardSettingsState.settings ?? []);
-    }, 400);
+      await loadDashboardSettings();
+    } finally {
+      saving = false;
+    }
+  }
+
+  function cancelChanges() {
+    localSettings = cloneSettings(savedSnapshot);
+    isDirty = false;
+  }
+
+  function getCanvasStyle(setting: DashboardChartSetting): string {
+    return `grid-column:${(setting.x ?? 0) + 1} / span ${setting.w ?? 3};grid-row:${(setting.y ?? 0) + 1} / span ${FIXED_H};`;
+  }
+
+  function pointInsideRect(x: number, y: number, rect: DOMRect): boolean {
+    return x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom;
+  }
+
+  function beginDrag(
+    event: PointerEvent,
+    key: string,
+    source: 'grid' | 'disabled',
+    mode: 'move' | 'resizeWidth' = 'move'
+  ) {
+    if (!canEdit) return;
+    const current = localSettings.find((item) => item.key === key);
+    dragState = {
+      key,
+      source,
+      mode,
+      pointerId: event.pointerId,
+      startClientX: event.clientX,
+      startClientY: event.clientY,
+      baseW: current?.w ?? 3,
+      didDrag: false,
+      targetKey: null,
+      overCanvas: false,
+      overDisabledSidebar: false,
+      captureEl: event.currentTarget as HTMLElement | null
+    };
+
+    if (dragState.captureEl && typeof dragState.captureEl.setPointerCapture === 'function') {
+      dragState.captureEl.setPointerCapture(event.pointerId);
+    }
+
+    window.addEventListener('pointermove', onPointerMove);
+    window.addEventListener('pointerup', onPointerUp);
+    window.addEventListener('pointercancel', onPointerUp);
+    event.preventDefault();
+  }
+
+  function updateDropTarget(clientX: number, clientY: number) {
+    if (!dragState) return;
+
+    dragState.overCanvas = !!(editorEl && pointInsideRect(clientX, clientY, editorEl.getBoundingClientRect()));
+    if (controlsEl) {
+      const controlsRect = controlsEl.getBoundingClientRect();
+      const relaxedX = clientX >= controlsRect.left - 12;
+      const relaxedY = clientY >= controlsRect.top - 20 && clientY <= controlsRect.bottom + 20;
+      dragState.overDisabledSidebar = relaxedX && relaxedY;
+    } else {
+      dragState.overDisabledSidebar = false;
+    }
+
+    dragState.targetKey = null;
+    if (dragState.overCanvas && editorEl) {
+      const cards = editorEl.querySelectorAll<HTMLElement>('[data-widget-key]');
+      for (const card of cards) {
+        const key = card.dataset.widgetKey;
+        if (!key || (dragState.source === 'grid' && key === dragState.key)) continue;
+        if (pointInsideRect(clientX, clientY, card.getBoundingClientRect())) {
+          dragState.targetKey = key;
+          break;
+        }
+      }
+    }
+  }
+
+  function onPointerMove(event: PointerEvent) {
+    if (!dragState || dragState.pointerId !== event.pointerId) return;
+    const dx = Math.abs(event.clientX - dragState.startClientX);
+    const dy = Math.abs(event.clientY - dragState.startClientY);
+    if (!dragState.didDrag && (dx > 4 || dy > 4)) {
+      dragState.didDrag = true;
+    }
+    if (!dragState.didDrag) return;
+
+    if (dragState.mode === 'resizeWidth' && dragState.source === 'grid') {
+      const gridWidth = editorEl?.getBoundingClientRect().width ?? 0;
+      if (gridWidth <= 0) return;
+      const colWidth = (gridWidth - GRID_GAP * (DASHBOARD_GRID_COLUMNS - 1)) / DASHBOARD_GRID_COLUMNS;
+      const step = colWidth + GRID_GAP;
+      const deltaCols = Math.round((event.clientX - dragState.startClientX) / step);
+      const nextW = Math.max(MIN_W, Math.min(MAX_W, dragState.baseW + deltaCols));
+
+      const patch = new Map<string, Partial<DashboardChartSetting>>();
+      patch.set(dragState.key, { w: nextW, h: FIXED_H });
+      commitEnabledOrder(getEnabledOrderKeys(), patch);
+      return;
+    }
+
+    updateDropTarget(event.clientX, event.clientY);
+  }
+
+  function onPointerUp(event: PointerEvent) {
+    if (!dragState || dragState.pointerId !== event.pointerId) return;
+    if (!dragState.didDrag) {
+      if (dragState.captureEl && typeof dragState.captureEl.releasePointerCapture === 'function') {
+        dragState.captureEl.releasePointerCapture(event.pointerId);
+      }
+      dragState = null;
+      window.removeEventListener('pointermove', onPointerMove);
+      window.removeEventListener('pointerup', onPointerUp);
+      window.removeEventListener('pointercancel', onPointerUp);
+      return;
+    }
+    updateDropTarget(event.clientX, event.clientY);
+
+    if (dragState.mode === 'move' && dragState.source === 'grid') {
+      if (dragState.overDisabledSidebar) {
+        disableWidget(dragState.key);
+      } else {
+        reorderEnabledWidget(dragState.key, dragState.targetKey, dragState.overCanvas);
+      }
+    } else if (dragState.mode === 'move' && dragState.source === 'disabled' && dragState.overCanvas) {
+      activateWidgetByDrop(dragState.key, dragState.targetKey);
+    }
+
+    if (dragState.captureEl && typeof dragState.captureEl.releasePointerCapture === 'function') {
+      dragState.captureEl.releasePointerCapture(event.pointerId);
+    }
+
+    dragState = null;
+    window.removeEventListener('pointermove', onPointerMove);
+    window.removeEventListener('pointerup', onPointerUp);
+    window.removeEventListener('pointercancel', onPointerUp);
   }
 
   onMount(async () => {
     await loadDashboardSettings();
-    applySettings($dashboardSettingsState.settings ?? []);
+    initLocalSettings($dashboardSettingsState.settings ?? []);
+    hasLoadedInitialSettings = true;
   });
 
   onDestroy(() => {
-    stopAutoScroll();
-    window.removeEventListener('dragover', handleWindowDragOver);
+    window.removeEventListener('pointermove', onPointerMove);
+    window.removeEventListener('pointerup', onPointerUp);
+    window.removeEventListener('pointercancel', onPointerUp);
   });
 
-  $: if (!isDirty && $dashboardSettingsState.settings && $dashboardSettingsState.settings.length > 0) {
-    applySettings($dashboardSettingsState.settings);
+  $: canEdit = viewportWidth >= 900;
+
+  $: if (
+    !hasLoadedInitialSettings &&
+    !isDirty &&
+    $dashboardSettingsState.settings &&
+    $dashboardSettingsState.settings.length > 0
+  ) {
+    initLocalSettings($dashboardSettingsState.settings);
+    hasLoadedInitialSettings = true;
   }
 
-  $: if (isDirty) {
-    scheduleAutoSave();
-  }
+  $: enabledSettings = [...localSettings]
+    .filter((setting) => setting.enabled && chartByKey.has(setting.key))
+    .sort((a, b) => {
+      if ((a.y ?? 0) !== (b.y ?? 0)) return (a.y ?? 0) - (b.y ?? 0);
+      if ((a.x ?? 0) !== (b.x ?? 0)) return (a.x ?? 0) - (b.x ?? 0);
+      return (a.order ?? 0) - (b.order ?? 0);
+    });
 
-  $: sortedCatalog = [...chartCatalog].sort((a, b) => {
-    const left = localSettings.find((s) => s.key === a.key)?.order ?? defaultOrderMap.get(a.key) ?? 0;
-    const right = localSettings.find((s) => s.key === b.key)?.order ?? defaultOrderMap.get(b.key) ?? 0;
-    return left - right;
-  });
+  $: disabledSettings = [...localSettings]
+    .filter((setting) => !setting.enabled && chartByKey.has(setting.key))
+    .sort((a, b) => (chartByKey.get(a.key)?.label ?? a.key).localeCompare(chartByKey.get(b.key)?.label ?? b.key));
+
+  $: editorGridRows =
+    enabledSettings.reduce((max, setting) => Math.max(max, (setting.y ?? 0) + FIXED_H), 0) + 1;
 </script>
+
+<svelte:window bind:innerWidth={viewportWidth} />
 
 <section class="dashboard-settings">
   <header>
-    <h2>Visibilita grafici dashboard</h2>
-    <p>Seleziona quali grafici mostrare nella dashboard per tutti gli utenti.</p>
+    <h2>Designer dashboard</h2>
+    <p>
+      Griglia fissa a 6 colonne e altezza card fissa. La larghezza e modificabile, la disposizione si compatta in
+      automatico.
+    </p>
   </header>
 
   {#if $dashboardSettingsState.error}
     <div class="status error">{$dashboardSettingsState.error}</div>
   {/if}
 
-  <div class="settings-grid">
-    {#each sortedCatalog as chart (chart.key)}
-      <div
-        class="setting-card"
-        class:dragging={draggingKey === chart.key}
-        class:drag-over={dragOverKey === chart.key && draggingKey !== chart.key}
-        on:dragover={(event) => handleDragOver(event, chart.key)}
-        on:dragleave={handleDragLeave}
-        on:drop={(event) => handleDrop(event, chart.key)}
-      >
-        <span
-          class="drag-handle"
-          draggable="true"
-          on:dragstart={(event) => handleDragStart(event, chart.key)}
-          on:dragend={handleDragEnd}
-          title="Trascina per riordinare"
-        >
-          ⋮⋮
-        </span>
-        <div class="setting-info">
-          <h3>{chart.label}</h3>
-          <p>{chart.description}</p>
-        </div>
-        <div class="setting-actions">
-          <label class="toggle">
-            <input
-              type="checkbox"
-              checked={getLocalSetting(chart.key).enabled}
-              on:change={() => toggleSetting(chart.key)}
-            />
-            <span class="slider"></span>
-          </label>
-        </div>
-      </div>
-    {/each}
+  <div class="toolbar">
+    <button class="btn ghost" type="button" on:click={resetLayout} disabled={saving}>Reset layout</button>
+    <button class="btn ghost" type="button" on:click={cancelChanges} disabled={!isDirty || saving}>Annulla</button>
+    <button class="btn primary" type="button" on:click={handleSave} disabled={!isDirty || saving}>
+      {saving ? 'Salvataggio...' : 'Salva'}
+    </button>
   </div>
 
+  {#if !canEdit}
+    <div class="status">Editor disabilitato su mobile: usa desktop/tablet per modificare il layout.</div>
+  {/if}
+
+  <div class="designer-layout">
+    <div class="canvas-wrapper" bind:this={editorEl}>
+      <div
+        class="canvas"
+        class:drop-active={dragState?.source === 'disabled' && dragState?.overCanvas}
+        style={`--columns:${DASHBOARD_GRID_COLUMNS};--row-height:${ROW_HEIGHT}px;--gap:${GRID_GAP}px;--rows:${editorGridRows};`}
+      >
+        {#each enabledSettings as setting (setting.key)}
+          <article
+            class="widget-card"
+            class:dragging={dragState?.source === 'grid' && dragState?.key === setting.key}
+            class:drop-target={dragState?.targetKey === setting.key}
+            data-widget-key={setting.key}
+            style={getCanvasStyle(setting)}
+          >
+            <header class="widget-header" on:pointerdown={(event) => beginDrag(event, setting.key, 'grid')}>
+              <span class="drag-handle" title="Trascina">⋮⋮</span>
+              <div>
+                <h3>{chartByKey.get(setting.key)?.label}</h3>
+                <p>{chartByKey.get(setting.key)?.description}</p>
+              </div>
+              <span class="chip-size" aria-label={`Larghezza ${setting.w}/6`}>
+                {setting.w}/6
+              </span>
+            </header>
+
+            <div class="widget-preview">
+              <div class="mock-line"></div>
+              <div class="mock-bars">
+                <span style="height: 36%"></span>
+                <span style="height: 62%"></span>
+                <span style="height: 48%"></span>
+                <span style="height: 78%"></span>
+                <span style="height: 54%"></span>
+              </div>
+            </div>
+            {#if canEdit}
+              <button
+                type="button"
+                class="resize-width-handle"
+                aria-label={`Ridimensiona larghezza ${chartByKey.get(setting.key)?.label}`}
+                on:pointerdown={(event) => beginDrag(event, setting.key, 'grid', 'resizeWidth')}
+              ></button>
+            {/if}
+          </article>
+        {/each}
+      </div>
+    </div>
+
+    <aside
+      class="controls"
+      bind:this={controlsEl}
+      class:drop-active={dragState?.source === 'grid' && dragState?.overDisabledSidebar}
+    >
+      <h3>Widget disattivati</h3>
+      <p class="controls-subtitle">Trascina nella griglia per attivare, trascina qui per disattivare.</p>
+
+      {#if disabledSettings.length === 0}
+        <div class="empty-state">Nessun widget disattivato.</div>
+      {:else}
+        {#each disabledSettings as setting (setting.key)}
+          <button
+            type="button"
+            class="disabled-card"
+            class:dragging={dragState?.source === 'disabled' && dragState?.key === setting.key}
+            on:pointerdown={(event) => beginDrag(event, setting.key, 'disabled')}
+          >
+            <span class="disabled-drag">⋮⋮</span>
+            <span>{chartByKey.get(setting.key)?.label}</span>
+          </button>
+        {/each}
+      {/if}
+    </aside>
+  </div>
 </section>
 
 <style>
   .dashboard-settings {
+    --brand-indigo: #6366f1;
+    --brand-violet: #8b5cf6;
+    --text-strong: #0f172a;
+    --text-muted: #64748b;
+    --panel-bg: #ffffff;
+    --panel-border: rgba(15, 23, 42, 0.06);
+    --panel-shadow:
+      0 1px 3px rgba(15, 23, 42, 0.08),
+      0 4px 12px rgba(15, 23, 42, 0.04);
+  }
+
+  .dashboard-settings {
     display: flex;
     flex-direction: column;
-    gap: 20px;
+    gap: 18px;
   }
 
   header h2 {
-    font-size: 20px;
-    margin-bottom: 6px;
+    font-size: 22px;
+    margin: 0 0 8px;
+    color: var(--text-strong);
   }
 
   header p {
-    color: #64748b;
     margin: 0;
+    color: var(--text-muted);
+    font-size: 14px;
+    max-width: 900px;
   }
 
   .status {
-    padding: 10px 12px;
-    border-radius: 10px;
+    padding: 12px;
+    border-radius: 12px;
     background: #f8fafc;
-    color: #475569;
+    color: var(--text-muted);
+    font-size: 14px;
+    border: 1px solid var(--panel-border);
   }
 
   .status.error {
-    background: #fee2e2;
-    color: #b91c1c;
+    background: rgba(239, 68, 68, 0.05);
+    color: #ef4444;
+    border-color: rgba(239, 68, 68, 0.15);
   }
 
-  .settings-grid {
-    display: flex;
-    flex-direction: column;
-    gap: 12px;
-  }
-
-  .settings-grid .setting-card {
-    transition: transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease;
-  }
-
-  .setting-card {
-    background: white;
-    border-radius: 14px;
-    padding: 16px;
-    border: 1px solid rgba(15, 23, 42, 0.08);
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 12px;
-  }
-
-  .setting-info {
-    flex: 1;
-    min-width: 0;
-  }
-
-  .setting-card h3 {
-    font-size: 14px;
-    margin: 0 0 6px;
-  }
-
-  .setting-card p {
-    font-size: 12px;
-    color: #64748b;
-    margin: 0;
-  }
-
-  .setting-actions {
+  .toolbar {
     display: flex;
     align-items: center;
     gap: 10px;
   }
 
-  .drag-handle {
-    width: 28px;
-    height: 28px;
+  .btn {
+    border: 1px solid #cbd5e1;
+    background: #fff;
+    color: #1e293b;
     border-radius: 8px;
-    border: 1px solid #e2e8f0;
+    height: 34px;
+    padding: 0 14px;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    transition:
+      background 0.15s ease,
+      border-color 0.15s ease,
+      color 0.15s ease,
+      transform 0.15s ease;
+  }
+
+  .btn.primary {
+    border: none;
+    background: linear-gradient(135deg, var(--brand-indigo) 0%, var(--brand-violet) 100%);
+    color: #fff;
+    box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3);
+  }
+
+  .btn:hover:not(:disabled) {
     background: #f8fafc;
-    color: #0f172a;
-    font-weight: 700;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    cursor: grab;
-    user-select: none;
-  }
-
-  .drag-handle:active {
-    cursor: grabbing;
-  }
-
-  .setting-card.dragging {
-    opacity: 0.5;
-    border-style: dashed;
     border-color: #94a3b8;
-    transform: scale(0.98);
+    color: #334155;
   }
 
-  .setting-card.drag-over {
-    border-color: #2563eb;
-    border-width: 2px;
-    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.15);
+  .btn.primary:hover:not(:disabled) {
+    transform: translateY(-1px);
+    box-shadow: 0 6px 16px rgba(99, 102, 241, 0.4);
+    color: #fff;
+  }
+
+  .btn:disabled {
+    opacity: 0.65;
+    cursor: not-allowed;
+  }
+
+  .designer-layout {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 320px;
+    gap: 14px;
+    min-height: 760px;
+    align-items: stretch;
+  }
+
+  .canvas-wrapper {
+    border: 1px solid var(--panel-border);
+    border-radius: 16px;
+    background: var(--panel-bg);
+    box-shadow: var(--panel-shadow);
+    padding: 12px;
+    height: 100%;
+    max-height: 760px;
+    overflow-y: auto;
+  }
+
+  .canvas {
+    width: 100%;
+    display: grid;
+    gap: var(--gap);
+    grid-template-columns: repeat(var(--columns), minmax(0, 1fr));
+    grid-auto-rows: var(--row-height);
+    grid-template-rows: repeat(var(--rows), var(--row-height));
+    min-height: 520px;
+    position: relative;
+    transition: box-shadow 0.15s ease;
+  }
+
+  .canvas.drop-active {
+    box-shadow: inset 0 0 0 2px rgba(99, 102, 241, 0.45);
+    border-radius: 10px;
+  }
+
+  .widget-card {
+    border-radius: 12px;
+    border: 1px solid var(--panel-border);
+    background: #fff;
+    box-shadow:
+      0 1px 3px rgba(15, 23, 42, 0.08),
+      0 3px 10px rgba(15, 23, 42, 0.04);
+    display: flex;
+    flex-direction: column;
+    position: relative;
+    overflow: hidden;
+    min-width: 0;
+    transition: transform 0.15s ease, box-shadow 0.15s ease;
+  }
+
+  .widget-card.drop-target {
+    box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.35);
     transform: translateY(-2px);
   }
 
-  .toggle {
-    position: relative;
-    width: 44px;
+  .widget-card.dragging {
+    opacity: 0.55;
+    transform: scale(0.98);
+    border-style: dashed;
+    border-color: var(--brand-indigo);
+    box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.2);
+  }
+
+  .widget-header {
+    display: flex;
+    gap: 8px;
+    align-items: flex-start;
+    padding: 10px;
+    border-bottom: 1px solid #e2e8f0;
+    cursor: grab;
+    user-select: none;
+    touch-action: none;
+  }
+
+  .widget-header:active {
+    cursor: grabbing;
+  }
+
+  .drag-handle {
+    width: 22px;
+    height: 22px;
+    border-radius: 6px;
+    border: 1px solid #e2e8f0;
+    background: #f8fafc;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 12px;
+    color: var(--text-muted);
+    flex: 0 0 22px;
+  }
+
+  .widget-header h3 {
+    margin: 0;
+    font-size: 12px;
+    color: var(--text-strong);
+  }
+
+  .widget-header p {
+    margin: 2px 0 0;
+    font-size: 11px;
+    color: var(--text-muted);
+    line-height: 1.3;
+  }
+
+  .chip-size {
+    margin-left: auto;
+    border: 1px solid #c7d2fe;
+    background: #eef2ff;
+    color: #4338ca;
+    border-radius: 999px;
+    font-size: 11px;
     height: 24px;
-    display: inline-block;
-    flex: 0 0 44px;
-    box-sizing: border-box;
+    min-width: 44px;
+    padding: 0 10px;
+    cursor: default;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    line-height: 1;
   }
 
-  .toggle input {
-    opacity: 0;
-    width: 0;
-    height: 0;
+  .widget-preview {
+    flex: 1;
+    min-height: 0;
+    padding: 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
   }
 
-  .slider {
+  .mock-line {
+    height: 8px;
+    border-radius: 999px;
+    background: linear-gradient(90deg, #e2e8f0 0%, #cbd5e1 48%, #e2e8f0 100%);
+  }
+
+  .mock-bars {
+    display: grid;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    align-items: end;
+    gap: 6px;
+    flex: 1;
+  }
+
+  .mock-bars span {
+    display: block;
+    width: 100%;
+    border-radius: 6px 6px 2px 2px;
+    background: linear-gradient(180deg, #a5b4fc 0%, #6366f1 100%);
+  }
+
+  .controls {
+    border: 1px solid var(--panel-border);
+    border-radius: 16px;
+    background: #fff;
+    box-shadow: var(--panel-shadow);
+    padding: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    overflow-y: auto;
+    height: 100%;
+    max-height: 760px;
+    transition: box-shadow 0.15s ease, border-color 0.15s ease;
+  }
+
+  .controls.drop-active {
+    border-color: var(--brand-indigo);
+    box-shadow: inset 0 0 0 2px rgba(99, 102, 241, 0.2);
+  }
+
+  .controls h3 {
+    margin: 0;
+    font-size: 13px;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--text-muted);
+  }
+
+  .controls-subtitle {
+    margin: 0;
+    font-size: 12px;
+    color: var(--text-muted);
+  }
+
+  .empty-state {
+    border: 1px dashed #cbd5e1;
+    border-radius: 10px;
+    padding: 12px;
+    font-size: 12px;
+    color: var(--text-muted);
+    background: #f8fafc;
+  }
+
+  .disabled-card {
+    width: 100%;
+    border: 1px solid var(--panel-border);
+    border-radius: 10px;
+    background: #f8fafc;
+    color: var(--text-strong);
+    padding: 10px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    cursor: grab;
+    font-size: 12px;
+    font-weight: 600;
+    text-align: left;
+    touch-action: none;
+  }
+
+  .disabled-card:active {
+    cursor: grabbing;
+  }
+
+  .disabled-card.dragging {
+    opacity: 0.55;
+    border-style: dashed;
+    border-color: var(--brand-indigo);
+    box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.2);
+  }
+
+  .disabled-drag {
+    width: 18px;
+    height: 18px;
+    border-radius: 6px;
+    border: 1px solid #e2e8f0;
+    background: #fff;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--text-muted);
+    font-size: 11px;
+    flex: 0 0 18px;
+  }
+
+  .resize-width-handle {
     position: absolute;
-    cursor: pointer;
-    top: 0;
-    left: 0;
     right: 0;
     bottom: 0;
-    background-color: #e2e8f0;
-    border-radius: 999px;
-    transition: 0.2s;
-    box-sizing: border-box;
-    overflow: hidden;
+    width: 24px;
+    height: 24px;
+    border: none;
+    border-top: 1px solid #c7d2fe;
+    border-left: 1px solid #c7d2fe;
+    border-top-left-radius: 12px;
+    background: linear-gradient(135deg, #e0e7ff 0%, #a5b4fc 100%);
+    cursor: ew-resize;
+    touch-action: none;
+    opacity: 0.9;
+    transition: opacity 0.15s ease, transform 0.15s ease;
   }
 
-  .slider:before {
-    position: absolute;
-    content: '';
-    height: 18px;
-    width: 18px;
-    left: 3px;
-    top: 3px;
-    background-color: white;
-    border-radius: 50%;
-    transition: 0.2s;
-    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
+  .resize-width-handle:hover {
+    opacity: 1;
+    transform: scale(1.05);
   }
 
-  .toggle input:checked + .slider {
-    background-color: #2563eb;
+  @media (max-width: 1200px) {
+    .designer-layout {
+      grid-template-columns: 1fr;
+    }
+
+    .controls {
+      max-height: none;
+    }
   }
 
-  .toggle input:checked + .slider:before {
-    transform: translateX(20px);
-  }
+  @media (max-width: 900px) {
+    .canvas {
+      grid-template-columns: 1fr;
+      grid-template-rows: none;
+      grid-auto-rows: auto;
+      min-height: 0;
+    }
 
+    .widget-card {
+      grid-column: 1 / -1 !important;
+      grid-row: auto !important;
+      min-height: 180px;
+    }
+  }
 </style>
