@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -88,17 +89,14 @@ func (s *Service) Run(ctx context.Context, req QueryRequest) (*QueryRunResult, e
 
 	var wg sync.WaitGroup
 	var mu sync.Mutex
-	var firstErr error
+	signalErrors := map[string]string{}
 
-	setError := func(err error) {
+	setSignalError := func(signal string, err error) {
 		if err == nil {
 			return
 		}
 		mu.Lock()
-		if firstErr == nil {
-			firstErr = err
-			cancel()
-		}
+		signalErrors[signal] = err.Error()
 		mu.Unlock()
 	}
 
@@ -108,7 +106,7 @@ func (s *Service) Run(ctx context.Context, req QueryRequest) (*QueryRunResult, e
 			defer wg.Done()
 			signalLogs, err := fetchLogs(ctx, s.Storage.Conn, logsQuery)
 			if err != nil {
-				setError(err)
+				setSignalError("logs", err)
 				return
 			}
 			signalLogs, signalLogsHasNext := trimToPage(signalLogs, limit)
@@ -116,7 +114,7 @@ func (s *Service) Run(ctx context.Context, req QueryRequest) (*QueryRunResult, e
 			if signalLogsHasNext {
 				signalLogsNextCursor, err = encodeLogsCursor(signalLogs[len(signalLogs)-1])
 				if err != nil {
-					setError(err)
+					setSignalError("logs", fmt.Errorf("encode logs cursor: %w", err))
 					return
 				}
 			}
@@ -134,7 +132,7 @@ func (s *Service) Run(ctx context.Context, req QueryRequest) (*QueryRunResult, e
 			defer wg.Done()
 			signalTraces, err := fetchTraces(ctx, s.Storage.Conn, tracesQuery)
 			if err != nil {
-				setError(err)
+				setSignalError("traces", err)
 				return
 			}
 			signalTraces, signalTracesHasNext := trimToPage(signalTraces, limit)
@@ -142,7 +140,7 @@ func (s *Service) Run(ctx context.Context, req QueryRequest) (*QueryRunResult, e
 			if signalTracesHasNext {
 				signalTracesNextCursor, err = encodeTracesCursor(signalTraces[len(signalTraces)-1])
 				if err != nil {
-					setError(err)
+					setSignalError("traces", fmt.Errorf("encode traces cursor: %w", err))
 					return
 				}
 			}
@@ -160,7 +158,7 @@ func (s *Service) Run(ctx context.Context, req QueryRequest) (*QueryRunResult, e
 			defer wg.Done()
 			signalMetrics, err := fetchMetrics(ctx, s.Storage.Conn, metricsQuery)
 			if err != nil {
-				setError(err)
+				setSignalError("metrics", err)
 				return
 			}
 			signalMetrics, signalMetricsHasNext := trimToPage(signalMetrics, limit)
@@ -172,13 +170,20 @@ func (s *Service) Run(ctx context.Context, req QueryRequest) (*QueryRunResult, e
 		}()
 	}
 	wg.Wait()
-	if firstErr != nil {
-		return nil, firstErr
+	requestedCount := countRequestedSignals(signals)
+	if len(signalErrors) == requestedCount && requestedCount > 0 {
+		return nil, fmt.Errorf("all requested signals failed: %s", joinSignalErrors(signalErrors))
+	}
+
+	status := "complete"
+	if len(signalErrors) > 0 {
+		status = "partial"
+		log.Printf("query.service.run partial: failedSignals=%s", joinSignalErrors(signalErrors))
 	}
 
 	result := &QueryRunResult{
 		RunID:  fmt.Sprintf("run-%d", time.Now().UnixNano()),
-		Status: "complete",
+		Status: status,
 		Pagination: PaginationSet{
 			Logs:    buildPagination(page, limit, logsHasNext, logsNextCursor),
 			Traces:  buildPagination(page, limit, tracesHasNext, tracesNextCursor),
@@ -190,6 +195,9 @@ func (s *Service) Run(ctx context.Context, req QueryRequest) (*QueryRunResult, e
 			Metrics: wrapAny(metrics),
 		},
 	}
+	if len(signalErrors) > 0 {
+		result.SignalErrors = signalErrors
+	}
 	result.Summary = QueryRunSummary{
 		LogCount:    len(logs),
 		TraceCount:  len(traces),
@@ -199,6 +207,33 @@ func (s *Service) Run(ctx context.Context, req QueryRequest) (*QueryRunResult, e
 		log.Printf("query.service.run complete: runId=%s logs=%d traces=%d metrics=%d", result.RunID, result.Summary.LogCount, result.Summary.TraceCount, result.Summary.MetricCount)
 	}
 	return result, nil
+}
+
+func countRequestedSignals(signals map[string]bool) int {
+	count := 0
+	for _, requested := range signals {
+		if requested {
+			count++
+		}
+	}
+	return count
+}
+
+func joinSignalErrors(signalErrors map[string]string) string {
+	if len(signalErrors) == 0 {
+		return ""
+	}
+	keys := make([]string, 0, len(signalErrors))
+	for key := range signalErrors {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+
+	parts := make([]string, 0, len(keys))
+	for _, key := range keys {
+		parts = append(parts, key+": "+strconv.Quote(signalErrors[key]))
+	}
+	return strings.Join(parts, "; ")
 }
 
 func buildPagination(page, limit int, hasNext bool, nextCursor string) Pagination {

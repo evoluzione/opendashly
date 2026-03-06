@@ -8,10 +8,11 @@ import (
 
 // BuildMetricsQuery creates a ClickHouse SQL statement for metrics.
 func BuildMetricsQuery(filters map[string]string, filterList []FilterItem, from, to time.Time, limit, offset int) string {
+	filteredForMetrics := filterListForSignal("metrics", filterList)
 	// Strategy: Union sum and gauge tables
 	sumBase := "SELECT MetricName AS name, MetricUnit AS unit, TimeUnix AS timestamp, Value AS value FROM telemetry.otel_metrics_sum"
 	gaugeBase := "SELECT MetricName AS name, MetricUnit AS unit, TimeUnix AS timestamp, Value AS value FROM telemetry.otel_metrics_gauge"
-	clauses := buildOtelClauses("TimeUnix", filters, filterList, from, to, "ServiceName", "", "", []string{"ResourceAttributes", "Attributes"})
+	clauses := buildOtelClauses("TimeUnix", filters, filteredForMetrics, from, to, "ServiceName", "", "", []string{"ResourceAttributes", "Attributes"})
 	sumQuery := sumBase
 	gaugeQuery := gaugeBase
 	if len(clauses) > 0 {
@@ -40,10 +41,11 @@ func BuildMetricsQuery(filters map[string]string, filterList []FilterItem, from,
 
 // BuildMetricsCountQuery creates a count query for metrics.
 func BuildMetricsCountQuery(filters map[string]string, filterList []FilterItem, from, to time.Time) string {
+	filteredForMetrics := filterListForSignal("metrics", filterList)
 	// Strategy: Union sum and gauge tables for counting
 	sumBase := "SELECT MetricName, MetricUnit FROM telemetry.otel_metrics_sum"
 	gaugeBase := "SELECT MetricName, MetricUnit FROM telemetry.otel_metrics_gauge"
-	clauses := buildOtelClauses("TimeUnix", filters, filterList, from, to, "ServiceName", "", "", []string{"ResourceAttributes", "Attributes"})
+	clauses := buildOtelClauses("TimeUnix", filters, filteredForMetrics, from, to, "ServiceName", "", "", []string{"ResourceAttributes", "Attributes"})
 
 	sumQuery := sumBase
 	gaugeQuery := gaugeBase

@@ -13,6 +13,12 @@ type TelemetryCounts struct {
 	Last5m uint64 `json:"last5m"`
 	Last10m uint64 `json:"last10m"`
 	Last60m uint64 `json:"last60m"`
+	Series []TelemetryPoint `json:"series,omitempty"`
+}
+
+type TelemetryPoint struct {
+	Ts    time.Time `json:"ts"`
+	Count uint64    `json:"count"`
 }
 
 type Checks struct {
@@ -36,6 +42,11 @@ type SummaryCounts struct {
 type Service struct {
 	Storage *storage.Client
 }
+
+const (
+	seriesBucketMinutes = 5
+	seriesPointCount    = 12
+)
 
 func (s *Service) Summary(ctx context.Context) Summary {
 	summary := Summary{
@@ -69,6 +80,23 @@ func (s *Service) Summary(ctx context.Context) Summary {
 		return summary
 	}
 
+	anchor := summary.GeneratedAt.UTC().Truncate(time.Duration(seriesBucketMinutes) * time.Minute)
+	logs.Series, err = fetchSeries(ctx, s.Storage, logsSeriesQuery, anchor, seriesBucketMinutes, seriesPointCount)
+	if err != nil {
+		summary.Error = fmt.Sprintf("logs series failed: %v", err)
+		return summary
+	}
+	traces.Series, err = fetchSeries(ctx, s.Storage, tracesSeriesQuery, anchor, seriesBucketMinutes, seriesPointCount)
+	if err != nil {
+		summary.Error = fmt.Sprintf("traces series failed: %v", err)
+		return summary
+	}
+	metrics.Series, err = fetchSeries(ctx, s.Storage, metricsSeriesQuery, anchor, seriesBucketMinutes, seriesPointCount)
+	if err != nil {
+		summary.Error = fmt.Sprintf("metrics series failed: %v", err)
+		return summary
+	}
+
 	summary.Counts = SummaryCounts{
 		Logs:    logs,
 		Traces:  traces,
@@ -85,6 +113,41 @@ func fetchCounts(ctx context.Context, store *storage.Client, query string) (Tele
 		return TelemetryCounts{}, err
 	}
 	return counts, nil
+}
+
+func fetchSeries(ctx context.Context, store *storage.Client, query string, anchor time.Time, bucketMinutes int, pointCount int) ([]TelemetryPoint, error) {
+	bucketSize := time.Duration(bucketMinutes) * time.Minute
+	rows, err := store.Conn.Query(ctx, query)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	countsByBucket := make(map[int64]uint64, pointCount)
+	for rows.Next() {
+		var bucket time.Time
+		var count uint64
+		if err := rows.Scan(&bucket, &count); err != nil {
+			return nil, err
+		}
+		bucketUnix := bucket.UTC().Truncate(bucketSize).Unix()
+		countsByBucket[bucketUnix] = count
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	series := make([]TelemetryPoint, 0, pointCount)
+	start := anchor.UTC().Truncate(bucketSize).Add(time.Duration(-(pointCount-1)) * bucketSize)
+	for i := 0; i < pointCount; i++ {
+		ts := start.Add(time.Duration(i) * bucketSize)
+		series = append(series, TelemetryPoint{
+			Ts:    ts,
+			Count: countsByBucket[ts.Unix()],
+		})
+	}
+
+	return series, nil
 }
 
 const logsCountsQuery = `
@@ -126,4 +189,47 @@ const metricsCountsQuery = `
 			countIf(TimeUnix >= now() - INTERVAL 60 MINUTE) AS last60m
 		FROM telemetry.otel_metrics_gauge
 	)
+`
+
+const logsSeriesQuery = `
+	SELECT
+		toStartOfInterval(Timestamp, INTERVAL 5 MINUTE) AS bucket,
+		count() AS count
+	FROM telemetry.otel_logs
+	WHERE Timestamp >= now() - INTERVAL 60 MINUTE
+	GROUP BY bucket
+	ORDER BY bucket
+`
+
+const tracesSeriesQuery = `
+	SELECT
+		toStartOfInterval(Timestamp, INTERVAL 5 MINUTE) AS bucket,
+		uniqExact(TraceId) AS count
+	FROM telemetry.otel_traces
+	WHERE Timestamp >= now() - INTERVAL 60 MINUTE
+	GROUP BY bucket
+	ORDER BY bucket
+`
+
+const metricsSeriesQuery = `
+	SELECT
+		bucket,
+		sum(count) AS count
+	FROM (
+		SELECT
+			toStartOfInterval(TimeUnix, INTERVAL 5 MINUTE) AS bucket,
+			count() AS count
+		FROM telemetry.otel_metrics_sum
+		WHERE TimeUnix >= now() - INTERVAL 60 MINUTE
+		GROUP BY bucket
+		UNION ALL
+		SELECT
+			toStartOfInterval(TimeUnix, INTERVAL 5 MINUTE) AS bucket,
+			count() AS count
+		FROM telemetry.otel_metrics_gauge
+		WHERE TimeUnix >= now() - INTERVAL 60 MINUTE
+		GROUP BY bucket
+	)
+	GROUP BY bucket
+	ORDER BY bucket
 `

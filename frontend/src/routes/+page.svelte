@@ -42,6 +42,7 @@
 
   let activeTab: "logs" | "metriche" | "tracce" = "metriche";
   let dashboardLoaded = false;
+  let lastQueryRefresh: Date | null = null;
   let initialTraceId: string | null = null;
   let forceMode: "manual" | null = null;
   let autoRun = false;
@@ -138,7 +139,7 @@
   let pageSize = "100";
   const pageSizeOptions = ["25", "50", "100", "200"];
 
-  function handleRun(event: CustomEvent) {
+  async function handleRun(event: CustomEvent) {
     const { request } = event.detail;
     logsCursorByPage.clear();
     tracesCursorByPage.clear();
@@ -148,7 +149,11 @@
       logsCursor: undefined,
       tracesCursor: undefined,
     };
-    void executeQuery(lastRequest).then(() => storeNextCursors(1));
+    await executeQuery(lastRequest);
+    storeNextCursors(1);
+    if (!get(queryState).error && get(queryState).result) {
+      lastQueryRefresh = new Date();
+    }
   }
 
   async function handlePageChange(
@@ -171,6 +176,9 @@
     lastRequest = updated;
     await executeQuery(updated, { retainResult: true });
     storeNextCursors(page);
+    if (!get(queryState).error && get(queryState).result) {
+      lastQueryRefresh = new Date();
+    }
   }
 
   async function handlePageSizeChange() {
@@ -189,6 +197,9 @@
     lastRequest = updated;
     await executeQuery(updated, { retainResult: true });
     storeNextCursors(1);
+    if (!get(queryState).error && get(queryState).result) {
+      lastQueryRefresh = new Date();
+    }
   }
 
   function storeNextCursors(page: number) {
@@ -641,6 +652,7 @@
             logs={$queryState.result.results.logs}
             pagination={$queryState.result.pagination?.logs ?? null}
             isLiveUpdate={$queryState.isLiveUpdate}
+            lastUpdatedLabel={formatLastRefresh(lastQueryRefresh)}
             on:pageChange={(e) => handlePageChange("logs", e.detail.page)}
           />
         {:else if activeTab === "tracce"}
@@ -648,6 +660,7 @@
             traces={$queryState.result.results.traces}
             pagination={$queryState.result.pagination?.traces ?? null}
             isLiveUpdate={$queryState.isLiveUpdate}
+            lastUpdatedLabel={formatLastRefresh(lastQueryRefresh)}
             on:pageChange={(e) => handlePageChange("traces", e.detail.page)}
           />
         {/if}
@@ -699,6 +712,7 @@
           {initialTraceId}
           {forceMode}
           {autoRun}
+          autoSearch={false}
           on:run={handleRun}
         />
       </div>

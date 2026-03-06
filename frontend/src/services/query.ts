@@ -34,6 +34,7 @@ export type QueryRunResult = {
   summary: { logCount: number; traceCount: number; metricCount: number };
   pagination?: { logs: Pagination; traces: Pagination; metrics: Pagination };
   results: { logs: any[]; traces: any[]; metrics: any[] };
+  signalErrors?: Record<string, string>;
 };
 
 export type SmartQueryResponse = {

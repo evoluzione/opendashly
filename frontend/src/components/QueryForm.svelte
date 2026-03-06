@@ -24,6 +24,7 @@
   export let initialTraceId: string | null = null;
   export let forceMode: SearchMode | null = null;
   export let autoRun = false;
+  export let autoSearch = true;
 
   interface TabState {
     searchMode: SearchMode;
@@ -88,6 +89,7 @@
   let showCustomRangeModal = false;
   let customFromInput = "";
   let customToInput = "";
+  let activeAdvancedFiltersCount = 0;
 
   const timeRangeOptions: Array<{ value: TimeRangePreset; label: string }> = [
     { value: "5m", label: "Ultimi 5 minuti" },
@@ -139,6 +141,7 @@
   }
 
   $: syncUrlWithState();
+  $: activeAdvancedFiltersCount = getEffectiveAdvancedFilters().length;
 
   function saveState(tab: string) {
     tabStates[tab] = {
@@ -293,7 +296,9 @@
     selectedRange = "custom";
     rangeError = "";
     showCustomRangeModal = false;
-    submit();
+    if (autoSearch) {
+      submit();
+    }
   }
 
   function handleRangeChange(event: Event) {
@@ -305,7 +310,9 @@
     }
     selectedRange = value;
     rangeError = "";
-    submit();
+    if (autoSearch) {
+      submit();
+    }
   }
 
   $: {
@@ -580,7 +587,7 @@
     clearTraceIdFromUrl();
   }
 
-  $: if (autoSubmitReady) {
+  $: if (autoSearch && autoSubmitReady) {
     const autoSubmitKey = JSON.stringify({
       tab: activeTab,
       selectedRange,
@@ -624,7 +631,7 @@
     dispatch("modeChange", { mode: "manual" });
     setTimeout(() => {
       suppressUrlSync = false;
-      autoSubmitReady = true;
+      autoSubmitReady = autoSearch;
       if (autoRun) {
         submit();
       }
@@ -791,7 +798,20 @@
       </div>
 
       <div class="advanced-filters-trigger">
-        <button type="button" class="btn-secondary" on:click={openFilters}>
+        {#if activeAdvancedFiltersCount > 0}
+          <div class="advanced-filters-indicator" aria-live="polite">
+            <span class="indicator-dot" aria-hidden="true"></span>
+            <span>{activeAdvancedFiltersCount} filtri avanzati attivi</span>
+          </div>
+        {/if}
+
+        <button
+          type="button"
+          class="btn-secondary advanced-filters-btn"
+          class:active={activeAdvancedFiltersCount > 0}
+          on:click={openFilters}
+          aria-label={`Filtri avanzati, ${activeAdvancedFiltersCount} attivi`}
+        >
           <svg
             xmlns="http://www.w3.org/2000/svg"
             width="16"
@@ -804,9 +824,9 @@
             stroke-linejoin="round"
             ><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"></polygon></svg
           >
-          Filtri Avanzati
-          {#if getEffectiveAdvancedFilters().length > 0}
-            <span class="badge">{getEffectiveAdvancedFilters().length}</span>
+          <span>Filtri avanzati</span>
+          {#if activeAdvancedFiltersCount > 0}
+            <span class="badge">{activeAdvancedFiltersCount}</span>
           {/if}
         </button>
       </div>
@@ -1064,10 +1084,42 @@
 
   .advanced-filters-trigger {
     margin-top: 6px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
   }
 
   .advanced-filters-trigger .btn-secondary {
     width: 100%;
+  }
+
+  .advanced-filters-indicator {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 12px;
+    font-weight: 700;
+    color: #1d4ed8;
+    background: #eff6ff;
+    border: 1px solid #bfdbfe;
+    border-radius: 999px;
+    padding: 6px 10px;
+    width: fit-content;
+  }
+
+  .indicator-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 999px;
+    background: #2563eb;
+    box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.16);
+  }
+
+  .advanced-filters-btn.active {
+    border-color: #2563eb;
+    background: #eff6ff;
+    color: #1e40af;
+    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
   }
 
   .btn-secondary {

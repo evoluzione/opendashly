@@ -5,6 +5,12 @@ export type TelemetryCounts = {
   last5m: number;
   last10m: number;
   last60m: number;
+  series?: TelemetryPoint[];
+};
+
+export type TelemetryPoint = {
+  ts: string;
+  count: number;
 };
 
 export type StatusSummary = {

@@ -5,6 +5,7 @@
   export let logs: any[] = [];
   export let pagination: { page: number; hasNext: boolean } | null = null;
   export let isLiveUpdate = false;
+  export let lastUpdatedLabel = "";
 
   const dispatch = createEventDispatcher();
   let selectedLog: any | null = null;
@@ -276,68 +277,75 @@
 
   {#if pagination}
     <div class="pager">
-      <button
-        type="button"
-        class="pager-btn"
-        on:click={() => changePage(1)}
-        disabled={pagination.page <= 1}
-        title="Prima pagina"
-      >
-        <svg
-          width="16"
-          height="16"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          stroke-width="2"
-          stroke-linecap="round"
-          stroke-linejoin="round"
+      <div class="pager-meta">
+        {#if lastUpdatedLabel}
+          <span class="last-refresh">Ultimo aggiornamento: {lastUpdatedLabel}</span>
+        {/if}
+      </div>
+      <div class="pager-controls">
+        <button
+          type="button"
+          class="pager-btn"
+          on:click={() => changePage(1)}
+          disabled={pagination.page <= 1}
+          title="Prima pagina"
         >
-          <polyline points="11 17 6 12 11 7"></polyline>
-          <polyline points="18 17 13 12 18 7"></polyline>
-        </svg>
-      </button>
-      <button
-        type="button"
-        class="pager-btn"
-        on:click={() => changePage(pagination.page - 1)}
-        disabled={pagination.page <= 1}
-        title="Pagina precedente"
-      >
-        <svg
-          width="16"
-          height="16"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          stroke-width="2"
-          stroke-linecap="round"
-          stroke-linejoin="round"
+          <svg
+            width="16"
+            height="16"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          >
+            <polyline points="11 17 6 12 11 7"></polyline>
+            <polyline points="18 17 13 12 18 7"></polyline>
+          </svg>
+        </button>
+        <button
+          type="button"
+          class="pager-btn"
+          on:click={() => changePage(pagination.page - 1)}
+          disabled={pagination.page <= 1}
+          title="Pagina precedente"
         >
-          <polyline points="15 18 9 12 15 6"></polyline>
-        </svg>
-      </button>
-      <span>Pagina {pagination.page}</span>
-      <button
-        type="button"
-        class="pager-btn"
-        on:click={() => changePage(pagination.page + 1)}
-        disabled={!pagination.hasNext}
-        title="Pagina successiva"
-      >
-        <svg
-          width="16"
-          height="16"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          stroke-width="2"
-          stroke-linecap="round"
-          stroke-linejoin="round"
+          <svg
+            width="16"
+            height="16"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          >
+            <polyline points="15 18 9 12 15 6"></polyline>
+          </svg>
+        </button>
+        <span>Pagina {pagination.page}</span>
+        <button
+          type="button"
+          class="pager-btn"
+          on:click={() => changePage(pagination.page + 1)}
+          disabled={!pagination.hasNext}
+          title="Pagina successiva"
         >
-          <polyline points="9 18 15 12 9 6"></polyline>
-        </svg>
-      </button>
+          <svg
+            width="16"
+            height="16"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          >
+            <polyline points="9 18 15 12 9 6"></polyline>
+          </svg>
+        </button>
+      </div>
     </div>
   {/if}
 </div>
@@ -636,12 +644,29 @@
   .pager {
     display: flex;
     align-items: center;
-    justify-content: center;
-    gap: 12px;
+    justify-content: space-between;
+    gap: 16px;
     padding: 20px 16px 6px 16px;
     border-top: 1px solid #e2e8f0;
     background: white;
     flex-shrink: 0;
+  }
+
+  .pager-meta {
+    min-width: 0;
+    flex: 1;
+  }
+
+  .last-refresh {
+    font-size: 12px;
+    color: #94a3b8;
+    white-space: nowrap;
+  }
+
+  .pager-controls {
+    display: inline-flex;
+    align-items: center;
+    gap: 12px;
   }
 
   .pager button {
@@ -670,6 +695,18 @@
     font-size: 13px;
     color: #64748b;
     padding: 0 8px;
+  }
+
+  @media (max-width: 760px) {
+    .pager {
+      flex-direction: column;
+      align-items: flex-start;
+    }
+
+    .pager-controls {
+      width: 100%;
+      justify-content: center;
+    }
   }
 
   .pager-btn {
