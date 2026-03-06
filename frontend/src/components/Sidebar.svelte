@@ -1,74 +1,16 @@
+<script context="module" lang="ts">
+  let persistedAdminMenuOpen = false;
+</script>
+
 <script lang="ts">
-  import { onDestroy, onMount } from "svelte";
   import { authState, logoutUser } from "../lib/stores/auth";
-  import { fetchStatusSummary, type StatusSummary } from "../services/status";
 
   export let activeTab: "logs" | "metriche" | "tracce" | null = null;
   export let onSelect: (tab: "logs" | "metriche" | "tracce") => void;
 
-  let statusSummary: StatusSummary | null = null;
-  let statusError = "";
-  let statusTimer: ReturnType<typeof setInterval> | null = null;
-  let statusAnchor: HTMLButtonElement | null = null;
-  let tooltipStyle = "";
-  let showTooltip = false;
+  let showAdminMenu = persistedAdminMenuOpen;
 
-  const numberFormat = new Intl.NumberFormat("it-IT");
-
-  function formatCount(value: number | undefined) {
-    if (value === undefined || value === null) return "-";
-    return numberFormat.format(value);
-  }
-
-  function hasRecentData(): boolean {
-    if (!statusSummary) return false;
-    const { logs, traces, metrics } = statusSummary.counts;
-    return logs.last60m > 0 || traces.last60m > 0 || metrics.last60m > 0;
-  }
-
-  function statusLabel() {
-    if (!statusSummary && statusError) return "Disattivo";
-    if (!statusSummary) return "Inattivo";
-    if (!statusSummary.ok) return "Disattivo";
-    return hasRecentData() ? "Attivo" : "Inattivo";
-  }
-
-  async function loadStatus() {
-    try {
-      statusSummary = await fetchStatusSummary();
-      statusError = statusSummary.error ?? "";
-    } catch (err) {
-      statusSummary = null;
-      statusError = err instanceof Error ? err.message : "Errore sconosciuto";
-    }
-  }
-
-  function updateTooltipPosition() {
-    if (!statusAnchor) return;
-    const rect = statusAnchor.getBoundingClientRect();
-    tooltipStyle = `left:${Math.round(rect.left)}px;top:${Math.round(rect.top)}px;`;
-  }
-
-  function handleTooltipOpen() {
-    showTooltip = true;
-    updateTooltipPosition();
-  }
-
-  function handleTooltipClose() {
-    showTooltip = false;
-  }
-
-  onMount(() => {
-    loadStatus();
-    statusTimer = setInterval(loadStatus, 30000);
-  });
-
-  onDestroy(() => {
-    if (statusTimer) {
-      clearInterval(statusTimer);
-      statusTimer = null;
-    }
-  });
+  $: persistedAdminMenuOpen = showAdminMenu;
 </script>
 
 <aside class="sidebar">
@@ -156,8 +98,28 @@
 
   {#if $authState.user?.role === "admin"}
     <div class="nav-section">
-      <span class="nav-label">Amministrazione</span>
-      <nav>
+      <button
+        type="button"
+        class="admin-toggle"
+        class:open={showAdminMenu}
+        on:click={() => (showAdminMenu = !showAdminMenu)}
+        aria-expanded={showAdminMenu}
+        aria-controls="admin-menu"
+      >
+        <span>Amministrazione</span>
+        <svg
+          class="admin-toggle-chevron"
+          viewBox="0 0 20 20"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          aria-hidden="true"
+        >
+          <polyline points="6 8 10 12 14 8"></polyline>
+        </svg>
+      </button>
+      {#if showAdminMenu}
+        <nav id="admin-menu" class="admin-nav">
         <a href="/admin/users" class="nav-link">
           <svg
             width="18"
@@ -220,83 +182,27 @@
           </svg>
           <span>Impostazioni AI</span>
         </a>
-      </nav>
+        <a href="/admin/status" class="nav-link">
+          <svg
+            width="18"
+            height="18"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+          >
+            <circle cx="12" cy="12" r="9" />
+            <path d="M12 8v4" />
+            <circle cx="12" cy="16" r="1" fill="currentColor" stroke="none" />
+          </svg>
+          <span>Monitor sistema</span>
+        </a>
+        </nav>
+      {/if}
     </div>
   {/if}
 
   <div class="sidebar-footer">
-    <button
-      class="status-indicator"
-      type="button"
-      bind:this={statusAnchor}
-      on:mouseenter={handleTooltipOpen}
-      on:mouseleave={handleTooltipClose}
-      on:focus={handleTooltipOpen}
-      on:blur={handleTooltipClose}
-    >
-      <span
-        class="dot"
-        class:active={statusSummary?.ok && hasRecentData()}
-        class:inactive={statusSummary?.ok && !hasRecentData()}
-        class:error={(!statusSummary && statusError) ||
-          (statusSummary && !statusSummary.ok)}
-        class:idle={!statusSummary && !statusError}
-      ></span>
-      <span>{statusLabel()}</span>
-      <div
-        class="status-tooltip"
-        class:visible={showTooltip}
-        role="tooltip"
-        style={tooltipStyle}
-      >
-        {#if statusSummary}
-          <div class="tooltip-title">Telemetria</div>
-          <div class="tooltip-row">
-            <span>Log totali</span>
-            <span>{formatCount(statusSummary.counts.logs.total)}</span>
-          </div>
-          <div class="tooltip-row">
-            <span>Log ultimi 5/10/60m</span>
-            <span>
-              {formatCount(statusSummary.counts.logs.last5m)} /
-              {formatCount(statusSummary.counts.logs.last10m)} /
-              {formatCount(statusSummary.counts.logs.last60m)}
-            </span>
-          </div>
-          <div class="tooltip-row">
-            <span>Tracce totali</span>
-            <span>{formatCount(statusSummary.counts.traces.total)}</span>
-          </div>
-          <div class="tooltip-row">
-            <span>Tracce ultimi 5/10/60m</span>
-            <span>
-              {formatCount(statusSummary.counts.traces.last5m)} /
-              {formatCount(statusSummary.counts.traces.last10m)} /
-              {formatCount(statusSummary.counts.traces.last60m)}
-            </span>
-          </div>
-          <div class="tooltip-row">
-            <span>Metriche totali</span>
-            <span>{formatCount(statusSummary.counts.metrics.total)}</span>
-          </div>
-          <div class="tooltip-row">
-            <span>Metriche ultimi 5/10/60m</span>
-            <span>
-              {formatCount(statusSummary.counts.metrics.last5m)} /
-              {formatCount(statusSummary.counts.metrics.last10m)} /
-              {formatCount(statusSummary.counts.metrics.last60m)}
-            </span>
-          </div>
-        {:else}
-          <div class="tooltip-title">Telemetria</div>
-          <div class="tooltip-row">
-            <span>Stato</span>
-            <span>{statusError || "Caricamento..."}</span>
-          </div>
-        {/if}
-      </div>
-    </button>
-
     {#if $authState.user}
       <div class="user-section">
         <div class="user-info">
@@ -325,6 +231,7 @@
       </div>
     {/if}
   </div>
+
 </aside>
 
 <style>
@@ -466,97 +373,45 @@
     gap: 16px;
   }
 
-  .status-indicator {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    font-size: 12px;
-    color: #64748b;
-    position: relative;
-    cursor: default;
-    border: none;
+  .admin-toggle {
+    width: 100%;
+    justify-content: space-between;
     background: transparent;
-    padding: 0;
-    text-align: left;
-    font-family: inherit;
-  }
-
-  .dot {
-    width: 8px;
-    height: 8px;
-    border-radius: 50%;
-    background: #94a3b8;
-    box-shadow: none;
-    animation: pulse 2s ease-in-out infinite;
-  }
-
-  .dot.active {
-    background: #22c55e;
-    box-shadow: 0 0 8px rgba(34, 197, 94, 0.6);
-  }
-
-  .dot.inactive {
-    background: #f59e0b;
-    box-shadow: 0 0 8px rgba(245, 158, 11, 0.6);
-  }
-
-  .dot.error {
-    background: #ef4444;
-    box-shadow: 0 0 8px rgba(239, 68, 68, 0.6);
-  }
-
-  .dot.idle {
-    background: #94a3b8;
-    box-shadow: none;
-  }
-
-  .status-tooltip {
-    position: fixed;
-    left: 0;
-    top: 0;
-    width: 280px;
-    padding: 12px;
-    border-radius: 12px;
-    background: rgba(15, 23, 42, 0.95);
-    color: #e2e8f0;
+    border: none;
+    color: #64748b;
     font-size: 11px;
-    line-height: 1.4;
-    box-shadow: 0 10px 20px rgba(15, 23, 42, 0.4);
-    border: 1px solid rgba(148, 163, 184, 0.2);
-    opacity: 0;
-    transform: translateY(calc(-100% - 10px));
-    pointer-events: none;
-    transition:
-      opacity 0.15s ease,
-      transform 0.15s ease;
-    z-index: 10;
-    overflow-wrap: anywhere;
-  }
-
-  .status-tooltip.visible {
-    opacity: 1;
-    transform: translateY(calc(-100% - 10px));
-  }
-
-  .tooltip-title {
-    font-size: 11px;
-    font-weight: 700;
+    font-weight: 600;
     text-transform: uppercase;
     letter-spacing: 0.08em;
+    padding: 0 12px;
+    border-radius: 0;
+  }
+
+  .admin-toggle:hover {
+    background: transparent;
+    color: #94a3b8;
+  }
+
+  .admin-toggle.open {
     color: #c7d2fe;
-    margin-bottom: 8px;
   }
 
-  .tooltip-row {
-    display: flex;
-    justify-content: space-between;
-    gap: 12px;
-    margin-bottom: 6px;
+  .admin-toggle-chevron {
+    width: 14px;
+    height: 14px;
+    transition: transform 0.2s ease;
   }
 
-  .tooltip-row span:last-child {
-    font-weight: 600;
-    color: #f8fafc;
+  .admin-toggle.open .admin-toggle-chevron {
+    transform: rotate(180deg);
+  }
+
+  .admin-nav {
+    margin-top: 6px;
+    padding: 6px;
+    border-radius: 10px;
+    background: rgba(15, 23, 42, 0.45);
+    border: 1px solid rgba(148, 163, 184, 0.14);
   }
 
   .user-section {
@@ -652,13 +507,4 @@
     box-shadow: inset 0 0 0 1px rgba(99, 102, 241, 0.3);
   }
 
-  @keyframes pulse {
-    0%,
-    100% {
-      opacity: 1;
-    }
-    50% {
-      opacity: 0.5;
-    }
-  }
 </style>

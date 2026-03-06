@@ -51,6 +51,7 @@ type QueryRunResult struct {
 	Summary    QueryRunSummary `json:"summary"`
 	Pagination PaginationSet   `json:"pagination"`
 	Results    Results         `json:"results"`
+	SignalErrors map[string]string `json:"signalErrors,omitempty"`
 }
 
 // Results aggregates signal results.

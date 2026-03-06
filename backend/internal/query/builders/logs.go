@@ -16,7 +16,8 @@ type LogsPageCursor struct {
 // BuildLogsQuery creates a ClickHouse SQL statement for logs.
 func BuildLogsQuery(filters map[string]string, filterList []FilterItem, from, to time.Time, limit, offset int, cursor *LogsPageCursor) string {
 	base := "SELECT Timestamp AS timestamp, SeverityText AS severity, Body AS body, TraceId AS traceId, SpanId AS spanId, ResourceAttributes AS resourceAttributes, LogAttributes AS logAttributes FROM telemetry.otel_logs"
-	bodySearch, effectiveFilterList := extractLogsBodySearch(filterList)
+	filteredForLogs := filterListForSignal("logs", filterList)
+	bodySearch, effectiveFilterList := extractLogsBodySearch(filteredForLogs)
 	clauses := buildOtelClauses("Timestamp", filters, effectiveFilterList, from, to, "ServiceName", "TraceId", "SeverityText", []string{"ResourceAttributes", "LogAttributes"})
 	if bodySearch != "" {
 		if searchClause := buildLogsBodySearchClause(bodySearch); searchClause != "" {
@@ -46,7 +47,8 @@ func BuildLogsQuery(filters map[string]string, filterList []FilterItem, from, to
 // BuildLogsCountQuery creates a count query for logs.
 func BuildLogsCountQuery(filters map[string]string, filterList []FilterItem, from, to time.Time) string {
 	base := "SELECT count(*) FROM telemetry.otel_logs"
-	bodySearch, effectiveFilterList := extractLogsBodySearch(filterList)
+	filteredForLogs := filterListForSignal("logs", filterList)
+	bodySearch, effectiveFilterList := extractLogsBodySearch(filteredForLogs)
 	clauses := buildOtelClauses("Timestamp", filters, effectiveFilterList, from, to, "ServiceName", "TraceId", "SeverityText", []string{"ResourceAttributes", "LogAttributes"})
 	if bodySearch != "" {
 		if searchClause := buildLogsBodySearchClause(bodySearch); searchClause != "" {

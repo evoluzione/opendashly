@@ -14,6 +14,7 @@
   import { saveQuery } from "../../services/saved_queries";
   import type { QueryRequest } from "../../services/query";
   let queryName = "";
+  let lastQueryRefresh: Date | null = null;
   let lastRequest: QueryRequest | null = null;
   const logsCursorByPage = new Map<number, string>();
   const tracesCursorByPage = new Map<number, string>();
@@ -42,6 +43,9 @@
     };
     await executeQuery(lastRequest);
     storeNextCursors(1);
+    if (!get(queryState).error && get(queryState).result) {
+      lastQueryRefresh = new Date();
+    }
   }
 
   async function handlePageChange(
@@ -63,6 +67,9 @@
     };
     await executeQuery(lastRequest, { retainResult: true });
     storeNextCursors(page);
+    if (!get(queryState).error && get(queryState).result) {
+      lastQueryRefresh = new Date();
+    }
   }
 
   async function handlePageSizeChange() {
@@ -80,6 +87,18 @@
     };
     await executeQuery(lastRequest, { retainResult: true });
     storeNextCursors(1);
+    if (!get(queryState).error && get(queryState).result) {
+      lastQueryRefresh = new Date();
+    }
+  }
+
+  function formatLastRefresh(date: Date | null): string {
+    if (!date) return "";
+    return date.toLocaleTimeString("it-IT", {
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+    });
   }
 
   async function handleSave() {
@@ -113,6 +132,7 @@
   initialTraceId={traceIdParam}
   forceMode={traceIdParam ? "manual" : null}
   autoRun={!!traceIdParam}
+  autoSearch={false}
   on:run={handleRun}
 />
 
@@ -149,6 +169,7 @@
     <LogResultsTable
       logs={$queryState.result.results.logs}
       pagination={$queryState.result.pagination?.logs ?? null}
+      lastUpdatedLabel={formatLastRefresh(lastQueryRefresh)}
       on:pageChange={(event) => handlePageChange("logs", event.detail.page)}
     />
   </section>
@@ -157,6 +178,7 @@
     <TraceResultsList
       traces={$queryState.result.results.traces}
       pagination={$queryState.result.pagination?.traces ?? null}
+      lastUpdatedLabel={formatLastRefresh(lastQueryRefresh)}
       on:pageChange={(event) => handlePageChange("traces", event.detail.page)}
     />
   </section>

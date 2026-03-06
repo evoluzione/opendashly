@@ -15,6 +15,51 @@ type FilterItem struct {
 	Value     string `json:"value"`
 }
 
+// filterListForSignal removes filters that are irrelevant for a specific signal.
+// This avoids expensive scans caused by applying log-only filters to traces/metrics.
+func filterListForSignal(signal string, filterList []FilterItem) []FilterItem {
+	if len(filterList) == 0 {
+		return filterList
+	}
+	out := make([]FilterItem, 0, len(filterList))
+	for _, item := range filterList {
+		key := strings.ToLower(strings.TrimSpace(item.Key))
+		skip := false
+
+		switch signal {
+		case "logs":
+			skip = isTraceOnlyFilterKey(key)
+		case "traces":
+			skip = isLogOnlyFilterKey(key)
+		case "metrics":
+			skip = isLogOnlyFilterKey(key) || isTraceOnlyFilterKey(key)
+		}
+
+		if !skip {
+			out = append(out, item)
+		}
+	}
+	return out
+}
+
+func isLogOnlyFilterKey(key string) bool {
+	switch key {
+	case "body", "message", "log.body", "log_message", "severity":
+		return true
+	default:
+		return false
+	}
+}
+
+func isTraceOnlyFilterKey(key string) bool {
+	switch key {
+	case "trace_error_scope", "span_name", "trace_or_span", "duration_ms":
+		return true
+	default:
+		return false
+	}
+}
+
 func buildOtelClauses(timeColumn string, filters map[string]string, filterList []FilterItem, from, to time.Time, serviceColumn, traceColumn, severityColumn string, attributeColumns []string) []string {
 	clauses := []string{}
 	if !from.IsZero() {

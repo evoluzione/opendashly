@@ -14,7 +14,8 @@ type TracesPageCursor struct {
 
 // BuildTracesQuery creates a ClickHouse SQL statement for traces.
 func BuildTracesQuery(filters map[string]string, filterList []FilterItem, from, to time.Time, limit, offset int, cursor *TracesPageCursor) string {
-	traceErrorScope, effectiveFilterList := extractTraceErrorScope(filterList)
+	filteredForTraces := filterListForSignal("traces", filterList)
+	traceErrorScope, effectiveFilterList := extractTraceErrorScope(filteredForTraces)
 	base := "SELECT TraceId AS traceId, argMin(SpanName, Timestamp) AS name, argMin(ServiceName, Timestamp) AS service, count() AS spanCount, countIf(StatusCode = 'STATUS_CODE_ERROR') AS errorCount, max(Timestamp) AS lastSeen, max(Duration) / 1000000 AS durationMs FROM telemetry.otel_traces"
 	clauses := buildOtelClauses("Timestamp", filters, effectiveFilterList, from, to, "ServiceName", "TraceId", "", []string{"ResourceAttributes", "SpanAttributes"})
 	query := base
@@ -50,7 +51,8 @@ func BuildTracesQuery(filters map[string]string, filterList []FilterItem, from, 
 
 // BuildTracesCountQuery creates a count query for traces (counting unique TraceIds).
 func BuildTracesCountQuery(filters map[string]string, filterList []FilterItem, from, to time.Time) string {
-	traceErrorScope, effectiveFilterList := extractTraceErrorScope(filterList)
+	filteredForTraces := filterListForSignal("traces", filterList)
+	traceErrorScope, effectiveFilterList := extractTraceErrorScope(filteredForTraces)
 	base := "SELECT TraceId, countIf(StatusCode = 'STATUS_CODE_ERROR') AS errorCount FROM telemetry.otel_traces"
 	clauses := buildOtelClauses("Timestamp", filters, effectiveFilterList, from, to, "ServiceName", "TraceId", "", []string{"ResourceAttributes", "SpanAttributes"})
 	query := base
