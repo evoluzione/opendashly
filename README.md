@@ -23,7 +23,7 @@
 ### Why Opendashly?
 
 - **🚀 High Performance**: ClickHouse-powered storage handles millions of events per second
-- **🤖 AI Smart Queries**: Natural language to SQL query generation with OpenAI
+- **🤖 AI Observability Agent**: Smart AI agent for automated insights and anomaly detection
 - **🔐 Enterprise Auth**: JWT-based authentication with role-based access control
 - **📈 Real-time Visualization**: Interactive charts and timelines with sub-second queries
 - **🎛️ Data Retention**: Configurable retention policies with automatic cleanup
@@ -104,6 +104,48 @@ curl -X POST http://localhost:4318/v1/logs \
 
 Or configure your application to send telemetry to `http://localhost:4318` (HTTP) or `grpc://localhost:4317` (gRPC).
 
+### 4. Run Ecommerce OTLP Load Test (Node)
+
+The repository includes a Node-based load generator that simulates ecommerce microservices and sends **traces, logs, and metrics** to the collector with cross-signal consistency.
+
+Install script dependencies once:
+
+```bash
+npm --prefix scripts install
+```
+
+Run a medium profile:
+
+```bash
+node scripts/loadtest_otel_node.mjs --duration 300 --rps 100
+```
+
+Useful examples:
+
+```bash
+# high load, higher error pressure on checkout/payment hotspots
+node scripts/loadtest_otel_node.mjs --duration 600 --rps 250 --error-rate 0.06 --hot-rate 0.35
+
+# fewer active services and traces+logs only
+node scripts/loadtest_otel_node.mjs --duration 180 --rps 80 --services 6 --no-metrics
+```
+
+Main CLI options:
+
+- `--duration` / `--duration-sec`: test duration in seconds
+- `--rps`: target requests per second
+- `--services`: active microservices count (`2..9`)
+- `--error-rate`: base error probability (`0..1`)
+- `--hot-rate`: extra traffic on checkout hotspot (`0..1`)
+- `--max-in-flight`: in-flight request cap
+- `--collector`: OTLP HTTP base endpoint (default `http://localhost:4318`)
+- `--traces|--no-traces`, `--logs|--no-logs`, `--metrics|--no-metrics`: signal toggles
+
+The generator models journeys such as browse, product detail, add-to-cart, checkout, and order tracking across:
+`api-gateway`, `auth-service`, `catalog-service`, `cart-service`, `checkout-service`, `payment-service`, `inventory-service`, `shipping-service`, and `notification-service`.
+
+Span names follow `HTTP_METHOD /route` format for server spans to align with dashboard endpoint widgets.
+
 ---
 
 <a id="ai"></a>
@@ -145,7 +187,7 @@ In the query form, type natural language prompts like:
 
 ```
 ┌─────────────┐      ┌──────────────────┐      ┌─────────────┐
-│   SDK/Agent │─────▶│ OTLP Collector   │─────▶│ ClickHouse  │
+│   Services  │─────▶│ OTLP Collector   │─────▶│ ClickHouse  │
 │  (Your App) │      │  (4317/4318)     │      │   Storage   │
 └─────────────┘      └──────────────────┘      └─────────────┘
                                                        │
