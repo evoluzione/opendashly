@@ -3,20 +3,7 @@ package query
 import (
 	"context"
 	"log"
-	"opendashly/backend/internal/storage"
-	"sync"
 )
-
-// Service handles query execution.
-type Service struct {
-	Storage *storage.Client
-	Debug   bool
-
-	cacheInit    sync.Once
-	cache        *cacheManager
-	runnerInit   sync.Once
-	signalRunner signalRunner
-}
 
 // Run executes an ad-hoc query and returns results.
 func (s *Service) Run(ctx context.Context, req QueryRequest) (*QueryRunResult, error) {
@@ -54,39 +41,4 @@ func (s *Service) Run(ctx context.Context, req QueryRequest) (*QueryRunResult, e
 		log.Printf("query.service.run complete: runId=%s logs=%d traces=%d metrics=%d", result.RunID, result.Summary.LogCount, result.Summary.TraceCount, result.Summary.MetricCount)
 	}
 	return result, nil
-}
-
-func (s *Service) getCacheManager() *cacheManager {
-	s.cacheInit.Do(func() {
-		s.cache = newCacheManager(servicesCacheTTL, attributesCacheTTL)
-	})
-	return s.cache
-}
-
-func (s *Service) getSignalRunner() signalRunner {
-	if s.signalRunner != nil {
-		return s.signalRunner
-	}
-	s.runnerInit.Do(func() {
-		if s.signalRunner == nil {
-			s.signalRunner = defaultSignalOrchestrator()
-		}
-	})
-	return s.signalRunner
-}
-
-func (s *Service) getServicesFromCache() ([]string, bool) {
-	return s.getCacheManager().getServices()
-}
-
-func (s *Service) setServicesCache(values []string) {
-	s.getCacheManager().setServices(values)
-}
-
-func (s *Service) getAttributesFromCache(search string) ([]string, bool) {
-	return s.getCacheManager().getAttributes(search)
-}
-
-func (s *Service) setAttributesCache(search string, values []string) {
-	s.getCacheManager().setAttributes(search, values)
 }
