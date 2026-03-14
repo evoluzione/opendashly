@@ -33,6 +33,22 @@ type RouterConfig struct {
 	CORSAllowedOrigins []string
 }
 
+type routeHandlers struct {
+	queryHandler           *handlers.QueryHandler
+	traceRelatedHandler    *handlers.TraceRelatedHandler
+	traceSpansHandler      *handlers.TraceSpansHandler
+	statusHandler          *handlers.StatusHandler
+	savedQueriesHandler    *handlers.SavedQueriesHandler
+	smartQueryHandler      *handlers.SmartQueryHandler
+	aiAvailabilityHandler  *handlers.AIAvailabilityHandler
+	aiAssistantChatHandler *handlers.AIAssistantChatHandler
+	aiAssistantSession     *handlers.AIAssistantSessionHandler
+	dashboardHandler       *handlers.DashboardHandler
+	aiSettingsHandler      *handlers.AISettingsHandler
+	attributesHandler      *handlers.AttributesHandler
+	dashboardSettings      *handlers.DashboardSettingsHandler
+}
+
 // NewRouter builds the API router.
 func NewRouter(cfg RouterConfig) http.Handler {
 	r := chi.NewRouter()
@@ -49,50 +65,64 @@ func NewRouter(cfg RouterConfig) http.Handler {
 		w.WriteHeader(http.StatusOK)
 	})
 
-	queryHandler := &handlers.QueryHandler{Service: cfg.QueryService}
-	traceRelated := &handlers.TraceRelatedHandler{Service: cfg.RelatedService}
-	traceSpans := &handlers.TraceSpansHandler{Service: cfg.TraceSpansService}
-	statusHandler := &handlers.StatusHandler{Service: cfg.StatusService}
-	savedHandler := &handlers.SavedQueriesHandler{Repo: cfg.SavedRepo, Runner: cfg.QueryService}
-	smartQuery := &handlers.SmartQueryHandler{AIService: cfg.AIService}
-	aiAvailability := &handlers.AIAvailabilityHandler{Service: cfg.AIService}
-	aiAssistantChat := &handlers.AIAssistantChatHandler{
-		AIService:    cfg.AIService,
-		QueryService: cfg.QueryService,
+	routeHandlers := buildRouteHandlers(cfg)
+	registerAPIRoutes(r, cfg, routeHandlers)
+
+	return r
+}
+
+func buildRouteHandlers(cfg RouterConfig) routeHandlers {
+	return routeHandlers{
+		queryHandler:          &handlers.QueryHandler{Service: cfg.QueryService},
+		traceRelatedHandler:   &handlers.TraceRelatedHandler{Service: cfg.RelatedService},
+		traceSpansHandler:     &handlers.TraceSpansHandler{Service: cfg.TraceSpansService},
+		statusHandler:         &handlers.StatusHandler{Service: cfg.StatusService},
+		savedQueriesHandler:   &handlers.SavedQueriesHandler{Repo: cfg.SavedRepo, Runner: cfg.QueryService},
+		smartQueryHandler:     &handlers.SmartQueryHandler{AIService: cfg.AIService},
+		aiAvailabilityHandler: &handlers.AIAvailabilityHandler{Service: cfg.AIService},
+		aiAssistantChatHandler: &handlers.AIAssistantChatHandler{
+			AIService:    cfg.AIService,
+			QueryService: cfg.QueryService,
+		},
+		aiAssistantSession: &handlers.AIAssistantSessionHandler{AIService: cfg.AIService},
+		dashboardHandler:   &handlers.DashboardHandler{Service: cfg.DashboardService},
+		aiSettingsHandler:  &handlers.AISettingsHandler{Service: cfg.AIService},
+		attributesHandler:  &handlers.AttributesHandler{Service: cfg.QueryService},
+		dashboardSettings:  &handlers.DashboardSettingsHandler{Service: cfg.DashboardSettings},
 	}
-	aiAssistantSession := &handlers.AIAssistantSessionHandler{AIService: cfg.AIService}
-	dashboardHandler := &handlers.DashboardHandler{Service: cfg.DashboardService}
-	aiHandler := &handlers.AISettingsHandler{Service: cfg.AIService}
-	dashboardSettingsHandler := &handlers.DashboardSettingsHandler{Service: cfg.DashboardSettings}
+}
 
-	r.Post("/api/query/run", queryHandler.ServeHTTP)
-	r.Post("/api/query/smart", smartQuery.ServeHTTP)
-	r.Get("/api/ai/availability", aiAvailability.Get)
-	r.Post("/api/ai/assistant/chat", aiAssistantChat.ServeHTTP)
-	r.Get("/api/ai/assistant/session", aiAssistantSession.Get)
-	r.Put("/api/ai/assistant/session", aiAssistantSession.Put)
-	r.Delete("/api/ai/assistant/session", aiAssistantSession.Delete)
-	// New attributes endpoint
-	attributesHandler := &handlers.AttributesHandler{Service: cfg.QueryService}
-	r.Get("/api/query/attributes", attributesHandler.ServeHTTP)
+func registerAPIRoutes(r *chi.Mux, cfg RouterConfig, h routeHandlers) {
+	r.Post("/api/query/run", h.queryHandler.ServeHTTP)
+	r.Post("/api/query/smart", h.smartQueryHandler.ServeHTTP)
+	r.Get("/api/ai/availability", h.aiAvailabilityHandler.Get)
+	r.Post("/api/ai/assistant/chat", h.aiAssistantChatHandler.ServeHTTP)
+	r.Get("/api/ai/assistant/session", h.aiAssistantSession.Get)
+	r.Put("/api/ai/assistant/session", h.aiAssistantSession.Put)
+	r.Delete("/api/ai/assistant/session", h.aiAssistantSession.Delete)
+	r.Get("/api/query/attributes", h.attributesHandler.ServeHTTP)
 
-	r.Get("/api/queries", savedHandler.List)
-	r.Post("/api/queries", savedHandler.Create)
-	r.Get("/api/queries/{queryId}", savedHandler.Get)
-	r.Delete("/api/queries/{queryId}", savedHandler.Delete)
-	r.Post("/api/queries/{queryId}/run", savedHandler.Run)
-	r.Get("/api/traces/{traceId}/related", traceRelated.ServeHTTP)
-	r.Get("/api/traces/{traceId}/spans", traceSpans.ServeHTTP)
-	r.Get("/api/status/summary", statusHandler.ServeHTTP)
-	r.Post("/api/dashboard/metrics", dashboardHandler.ServeHTTP)
-	r.Get("/api/dashboard/settings", dashboardSettingsHandler.Get)
+	r.Get("/api/queries", h.savedQueriesHandler.List)
+	r.Post("/api/queries", h.savedQueriesHandler.Create)
+	r.Get("/api/queries/{queryId}", h.savedQueriesHandler.Get)
+	r.Delete("/api/queries/{queryId}", h.savedQueriesHandler.Delete)
+	r.Post("/api/queries/{queryId}/run", h.savedQueriesHandler.Run)
+	r.Get("/api/traces/{traceId}/related", h.traceRelatedHandler.ServeHTTP)
+	r.Get("/api/traces/{traceId}/spans", h.traceSpansHandler.ServeHTTP)
+	r.Get("/api/status/summary", h.statusHandler.ServeHTTP)
+	r.Post("/api/dashboard/metrics", h.dashboardHandler.ServeHTTP)
+	r.Get("/api/dashboard/settings", h.dashboardSettings.Get)
 
 	// Admin Settings
-	r.Get("/api/admin/ai/settings", aiHandler.Get)
-	r.Put("/api/admin/ai/settings", aiHandler.Update)
-	r.Get("/api/admin/dashboard/settings", dashboardSettingsHandler.Get)
-	r.Put("/api/admin/dashboard/settings", dashboardSettingsHandler.Update)
+	r.Get("/api/admin/ai/settings", h.aiSettingsHandler.Get)
+	r.Put("/api/admin/ai/settings", h.aiSettingsHandler.Update)
+	r.Get("/api/admin/dashboard/settings", h.dashboardSettings.Get)
+	r.Put("/api/admin/dashboard/settings", h.dashboardSettings.Update)
 
+	registerOptionalRoutes(r, cfg)
+}
+
+func registerOptionalRoutes(r *chi.Mux, cfg RouterConfig) {
 	if cfg.AuthHandler != nil {
 		r.Post("/api/auth/login", cfg.AuthHandler.Login)
 		r.Post("/api/auth/logout", cfg.AuthHandler.Logout)
@@ -113,8 +143,6 @@ func NewRouter(cfg RouterConfig) http.Handler {
 		r.Post("/api/admin/retention/cleanup", cfg.RetentionHandler.ManualCleanup)
 		r.Get("/api/admin/retention/jobs", cfg.RetentionHandler.ListJobs)
 	}
-
-	return r
 }
 
 func corsMiddleware(allowedOrigins []string) func(http.Handler) http.Handler {
