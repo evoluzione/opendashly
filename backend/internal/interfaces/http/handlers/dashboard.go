@@ -6,7 +6,7 @@ import (
 	"net/http"
 	"time"
 
-	"opendashly/backend/internal/metrics"
+	"opendashly/backend/internal/application/metrics"
 )
 
 // DashboardHandler handles dashboard metrics requests.

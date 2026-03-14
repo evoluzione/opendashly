@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"time"
 
-	"opendashly/backend/internal/query/builders"
-	"opendashly/backend/internal/storage"
+	"opendashly/backend/internal/infrastructure/querysql"
+	"opendashly/backend/internal/infrastructure/storage"
 )
 
 // RelatedService fetches correlated telemetry for a trace.
@@ -24,7 +24,7 @@ func (s *RelatedService) Related(ctx context.Context, traceID string) (Results, 
 		}, nil
 	}
 
-	logsQuery := builders.BuildLogsQuery(BuildRelatedFilters(traceID), nil, time.Time{}, time.Time{}, 50, 0, nil)
+	logsQuery := querysql.BuildLogsQuery(BuildRelatedFilters(traceID), nil, time.Time{}, time.Time{}, 50, 0, nil)
 	logs, err := fetchLogs(ctx, s.Storage.Conn, logsQuery)
 	if err != nil {
 		return Results{}, err
@@ -44,7 +44,7 @@ func (s *RelatedService) Related(ctx context.Context, traceID string) (Results, 
 }
 
 func buildRelatedMetricsQuery(traceID string, limit int) string {
-	escapedTraceID := builders.EscapeTraceID(traceID)
+	escapedTraceID := querysql.EscapeTraceID(traceID)
 	base := "SELECT MetricName AS name, MetricUnit AS unit, TimeUnix AS timestamp, Value AS value FROM telemetry.otel_metrics_sum WHERE has(`Exemplars.TraceId`, '" + escapedTraceID + "')"
 	gauge := "SELECT MetricName AS name, MetricUnit AS unit, TimeUnix AS timestamp, Value AS value FROM telemetry.otel_metrics_gauge WHERE has(`Exemplars.TraceId`, '" + escapedTraceID + "')"
 	query := "SELECT name, unit, timestamp, value FROM (" + base + " UNION ALL " + gauge + ") ORDER BY timestamp DESC"

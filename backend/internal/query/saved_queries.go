@@ -9,9 +9,9 @@ import (
 
 // SavedQueryRepo stores saved queries in memory.
 type SavedQueryRepo struct {
-	mu     sync.Mutex
-	items  map[string]SavedQuery
-	order  []string
+	mu    sync.Mutex
+	items map[string]SavedQuery
+	order []string
 }
 
 func NewSavedQueryRepo() *SavedQueryRepo {

@@ -14,8 +14,8 @@ type SavedQueriesHandler struct {
 }
 
 type savedQueryCreateRequest struct {
-	Name        string           `json:"name"`
-	Description string           `json:"description"`
+	Name        string             `json:"name"`
+	Description string             `json:"description"`
 	Request     query.QueryRequest `json:"request"`
 }
 

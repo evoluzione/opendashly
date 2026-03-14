@@ -4,7 +4,7 @@ import (
 	"context"
 	"testing"
 
-	"opendashly/backend/internal/storage"
+	"opendashly/backend/internal/infrastructure/storage"
 )
 
 func TestGetLogAttributeKeys_StorageNilReturnsEmpty(t *testing.T) {

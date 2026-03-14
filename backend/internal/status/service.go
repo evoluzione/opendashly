@@ -5,15 +5,15 @@ import (
 	"fmt"
 	"time"
 
-	"opendashly/backend/internal/storage"
+	"opendashly/backend/internal/infrastructure/storage"
 )
 
 type TelemetryCounts struct {
-	Total  uint64 `json:"total"`
-	Last5m uint64 `json:"last5m"`
-	Last10m uint64 `json:"last10m"`
-	Last60m uint64 `json:"last60m"`
-	Series []TelemetryPoint `json:"series,omitempty"`
+	Total   uint64           `json:"total"`
+	Last5m  uint64           `json:"last5m"`
+	Last10m uint64           `json:"last10m"`
+	Last60m uint64           `json:"last60m"`
+	Series  []TelemetryPoint `json:"series,omitempty"`
 }
 
 type TelemetryPoint struct {
@@ -26,11 +26,11 @@ type Checks struct {
 }
 
 type Summary struct {
-	Ok          bool            `json:"ok"`
-	GeneratedAt time.Time       `json:"generatedAt"`
-	Error       string          `json:"error,omitempty"`
-	Checks      Checks          `json:"checks"`
-	Counts      SummaryCounts   `json:"counts"`
+	Ok          bool          `json:"ok"`
+	GeneratedAt time.Time     `json:"generatedAt"`
+	Error       string        `json:"error,omitempty"`
+	Checks      Checks        `json:"checks"`
+	Counts      SummaryCounts `json:"counts"`
 }
 
 type SummaryCounts struct {
@@ -138,7 +138,7 @@ func fetchSeries(ctx context.Context, store *storage.Client, query string, ancho
 	}
 
 	series := make([]TelemetryPoint, 0, pointCount)
-	start := anchor.UTC().Truncate(bucketSize).Add(time.Duration(-(pointCount-1)) * bucketSize)
+	start := anchor.UTC().Truncate(bucketSize).Add(time.Duration(-(pointCount - 1)) * bucketSize)
 	for i := 0; i < pointCount; i++ {
 		ts := start.Add(time.Duration(i) * bucketSize)
 		series = append(series, TelemetryPoint{

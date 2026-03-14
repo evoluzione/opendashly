@@ -3,7 +3,7 @@ package query
 import (
 	"time"
 
-	"opendashly/backend/internal/query/builders"
+	"opendashly/backend/internal/infrastructure/querysql"
 )
 
 // FilterItem represents a single filter condition.
@@ -11,15 +11,15 @@ import (
 
 // QueryRequest captures an ad-hoc query.
 type QueryRequest struct {
-	Signals    []string              `json:"signals"`
-	TimeRange  TimeRange             `json:"timeRange"`
-	Filters    map[string]string     `json:"filters"` // Deprecated: use FilterList
-	FilterList []builders.FilterItem `json:"filterList"`
-	LogsCursor string                `json:"logsCursor,omitempty"`
-	TracesCursor string              `json:"tracesCursor,omitempty"`
-	Page       int                   `json:"page"`
-	Limit      int                   `json:"limit"`
-	OrderBy    string                `json:"orderBy"`
+	Signals      []string              `json:"signals"`
+	TimeRange    TimeRange             `json:"timeRange"`
+	Filters      map[string]string     `json:"filters"` // Deprecated: use FilterList
+	FilterList   []querysql.FilterItem `json:"filterList"`
+	LogsCursor   string                `json:"logsCursor,omitempty"`
+	TracesCursor string                `json:"tracesCursor,omitempty"`
+	Page         int                   `json:"page"`
+	Limit        int                   `json:"limit"`
+	OrderBy      string                `json:"orderBy"`
 }
 
 // TimeRange defines a query window.
@@ -46,11 +46,11 @@ type QueryRunSummary struct {
 
 // QueryRunResult holds query results.
 type QueryRunResult struct {
-	RunID      string          `json:"runId"`
-	Status     string          `json:"status"`
-	Summary    QueryRunSummary `json:"summary"`
-	Pagination PaginationSet   `json:"pagination"`
-	Results    Results         `json:"results"`
+	RunID        string            `json:"runId"`
+	Status       string            `json:"status"`
+	Summary      QueryRunSummary   `json:"summary"`
+	Pagination   PaginationSet     `json:"pagination"`
+	Results      Results           `json:"results"`
 	SignalErrors map[string]string `json:"signalErrors,omitempty"`
 }
 
@@ -63,11 +63,11 @@ type Results struct {
 
 // Pagination captures paging metadata for a signal.
 type Pagination struct {
-	Page       int `json:"page"`
-	Limit      int `json:"limit"`
-	Total      int `json:"total"`
-	TotalPages int `json:"totalPages"`
-	HasNext    bool `json:"hasNext"`
+	Page       int    `json:"page"`
+	Limit      int    `json:"limit"`
+	Total      int    `json:"total"`
+	TotalPages int    `json:"totalPages"`
+	HasNext    bool   `json:"hasNext"`
 	NextCursor string `json:"nextCursor,omitempty"`
 }
 

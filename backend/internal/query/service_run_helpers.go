@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"time"
 
-	"opendashly/backend/internal/query/builders"
+	"opendashly/backend/internal/infrastructure/querysql"
 )
 
 type runPagination struct {
@@ -42,7 +42,7 @@ func buildSignalQueries(req QueryRequest, pagination runPagination) (signalQueri
 	}
 
 	return signalQueries{
-		logs: builders.BuildLogsQuery(
+		logs: querysql.BuildLogsQuery(
 			req.Filters,
 			req.FilterList,
 			req.TimeRange.From,
@@ -51,7 +51,7 @@ func buildSignalQueries(req QueryRequest, pagination runPagination) (signalQueri
 			pagination.offset,
 			logsCursor,
 		),
-		traces: builders.BuildTracesQuery(
+		traces: querysql.BuildTracesQuery(
 			req.Filters,
 			req.FilterList,
 			req.TimeRange.From,
@@ -60,7 +60,7 @@ func buildSignalQueries(req QueryRequest, pagination runPagination) (signalQueri
 			pagination.offset,
 			tracesCursor,
 		),
-		metrics: builders.BuildMetricsQuery(
+		metrics: querysql.BuildMetricsQuery(
 			req.Filters,
 			req.FilterList,
 			req.TimeRange.From,

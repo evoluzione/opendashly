@@ -1,7 +1,7 @@
 package query
 
 import (
-	"opendashly/backend/internal/storage"
+	"opendashly/backend/internal/infrastructure/storage"
 	"sync"
 )
 

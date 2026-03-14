@@ -6,7 +6,7 @@ import (
 	"log"
 	"time"
 
-	"opendashly/backend/internal/storage"
+	"opendashly/backend/internal/infrastructure/storage"
 )
 
 // Service handles dashboard metrics calculations.
@@ -132,11 +132,11 @@ func (s *Service) GetDashboard(ctx context.Context, req DashboardRequest) (*Dash
 			StatusCodes:         statusCodes,
 		},
 		Satisfaction: SatisfactionData{
-			Apdex:      apdex,
-			ErrorRate:  errorRate,
-			Throughput: throughput,
-			TimeSeries: timeSeries,
-			LatencySeries: latencySeries,
+			Apdex:           apdex,
+			ErrorRate:       errorRate,
+			Throughput:      throughput,
+			TimeSeries:      timeSeries,
+			LatencySeries:   latencySeries,
 			ErrorRateSeries: errorRateSeries,
 		},
 		Logs: LogsData{

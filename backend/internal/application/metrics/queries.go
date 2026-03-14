@@ -163,7 +163,7 @@ func BuildApdexQuery(from, to time.Time, serviceName string) string {
 				%s
 				%s
 		`, ApdexThresholdMs, ApdexThresholdMs, toleratingThreshold, toleratingThreshold,
-			formatTime(from), formatTime(to), serverSpanFilter(), serviceFilter(serviceName))
+		formatTime(from), formatTime(to), serverSpanFilter(), serviceFilter(serviceName))
 }
 
 // BuildThroughputQuery builds a query to get throughput time series.

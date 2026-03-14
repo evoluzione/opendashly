@@ -22,7 +22,7 @@ func TestSavedQueriesContract(t *testing.T) {
 	})
 
 	payload := map[string]any{
-		"name": "Errors",
+		"name":        "Errors",
 		"description": "",
 		"request": map[string]any{
 			"signals": []string{"logs"},

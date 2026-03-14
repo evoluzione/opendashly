@@ -19,8 +19,8 @@ type UpdateSettingsRequest struct {
 }
 
 type AssistantSession struct {
-	TenantID    string    `json:"tenantId"`
-	UserID      string    `json:"userId"`
-	MessagesJSON string   `json:"messagesJson"`
-	UpdatedAt   time.Time `json:"updatedAt"`
+	TenantID     string    `json:"tenantId"`
+	UserID       string    `json:"userId"`
+	MessagesJSON string    `json:"messagesJson"`
+	UpdatedAt    time.Time `json:"updatedAt"`
 }

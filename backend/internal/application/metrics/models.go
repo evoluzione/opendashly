@@ -11,11 +11,11 @@ type DashboardRequest struct {
 
 // LatencyBucket represents a histogram bucket for latency distribution.
 type LatencyBucket struct {
-	RangeStart  int     `json:"rangeStart"`
-	RangeEnd    int     `json:"rangeEnd"`
-	Count       int64   `json:"count"`
-	Percentage  float64 `json:"percentage"`
-	Label       string  `json:"label"`
+	RangeStart int     `json:"rangeStart"`
+	RangeEnd   int     `json:"rangeEnd"`
+	Count      int64   `json:"count"`
+	Percentage float64 `json:"percentage"`
+	Label      string  `json:"label"`
 }
 
 // EndpointLatency contains latency statistics for an endpoint.
@@ -102,21 +102,21 @@ type LogLevelCount struct {
 
 // HotspotsData contains performance hotspot information.
 type HotspotsData struct {
-	LatencyDistribution []LatencyBucket   `json:"latencyDistribution"`
-	SlowestEndpoints    []EndpointLatency `json:"slowestEndpoints"`
-	ErrorHotspots       []ErrorHotspot    `json:"errorHotspots"`
-	TopEndpoints        []EndpointThroughput `json:"topEndpoints"`
+	LatencyDistribution []LatencyBucket       `json:"latencyDistribution"`
+	SlowestEndpoints    []EndpointLatency     `json:"slowestEndpoints"`
+	ErrorHotspots       []ErrorHotspot        `json:"errorHotspots"`
+	TopEndpoints        []EndpointThroughput  `json:"topEndpoints"`
 	StatusCodes         []StatusCodeBreakdown `json:"statusCodes"`
 }
 
 // SatisfactionData contains satisfaction metrics.
 type SatisfactionData struct {
-	Apdex      ApdexScore        `json:"apdex"`
-	ErrorRate  float64           `json:"errorRate"`
-	Throughput ThroughputSummary `json:"throughput"`
-	TimeSeries []ThroughputPoint `json:"timeSeries"`
-	LatencySeries []LatencyPercentilePoint `json:"latencySeries"`
-	ErrorRateSeries []ErrorRatePoint `json:"errorRateSeries"`
+	Apdex           ApdexScore               `json:"apdex"`
+	ErrorRate       float64                  `json:"errorRate"`
+	Throughput      ThroughputSummary        `json:"throughput"`
+	TimeSeries      []ThroughputPoint        `json:"timeSeries"`
+	LatencySeries   []LatencyPercentilePoint `json:"latencySeries"`
+	ErrorRateSeries []ErrorRatePoint         `json:"errorRateSeries"`
 }
 
 // LogsData contains log analytics.
@@ -127,10 +127,10 @@ type LogsData struct {
 
 // ThroughputSummary contains summary statistics for throughput.
 type ThroughputSummary struct {
-	TotalRequests   int64   `json:"totalRequests"`
-	TotalErrors     int64   `json:"totalErrors"`
-	RequestsPerMin  float64 `json:"requestsPerMin"`
-	ErrorsPerMin    float64 `json:"errorsPerMin"`
+	TotalRequests  int64   `json:"totalRequests"`
+	TotalErrors    int64   `json:"totalErrors"`
+	RequestsPerMin float64 `json:"requestsPerMin"`
+	ErrorsPerMin   float64 `json:"errorsPerMin"`
 }
 
 // DashboardResponse contains all dashboard metrics.

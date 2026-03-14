@@ -10,7 +10,7 @@ import (
 	"time"
 
 	"opendashly/backend/internal/ai"
-	"opendashly/backend/internal/query/builders"
+	"opendashly/backend/internal/infrastructure/querysql"
 
 	openai "github.com/sashabaranov/go-openai"
 )
@@ -35,9 +35,9 @@ type assistantPlan struct {
 	Plan          string `json:"plan"`
 	Answer        string `json:"answer"`
 	ResponseStyle string `json:"response_style"`
-	Action struct {
-		Type    string      `json:"type"`
-		Reason  string      `json:"reason"`
+	Action        struct {
+		Type    string       `json:"type"`
+		Reason  string       `json:"reason"`
 		Request QueryRequest `json:"request"`
 	} `json:"action"`
 }
@@ -588,11 +588,11 @@ func sanitizeFilterMap(in map[string]string) map[string]string {
 	return out
 }
 
-func sanitizeFilterList(in []builders.FilterItem) []builders.FilterItem {
+func sanitizeFilterList(in []querysql.FilterItem) []querysql.FilterItem {
 	if len(in) == 0 {
 		return nil
 	}
-	out := make([]builders.FilterItem, 0, len(in))
+	out := make([]querysql.FilterItem, 0, len(in))
 	allowedOps := map[string]struct{}{
 		"=": {}, "!=": {}, ">": {}, "<": {}, ">=": {}, "<=": {}, "contains": {},
 	}
@@ -619,7 +619,7 @@ func sanitizeFilterList(in []builders.FilterItem) []builders.FilterItem {
 		if connector != "OR" {
 			connector = "AND"
 		}
-		out = append(out, builders.FilterItem{
+		out = append(out, querysql.FilterItem{
 			Connector: connector,
 			Key:       key,
 			Operator:  op,

@@ -6,7 +6,7 @@ import (
 	"strings"
 	"time"
 
-	"opendashly/backend/internal/query/builders"
+	"opendashly/backend/internal/infrastructure/querysql"
 )
 
 type logsCursorPayload struct {
@@ -20,7 +20,7 @@ type tracesCursorPayload struct {
 	TraceID  string    `json:"traceId"`
 }
 
-func decodeLogsCursor(value string) (*builders.LogsPageCursor, error) {
+func decodeLogsCursor(value string) (*querysql.LogsPageCursor, error) {
 	if strings.TrimSpace(value) == "" {
 		return nil, nil
 	}
@@ -31,14 +31,14 @@ func decodeLogsCursor(value string) (*builders.LogsPageCursor, error) {
 	if payload.Timestamp.IsZero() {
 		return nil, nil
 	}
-	return &builders.LogsPageCursor{
+	return &querysql.LogsPageCursor{
 		Timestamp: payload.Timestamp,
 		TraceID:   payload.TraceID,
 		SpanID:    payload.SpanID,
 	}, nil
 }
 
-func decodeTracesCursor(value string) (*builders.TracesPageCursor, error) {
+func decodeTracesCursor(value string) (*querysql.TracesPageCursor, error) {
 	if strings.TrimSpace(value) == "" {
 		return nil, nil
 	}
@@ -49,7 +49,7 @@ func decodeTracesCursor(value string) (*builders.TracesPageCursor, error) {
 	if payload.LastSeen.IsZero() {
 		return nil, nil
 	}
-	return &builders.TracesPageCursor{
+	return &querysql.TracesPageCursor{
 		LastSeen: payload.LastSeen,
 		TraceID:  payload.TraceID,
 	}, nil

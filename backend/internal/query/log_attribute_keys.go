@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"strings"
 
-	"opendashly/backend/internal/query/builders"
+	"opendashly/backend/internal/infrastructure/querysql"
 )
 
 var defaultLogAttributeSeed = []string{
@@ -40,7 +40,7 @@ func buildLogAttributeKeysQuery(search string) string {
 		"UNION ALL SELECT 'error.message' AS key " +
 		") WHERE key != ''"
 	if search != "" {
-		escaped := builders.EscapeLiteral(search)
+		escaped := querysql.EscapeLiteral(search)
 		query += " AND key ILIKE '%" + escaped + "%'"
 	}
 	query += " ORDER BY key LIMIT 100"

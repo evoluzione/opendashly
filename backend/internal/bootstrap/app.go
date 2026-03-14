@@ -6,16 +6,16 @@ import (
 	"time"
 
 	"opendashly/backend/internal/ai"
-	"opendashly/backend/internal/api"
-	"opendashly/backend/internal/api/handlers"
+	"opendashly/backend/internal/application/dashboard"
+	"opendashly/backend/internal/application/metrics"
 	"opendashly/backend/internal/auth"
 	"opendashly/backend/internal/config"
-	"opendashly/backend/internal/dashboard"
-	"opendashly/backend/internal/metrics"
+	"opendashly/backend/internal/infrastructure/storage"
+	httpapi "opendashly/backend/internal/interfaces/http"
+	"opendashly/backend/internal/interfaces/http/handlers"
 	"opendashly/backend/internal/query"
 	"opendashly/backend/internal/retention"
 	"opendashly/backend/internal/status"
-	"opendashly/backend/internal/storage"
 )
 
 // App groups runtime dependencies needed by the API entrypoint.
@@ -87,7 +87,7 @@ func Build(ctx context.Context) (*App, error) {
 		SessionDuration: 24 * time.Hour,
 	})
 
-	handler := api.NewRouter(api.RouterConfig{
+	handler := httpapi.NewRouter(httpapi.RouterConfig{
 		Config:             cfg,
 		QueryService:       queryService,
 		RelatedService:     relatedService,

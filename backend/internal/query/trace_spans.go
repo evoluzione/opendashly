@@ -6,8 +6,8 @@ import (
 	"math"
 	"time"
 
-	"opendashly/backend/internal/query/builders"
-	"opendashly/backend/internal/storage"
+	"opendashly/backend/internal/infrastructure/querysql"
+	"opendashly/backend/internal/infrastructure/storage"
 
 	"github.com/ClickHouse/clickhouse-go/v2/lib/driver"
 )
@@ -19,20 +19,20 @@ type TraceSpansService struct {
 
 // TraceSpanEntry represents a span row for the timeline.
 type TraceSpanEntry struct {
-	TraceID      string            `json:"traceId"`
-	SpanID       string            `json:"spanId"`
-	ParentSpanID string            `json:"parentSpanId,omitempty"`
-	Name         string            `json:"name"`
-	Service      string            `json:"service,omitempty"`
-	Source       string            `json:"source,omitempty"`
-	StartTime    time.Time         `json:"startTime"`
-	EndTime      time.Time         `json:"endTime"`
-	Duration     int64             `json:"duration"`
-	Status       string            `json:"status,omitempty"`
-	StatusMessage string           `json:"statusMessage,omitempty"`
-	SpanKind     any               `json:"spanKind,omitempty"`
-	Attributes   map[string]string `json:"attributes,omitempty"`
-	Events       []TraceSpanEvent  `json:"events,omitempty"`
+	TraceID       string            `json:"traceId"`
+	SpanID        string            `json:"spanId"`
+	ParentSpanID  string            `json:"parentSpanId,omitempty"`
+	Name          string            `json:"name"`
+	Service       string            `json:"service,omitempty"`
+	Source        string            `json:"source,omitempty"`
+	StartTime     time.Time         `json:"startTime"`
+	EndTime       time.Time         `json:"endTime"`
+	Duration      int64             `json:"duration"`
+	Status        string            `json:"status,omitempty"`
+	StatusMessage string            `json:"statusMessage,omitempty"`
+	SpanKind      any               `json:"spanKind,omitempty"`
+	Attributes    map[string]string `json:"attributes,omitempty"`
+	Events        []TraceSpanEvent  `json:"events,omitempty"`
 }
 
 // TraceSpanEvent represents a single span event.
@@ -52,7 +52,7 @@ func (s *TraceSpansService) Spans(ctx context.Context, traceID string) ([]TraceS
 }
 
 func buildTraceSpansQuery(traceID string) string {
-	escapedTraceID := builders.EscapeTraceID(traceID)
+	escapedTraceID := querysql.EscapeTraceID(traceID)
 	return "SELECT TraceId AS traceId, SpanId AS spanId, ParentSpanId AS parentSpanId, SpanName AS name, ServiceName AS serviceName, ServiceName AS source, Timestamp AS startTime, Duration AS duration, StatusCode AS status, StatusMessage AS statusMessage, SpanKind AS spanKind, SpanAttributes AS attributes, `Events.Timestamp` AS eventTimestamps, `Events.Name` AS eventNames, `Events.Attributes` AS eventAttributes FROM telemetry.otel_traces WHERE TraceId = '" + escapedTraceID + "' ORDER BY Timestamp ASC"
 }
 

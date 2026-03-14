@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"opendashly/backend/internal/storage"
+	"opendashly/backend/internal/infrastructure/storage"
 
 	"github.com/ClickHouse/clickhouse-go/v2/lib/driver"
 )

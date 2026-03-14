@@ -9,7 +9,7 @@ import (
 	"time"
 
 	"opendashly/backend/internal/ai"
-	"opendashly/backend/internal/query/builders"
+	"opendashly/backend/internal/infrastructure/querysql"
 
 	openai "github.com/sashabaranov/go-openai"
 )
@@ -150,11 +150,11 @@ func buildLegacySmartQuery(prompt string, now time.Time) (*SmartQueryResponse, e
 func buildPreviewSQL(signal string, filters map[string]string, from, to time.Time, limit int) string {
 	switch signal {
 	case "traces":
-		return builders.BuildTracesQuery(filters, nil, from, to, limit, 0, nil)
+		return querysql.BuildTracesQuery(filters, nil, from, to, limit, 0, nil)
 	case "metrics":
-		return builders.BuildMetricsQuery(filters, nil, from, to, limit, 0)
+		return querysql.BuildMetricsQuery(filters, nil, from, to, limit, 0)
 	default:
-		return builders.BuildLogsQuery(filters, nil, from, to, limit, 0, nil)
+		return querysql.BuildLogsQuery(filters, nil, from, to, limit, 0, nil)
 	}
 }
 
