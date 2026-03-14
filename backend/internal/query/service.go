@@ -22,8 +22,10 @@ type Service struct {
 	Storage *storage.Client
 	Debug   bool
 
-	cacheInit sync.Once
-	cache     *cacheManager
+	cacheInit    sync.Once
+	cache        *cacheManager
+	runnerInit   sync.Once
+	signalRunner signalRunner
 }
 
 // Run executes an ad-hoc query and returns results.
@@ -47,7 +49,7 @@ func (s *Service) Run(ctx context.Context, req QueryRequest) (*QueryRunResult, e
 		log.Printf("DEBUG: executing logsQuery: %s", queries.logs)
 		log.Printf("query.service.run built queries: logs=%q traces=%q metrics=%q", queries.logs, queries.traces, queries.metrics)
 	}
-	signalResult := defaultSignalOrchestrator().run(ctx, s.Storage.Conn, queries, signals, pagination.limit)
+	signalResult := s.getSignalRunner().run(ctx, s.Storage.Conn, queries, signals, pagination.limit)
 	signalErrors := signalResult.signalErrors
 	requestedCount := countRequestedSignals(signals)
 	if len(signalErrors) == requestedCount && requestedCount > 0 {
@@ -339,6 +341,18 @@ func (s *Service) getCacheManager() *cacheManager {
 		s.cache = newCacheManager(servicesCacheTTL, attributesCacheTTL)
 	})
 	return s.cache
+}
+
+func (s *Service) getSignalRunner() signalRunner {
+	if s.signalRunner != nil {
+		return s.signalRunner
+	}
+	s.runnerInit.Do(func() {
+		if s.signalRunner == nil {
+			s.signalRunner = defaultSignalOrchestrator()
+		}
+	})
+	return s.signalRunner
 }
 
 func (s *Service) getServicesFromCache() ([]string, bool) {

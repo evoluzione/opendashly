@@ -30,6 +30,10 @@ type signalExecutionResult struct {
 	signalErrors     map[string]string
 }
 
+type signalRunner interface {
+	run(context.Context, driver.Conn, signalQueries, map[string]bool, int) signalExecutionResult
+}
+
 type signalOrchestrator struct {
 	fetchLogs    logsFetcher
 	fetchTraces  tracesFetcher
