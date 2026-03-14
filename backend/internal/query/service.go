@@ -42,14 +42,11 @@ func (s *Service) Run(ctx context.Context, req QueryRequest) (*QueryRunResult, e
 	}
 	signalResult := s.getSignalRunner().run(ctx, s.Storage.Conn, queries, signals, pagination.limit)
 	signalErrors := signalResult.signalErrors
-	requestedCount := countRequestedSignals(signals)
-	if len(signalErrors) == requestedCount && requestedCount > 0 {
-		return nil, fmt.Errorf("all requested signals failed: %s", joinSignalErrors(signalErrors))
+	status, err := determineQueryRunStatus(signals, signalErrors)
+	if err != nil {
+		return nil, err
 	}
-
-	status := "complete"
-	if len(signalErrors) > 0 {
-		status = "partial"
+	if status == "partial" {
 		log.Printf("query.service.run partial: failedSignals=%s", joinSignalErrors(signalErrors))
 	}
 
