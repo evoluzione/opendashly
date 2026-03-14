@@ -64,39 +64,11 @@ func (o *signalOrchestrator) run(ctx context.Context, conn driver.Conn, queries 
 	var wg sync.WaitGroup
 	var mu sync.Mutex
 
-	setSignalError := func(signal string, err error) {
-		if err == nil {
-			return
-		}
-		mu.Lock()
-		result.signalErrors[signal] = err.Error()
-		mu.Unlock()
-	}
-
 	if signals["logs"] {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			signalLogs, err := o.fetchLogs(ctx, conn, queries.logs)
-			if err != nil {
-				setSignalError("logs", err)
-				return
-			}
-			signalLogs, signalLogsHasNext := trimToPage(signalLogs, limit)
-			signalLogsNextCursor := ""
-			if signalLogsHasNext {
-				signalLogsNextCursor, err = encodeLogsCursor(signalLogs[len(signalLogs)-1])
-				if err != nil {
-					setSignalError("logs", fmt.Errorf("encode logs cursor: %w", err))
-					return
-				}
-			}
-
-			mu.Lock()
-			result.logs = signalLogs
-			result.logsHasNext = signalLogsHasNext
-			result.logsNextCursor = signalLogsNextCursor
-			mu.Unlock()
+			o.executeLogs(ctx, conn, queries.logs, limit, &mu, &result)
 		}()
 	}
 
@@ -104,26 +76,7 @@ func (o *signalOrchestrator) run(ctx context.Context, conn driver.Conn, queries 
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			signalTraces, err := o.fetchTraces(ctx, conn, queries.traces)
-			if err != nil {
-				setSignalError("traces", err)
-				return
-			}
-			signalTraces, signalTracesHasNext := trimToPage(signalTraces, limit)
-			signalTracesNextCursor := ""
-			if signalTracesHasNext {
-				signalTracesNextCursor, err = encodeTracesCursor(signalTraces[len(signalTraces)-1])
-				if err != nil {
-					setSignalError("traces", fmt.Errorf("encode traces cursor: %w", err))
-					return
-				}
-			}
-
-			mu.Lock()
-			result.traces = signalTraces
-			result.tracesHasNext = signalTracesHasNext
-			result.tracesNextCursor = signalTracesNextCursor
-			mu.Unlock()
+			o.executeTraces(ctx, conn, queries.traces, limit, &mu, &result)
 		}()
 	}
 
@@ -131,20 +84,79 @@ func (o *signalOrchestrator) run(ctx context.Context, conn driver.Conn, queries 
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			signalMetrics, err := o.fetchMetrics(ctx, conn, queries.metrics)
-			if err != nil {
-				setSignalError("metrics", err)
-				return
-			}
-			signalMetrics, signalMetricsHasNext := trimToPage(signalMetrics, limit)
-
-			mu.Lock()
-			result.metrics = signalMetrics
-			result.metricsHasNext = signalMetricsHasNext
-			mu.Unlock()
+			o.executeMetrics(ctx, conn, queries.metrics, limit, &mu, &result)
 		}()
 	}
 
 	wg.Wait()
 	return result
+}
+
+func (o *signalOrchestrator) executeLogs(ctx context.Context, conn driver.Conn, query string, limit int, mu *sync.Mutex, result *signalExecutionResult) {
+	signalLogs, err := o.fetchLogs(ctx, conn, query)
+	if err != nil {
+		setSignalError(mu, result, "logs", err)
+		return
+	}
+	signalLogs, signalLogsHasNext := trimToPage(signalLogs, limit)
+	signalLogsNextCursor := ""
+	if signalLogsHasNext {
+		signalLogsNextCursor, err = encodeLogsCursor(signalLogs[len(signalLogs)-1])
+		if err != nil {
+			setSignalError(mu, result, "logs", fmt.Errorf("encode logs cursor: %w", err))
+			return
+		}
+	}
+
+	mu.Lock()
+	result.logs = signalLogs
+	result.logsHasNext = signalLogsHasNext
+	result.logsNextCursor = signalLogsNextCursor
+	mu.Unlock()
+}
+
+func (o *signalOrchestrator) executeTraces(ctx context.Context, conn driver.Conn, query string, limit int, mu *sync.Mutex, result *signalExecutionResult) {
+	signalTraces, err := o.fetchTraces(ctx, conn, query)
+	if err != nil {
+		setSignalError(mu, result, "traces", err)
+		return
+	}
+	signalTraces, signalTracesHasNext := trimToPage(signalTraces, limit)
+	signalTracesNextCursor := ""
+	if signalTracesHasNext {
+		signalTracesNextCursor, err = encodeTracesCursor(signalTraces[len(signalTraces)-1])
+		if err != nil {
+			setSignalError(mu, result, "traces", fmt.Errorf("encode traces cursor: %w", err))
+			return
+		}
+	}
+
+	mu.Lock()
+	result.traces = signalTraces
+	result.tracesHasNext = signalTracesHasNext
+	result.tracesNextCursor = signalTracesNextCursor
+	mu.Unlock()
+}
+
+func (o *signalOrchestrator) executeMetrics(ctx context.Context, conn driver.Conn, query string, limit int, mu *sync.Mutex, result *signalExecutionResult) {
+	signalMetrics, err := o.fetchMetrics(ctx, conn, query)
+	if err != nil {
+		setSignalError(mu, result, "metrics", err)
+		return
+	}
+	signalMetrics, signalMetricsHasNext := trimToPage(signalMetrics, limit)
+
+	mu.Lock()
+	result.metrics = signalMetrics
+	result.metricsHasNext = signalMetricsHasNext
+	mu.Unlock()
+}
+
+func setSignalError(mu *sync.Mutex, result *signalExecutionResult, signal string, err error) {
+	if err == nil {
+		return
+	}
+	mu.Lock()
+	result.signalErrors[signal] = err.Error()
+	mu.Unlock()
 }

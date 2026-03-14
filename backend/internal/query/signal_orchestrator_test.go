@@ -71,3 +71,16 @@ func TestSignalOrchestrator_RunCollectsPartialErrors(t *testing.T) {
 		t.Fatalf("expected traces to be returned, got len=%d", len(result.traces))
 	}
 }
+
+func TestSignalOrchestrator_RunNilOrchestratorReturnsEmptyResult(t *testing.T) {
+	var orchestrator *signalOrchestrator
+
+	result := orchestrator.run(context.Background(), nil, signalQueries{}, map[string]bool{"logs": true}, 10)
+
+	if len(result.signalErrors) != 0 {
+		t.Fatalf("expected no signal errors, got %#v", result.signalErrors)
+	}
+	if len(result.logs) != 0 || len(result.traces) != 0 || len(result.metrics) != 0 {
+		t.Fatalf("expected empty result, got %#v", result)
+	}
+}
