@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"log"
-	"opendashly/backend/internal/query/builders"
 	"opendashly/backend/internal/storage"
 	"sort"
 	"strconv"
@@ -254,29 +253,7 @@ func (s *Service) GetLogAttributeKeys(ctx context.Context, search string) ([]str
 	// - read only a bounded recent sample
 	// - always include a small seed set
 	// This avoids empty suggestions when full-table scans fail or timeout.
-	query := "SELECT DISTINCT key FROM (" +
-		"SELECT arrayJoin(mapKeys(ResourceAttributes)) AS key FROM (" +
-		"SELECT ResourceAttributes FROM telemetry.otel_logs ORDER BY Timestamp DESC LIMIT 50000" +
-		") " +
-		"UNION ALL " +
-		"SELECT arrayJoin(mapKeys(LogAttributes)) AS key FROM (" +
-		"SELECT LogAttributes FROM telemetry.otel_logs ORDER BY Timestamp DESC LIMIT 50000" +
-		") " +
-		"UNION ALL SELECT 'service.name' AS key " +
-		"UNION ALL SELECT 'severity' AS key " +
-		"UNION ALL SELECT 'trace_id' AS key " +
-		"UNION ALL SELECT 'span_id' AS key " +
-		"UNION ALL SELECT 'http.method' AS key " +
-		"UNION ALL SELECT 'http.route' AS key " +
-		"UNION ALL SELECT 'http.status_code' AS key " +
-		"UNION ALL SELECT 'error.type' AS key " +
-		"UNION ALL SELECT 'error.message' AS key " +
-		") WHERE key != ''"
-	if search != "" {
-		escaped := builders.EscapeLiteral(search)
-		query += " AND key ILIKE '%" + escaped + "%'"
-	}
-	query += " ORDER BY key LIMIT 100"
+	query := buildLogAttributeKeysQuery(search)
 
 	rows, err := s.Storage.Conn.Query(ctx, query)
 	if err != nil {
@@ -300,24 +277,7 @@ func (s *Service) GetLogAttributeKeys(ctx context.Context, search string) ([]str
 		return keys, nil
 	}
 
-	seed := []string{
-		"service.name",
-		"severity",
-		"trace_id",
-		"span_id",
-		"http.method",
-		"http.route",
-		"http.status_code",
-		"error.type",
-		"error.message",
-	}
-	searchLower := strings.ToLower(strings.TrimSpace(search))
-	filtered := make([]string, 0, len(seed))
-	for _, key := range seed {
-		if searchLower == "" || strings.Contains(strings.ToLower(key), searchLower) {
-			filtered = append(filtered, key)
-		}
-	}
+	filtered := fallbackLogAttributeKeys(search)
 	s.setAttributesCache(search, filtered)
 	return filtered, nil
 }
