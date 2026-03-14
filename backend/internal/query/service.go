@@ -2,7 +2,6 @@ package query
 
 import (
 	"context"
-	"fmt"
 	"log"
 	"opendashly/backend/internal/storage"
 	"sync"
@@ -90,45 +89,4 @@ func (s *Service) getAttributesFromCache(search string) ([]string, bool) {
 
 func (s *Service) setAttributesCache(search string, values []string) {
 	s.getCacheManager().setAttributes(search, values)
-}
-
-func (s *Service) GetLogAttributeKeys(ctx context.Context, search string) ([]string, error) {
-	if s.Storage == nil {
-		return []string{}, nil
-	}
-	if keys, ok := s.getAttributesFromCache(search); ok {
-		return keys, nil
-	}
-
-	// Keep this query fast for autocomplete:
-	// - read only a bounded recent sample
-	// - always include a small seed set
-	// This avoids empty suggestions when full-table scans fail or timeout.
-	query := buildLogAttributeKeysQuery(search)
-
-	rows, err := s.Storage.Conn.Query(ctx, query)
-	if err != nil {
-		return nil, fmt.Errorf("query attributes: %w", err)
-	}
-	defer rows.Close()
-
-	var keys []string
-	for rows.Next() {
-		var key string
-		if err := rows.Scan(&key); err != nil {
-			return nil, err
-		}
-		keys = append(keys, key)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	if len(keys) > 0 {
-		s.setAttributesCache(search, keys)
-		return keys, nil
-	}
-
-	filtered := fallbackLogAttributeKeys(search)
-	s.setAttributesCache(search, filtered)
-	return filtered, nil
 }
