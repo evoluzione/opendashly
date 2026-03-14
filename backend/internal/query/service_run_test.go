@@ -77,3 +77,53 @@ func TestRun_AllRequestedSignalsFailedReturnsError(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 }
+
+func TestRun_StorageNilReturnsEmptyResultWithDefaults(t *testing.T) {
+	svc := &Service{}
+
+	res, err := svc.Run(context.Background(), QueryRequest{})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if res.Status != "complete" {
+		t.Fatalf("expected complete status, got %q", res.Status)
+	}
+	if res.Pagination.Logs.Page != 1 || res.Pagination.Logs.Limit != 100 {
+		t.Fatalf("unexpected default pagination: %#v", res.Pagination.Logs)
+	}
+	if res.Summary.LogCount != 0 || res.Summary.TraceCount != 0 || res.Summary.MetricCount != 0 {
+		t.Fatalf("expected empty summary, got %#v", res.Summary)
+	}
+}
+
+func TestRun_InvalidLogsCursorReturnsError(t *testing.T) {
+	svc := &Service{Storage: &storage.Client{}}
+
+	_, err := svc.Run(context.Background(), QueryRequest{
+		Signals:    []string{"logs"},
+		LogsCursor: "%%%",
+		TimeRange:  TimeRange{From: time.Now().Add(-time.Hour), To: time.Now()},
+	})
+	if err == nil {
+		t.Fatal("expected error for invalid logs cursor")
+	}
+	if !strings.Contains(err.Error(), "decode logs cursor") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestRun_InvalidTracesCursorReturnsError(t *testing.T) {
+	svc := &Service{Storage: &storage.Client{}}
+
+	_, err := svc.Run(context.Background(), QueryRequest{
+		Signals:      []string{"traces"},
+		TracesCursor: "%%%",
+		TimeRange:    TimeRange{From: time.Now().Add(-time.Hour), To: time.Now()},
+	})
+	if err == nil {
+		t.Fatal("expected error for invalid traces cursor")
+	}
+	if !strings.Contains(err.Error(), "decode traces cursor") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
