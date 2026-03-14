@@ -61,104 +61,13 @@ func (s *Service) Run(ctx context.Context, req QueryRequest) (*QueryRunResult, e
 	logsQuery := builders.BuildLogsQuery(req.Filters, req.FilterList, req.TimeRange.From, req.TimeRange.To, readLimit, offset, logsCursor)
 	tracesQuery := builders.BuildTracesQuery(req.Filters, req.FilterList, req.TimeRange.From, req.TimeRange.To, readLimit, offset, tracesCursor)
 	metricsQuery := builders.BuildMetricsQuery(req.Filters, req.FilterList, req.TimeRange.From, req.TimeRange.To, readLimit, offset)
+	queries := signalQueries{logs: logsQuery, traces: tracesQuery, metrics: metricsQuery}
 	if s.Debug {
 		log.Printf("DEBUG: executing logsQuery: %s", logsQuery)
 		log.Printf("query.service.run built queries: logs=%q traces=%q metrics=%q", logsQuery, tracesQuery, metricsQuery)
 	}
-
-	var logs []LogEntry
-	var traces []TraceEntry
-	var metrics []MetricSeries
-
-	var logsHasNext, tracesHasNext, metricsHasNext bool
-	var logsNextCursor, tracesNextCursor string
-
-	ctx, cancel := context.WithCancel(ctx)
-	defer cancel()
-
-	var wg sync.WaitGroup
-	var mu sync.Mutex
-	signalErrors := map[string]string{}
-
-	setSignalError := func(signal string, err error) {
-		if err == nil {
-			return
-		}
-		mu.Lock()
-		signalErrors[signal] = err.Error()
-		mu.Unlock()
-	}
-
-	if signals["logs"] {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			signalLogs, err := fetchLogs(ctx, s.Storage.Conn, logsQuery)
-			if err != nil {
-				setSignalError("logs", err)
-				return
-			}
-			signalLogs, signalLogsHasNext := trimToPage(signalLogs, limit)
-			signalLogsNextCursor := ""
-			if signalLogsHasNext {
-				signalLogsNextCursor, err = encodeLogsCursor(signalLogs[len(signalLogs)-1])
-				if err != nil {
-					setSignalError("logs", fmt.Errorf("encode logs cursor: %w", err))
-					return
-				}
-			}
-
-			mu.Lock()
-			logs = signalLogs
-			logsHasNext = signalLogsHasNext
-			logsNextCursor = signalLogsNextCursor
-			mu.Unlock()
-		}()
-	}
-	if signals["traces"] {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			signalTraces, err := fetchTraces(ctx, s.Storage.Conn, tracesQuery)
-			if err != nil {
-				setSignalError("traces", err)
-				return
-			}
-			signalTraces, signalTracesHasNext := trimToPage(signalTraces, limit)
-			signalTracesNextCursor := ""
-			if signalTracesHasNext {
-				signalTracesNextCursor, err = encodeTracesCursor(signalTraces[len(signalTraces)-1])
-				if err != nil {
-					setSignalError("traces", fmt.Errorf("encode traces cursor: %w", err))
-					return
-				}
-			}
-
-			mu.Lock()
-			traces = signalTraces
-			tracesHasNext = signalTracesHasNext
-			tracesNextCursor = signalTracesNextCursor
-			mu.Unlock()
-		}()
-	}
-	if signals["metrics"] {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			signalMetrics, err := fetchMetrics(ctx, s.Storage.Conn, metricsQuery)
-			if err != nil {
-				setSignalError("metrics", err)
-				return
-			}
-			signalMetrics, signalMetricsHasNext := trimToPage(signalMetrics, limit)
-
-			mu.Lock()
-			metrics = signalMetrics
-			metricsHasNext = signalMetricsHasNext
-			mu.Unlock()
-		}()
-	}
-	wg.Wait()
+	signalResult := defaultSignalOrchestrator().run(ctx, s.Storage.Conn, queries, signals, limit)
+	signalErrors := signalResult.signalErrors
 	requestedCount := countRequestedSignals(signals)
 	if len(signalErrors) == requestedCount && requestedCount > 0 {
 		return nil, fmt.Errorf("all requested signals failed: %s", joinSignalErrors(signalErrors))
@@ -174,23 +83,23 @@ func (s *Service) Run(ctx context.Context, req QueryRequest) (*QueryRunResult, e
 		RunID:  fmt.Sprintf("run-%d", time.Now().UnixNano()),
 		Status: status,
 		Pagination: PaginationSet{
-			Logs:    buildPagination(page, limit, logsHasNext, logsNextCursor),
-			Traces:  buildPagination(page, limit, tracesHasNext, tracesNextCursor),
-			Metrics: buildPagination(page, limit, metricsHasNext, ""),
+			Logs:    buildPagination(page, limit, signalResult.logsHasNext, signalResult.logsNextCursor),
+			Traces:  buildPagination(page, limit, signalResult.tracesHasNext, signalResult.tracesNextCursor),
+			Metrics: buildPagination(page, limit, signalResult.metricsHasNext, ""),
 		},
 		Results: Results{
-			Logs:    wrapAny(logs),
-			Traces:  wrapAny(traces),
-			Metrics: wrapAny(metrics),
+			Logs:    wrapAny(signalResult.logs),
+			Traces:  wrapAny(signalResult.traces),
+			Metrics: wrapAny(signalResult.metrics),
 		},
 	}
 	if len(signalErrors) > 0 {
 		result.SignalErrors = signalErrors
 	}
 	result.Summary = QueryRunSummary{
-		LogCount:    len(logs),
-		TraceCount:  len(traces),
-		MetricCount: len(metrics),
+		LogCount:    len(signalResult.logs),
+		TraceCount:  len(signalResult.traces),
+		MetricCount: len(signalResult.metrics),
 	}
 	if s.Debug {
 		log.Printf("query.service.run complete: runId=%s logs=%d traces=%d metrics=%d", result.RunID, result.Summary.LogCount, result.Summary.TraceCount, result.Summary.MetricCount)
