@@ -6,14 +6,13 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"opendashly/backend/internal/query/builders"
+	"opendashly/backend/internal/storage"
 	"sort"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
-
-	"opendashly/backend/internal/query/builders"
-	"opendashly/backend/internal/storage"
 
 	"github.com/ClickHouse/clickhouse-go/v2/lib/driver"
 )
@@ -29,44 +28,26 @@ type Service struct {
 
 // Run executes an ad-hoc query and returns results.
 func (s *Service) Run(ctx context.Context, req QueryRequest) (*QueryRunResult, error) {
-	page := req.Page
-	if page < 1 {
-		page = 1
-	}
-	limit := req.Limit
-	if limit < 1 {
-		limit = 100
-	}
-	offset := (page - 1) * limit
-	readLimit := limit + 1
+	pagination := normalizeRunPagination(req)
 
 	if s.Debug {
-		log.Printf("query.service.run start: page=%d limit=%d offset=%d filters=%d", page, limit, offset, len(req.Filters))
+		log.Printf("query.service.run start: page=%d limit=%d offset=%d filters=%d", pagination.page, pagination.limit, pagination.offset, len(req.Filters))
 	}
 	if s.Storage == nil {
 		log.Printf("query.service.run skipped: storage not configured")
-		return emptyResult(page, limit), nil
-	}
-
-	logsCursor, err := decodeLogsCursor(req.LogsCursor)
-	if err != nil {
-		return nil, fmt.Errorf("decode logs cursor: %w", err)
-	}
-	tracesCursor, err := decodeTracesCursor(req.TracesCursor)
-	if err != nil {
-		return nil, fmt.Errorf("decode traces cursor: %w", err)
+		return emptyResult(pagination.page, pagination.limit), nil
 	}
 
 	signals := requestedSignals(req.Signals)
-	logsQuery := builders.BuildLogsQuery(req.Filters, req.FilterList, req.TimeRange.From, req.TimeRange.To, readLimit, offset, logsCursor)
-	tracesQuery := builders.BuildTracesQuery(req.Filters, req.FilterList, req.TimeRange.From, req.TimeRange.To, readLimit, offset, tracesCursor)
-	metricsQuery := builders.BuildMetricsQuery(req.Filters, req.FilterList, req.TimeRange.From, req.TimeRange.To, readLimit, offset)
-	queries := signalQueries{logs: logsQuery, traces: tracesQuery, metrics: metricsQuery}
-	if s.Debug {
-		log.Printf("DEBUG: executing logsQuery: %s", logsQuery)
-		log.Printf("query.service.run built queries: logs=%q traces=%q metrics=%q", logsQuery, tracesQuery, metricsQuery)
+	queries, err := buildSignalQueries(req, pagination)
+	if err != nil {
+		return nil, err
 	}
-	signalResult := defaultSignalOrchestrator().run(ctx, s.Storage.Conn, queries, signals, limit)
+	if s.Debug {
+		log.Printf("DEBUG: executing logsQuery: %s", queries.logs)
+		log.Printf("query.service.run built queries: logs=%q traces=%q metrics=%q", queries.logs, queries.traces, queries.metrics)
+	}
+	signalResult := defaultSignalOrchestrator().run(ctx, s.Storage.Conn, queries, signals, pagination.limit)
 	signalErrors := signalResult.signalErrors
 	requestedCount := countRequestedSignals(signals)
 	if len(signalErrors) == requestedCount && requestedCount > 0 {
@@ -79,28 +60,7 @@ func (s *Service) Run(ctx context.Context, req QueryRequest) (*QueryRunResult, e
 		log.Printf("query.service.run partial: failedSignals=%s", joinSignalErrors(signalErrors))
 	}
 
-	result := &QueryRunResult{
-		RunID:  fmt.Sprintf("run-%d", time.Now().UnixNano()),
-		Status: status,
-		Pagination: PaginationSet{
-			Logs:    buildPagination(page, limit, signalResult.logsHasNext, signalResult.logsNextCursor),
-			Traces:  buildPagination(page, limit, signalResult.tracesHasNext, signalResult.tracesNextCursor),
-			Metrics: buildPagination(page, limit, signalResult.metricsHasNext, ""),
-		},
-		Results: Results{
-			Logs:    wrapAny(signalResult.logs),
-			Traces:  wrapAny(signalResult.traces),
-			Metrics: wrapAny(signalResult.metrics),
-		},
-	}
-	if len(signalErrors) > 0 {
-		result.SignalErrors = signalErrors
-	}
-	result.Summary = QueryRunSummary{
-		LogCount:    len(signalResult.logs),
-		TraceCount:  len(signalResult.traces),
-		MetricCount: len(signalResult.metrics),
-	}
+	result := assembleQueryRunResult(pagination, status, signalResult)
 	if s.Debug {
 		log.Printf("query.service.run complete: runId=%s logs=%d traces=%d metrics=%d", result.RunID, result.Summary.LogCount, result.Summary.TraceCount, result.Summary.MetricCount)
 	}
