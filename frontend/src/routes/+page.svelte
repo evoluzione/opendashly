@@ -40,6 +40,46 @@
   import SlowestEndpointsTable from "../components/dashboard/SlowestEndpointsTable.svelte";
   import ErrorHotspotsTable from "../components/dashboard/ErrorHotspotsTable.svelte";
 
+  type DashboardRangePreset =
+    | "5m"
+    | "15m"
+    | "30m"
+    | "1h"
+    | "6h"
+    | "24h"
+    | "7d"
+    | "all"
+    | "custom";
+
+  const dashboardTimeRangeOptions: Array<{
+    value: DashboardRangePreset;
+    label: string;
+  }> = [
+    { value: "5m", label: "Ultimi 5 minuti" },
+    { value: "15m", label: "Ultimi 15 minuti" },
+    { value: "30m", label: "Ultimi 30 minuti" },
+    { value: "1h", label: "Ultima ora" },
+    { value: "6h", label: "Ultime 6 ore" },
+    { value: "24h", label: "Ultime 24 ore" },
+    { value: "7d", label: "Ultimi 7 giorni" },
+    { value: "all", label: "Tutto" },
+    { value: "custom", label: "Personalizzato" },
+  ];
+
+  const dashboardPresetMinutes: Record<
+    Exclude<DashboardRangePreset, "custom">,
+    number | null
+  > = {
+    "5m": 5,
+    "15m": 15,
+    "30m": 30,
+    "1h": 60,
+    "6h": 360,
+    "24h": 1440,
+    "7d": 10080,
+    all: null,
+  };
+
   let activeTab: "logs" | "metriche" | "tracce" = "metriche";
   let dashboardLoaded = false;
   let lastQueryRefresh: Date | null = null;
@@ -48,7 +88,7 @@
   let autoRun = false;
   let tabFromUrl = "";
   let tabFromUrlApplied = false;
-  let dashboardAllTime = true;
+  let dashboardRangePreset: DashboardRangePreset = "6h";
   let dashboardFromInput = "";
   let dashboardToInput = "";
   let dashboardRangeError = "";
@@ -122,13 +162,16 @@
     return date.toISOString();
   }
 
-  $: if (dashboardAllTime) {
+  $: if (dashboardRangePreset !== "custom") {
     dashboardRangeError = "";
   }
 
-  $: if (!dashboardAllTime && (!dashboardFromInput || !dashboardToInput)) {
+  $: if (
+    dashboardRangePreset === "custom" &&
+    (!dashboardFromInput || !dashboardToInput)
+  ) {
     const now = new Date();
-    const from = new Date(now.getTime() - 60 * 60 * 1000);
+    const from = new Date(now.getTime() - 6 * 60 * 60 * 1000);
     if (!dashboardFromInput) dashboardFromInput = formatDateTimeLocal(from);
     if (!dashboardToInput) dashboardToInput = formatDateTimeLocal(now);
   }
@@ -229,7 +272,8 @@
     if ($dashboardState.selectedService) {
       request.serviceName = $dashboardState.selectedService;
     }
-    if (!dashboardAllTime) {
+
+    if (dashboardRangePreset === "custom") {
       const fromIso = toIsoFromLocal(dashboardFromInput);
       const toIso = toIsoFromLocal(dashboardToInput);
       if (!fromIso || !toIso) {
@@ -243,7 +287,21 @@
       dashboardRangeError = "";
       request.from = fromIso;
       request.to = toIso;
+    } else {
+      const minutes =
+        dashboardPresetMinutes[
+          dashboardRangePreset as Exclude<DashboardRangePreset, "custom">
+        ];
+      const now = new Date();
+      if (minutes === null) {
+        request.from = new Date(0).toISOString();
+        request.to = now.toISOString();
+      } else {
+        request.from = new Date(now.getTime() - minutes * 60 * 1000).toISOString();
+        request.to = now.toISOString();
+      }
     }
+
     await loadDashboard(request);
     dashboardLoaded = true;
     lastRefresh = new Date();
@@ -264,9 +322,16 @@
     await loadDashboardMetrics();
   }
 
-  function enableDashboardPeriod() {
-    if (!dashboardAllTime) return;
-    dashboardAllTime = false;
+  function handleDashboardRangePresetChange(event: Event) {
+    const value = (event.target as HTMLSelectElement)
+      .value as DashboardRangePreset;
+    dashboardRangePreset = value;
+
+    if (dashboardRangePreset !== "custom") {
+      dashboardFromInput = "";
+      dashboardToInput = "";
+    }
+
     dashboardRangeError = "";
   }
 
@@ -285,7 +350,7 @@
   }
 
   async function resetDashboardFilters() {
-    dashboardAllTime = true;
+    dashboardRangePreset = "6h";
     dashboardRangeError = "";
     dashboardFromInput = "";
     dashboardToInput = "";
@@ -303,7 +368,8 @@
   }
 
   $: activeDashboardFilters =
-    (dashboardAllTime ? 0 : 1) + ($dashboardState.selectedService ? 1 : 0);
+    (dashboardRangePreset === "all" ? 0 : 1) +
+    ($dashboardState.selectedService ? 1 : 0);
 
   function handleGlobalClick(event: MouseEvent) {
     if (!showDashboardFilters || !dashboardFiltersRef) return;
@@ -415,25 +481,34 @@
 
                 <div class="filter-block">
                   <span class="filter-label">Periodo (data + ora)</span>
+                  <select
+                    class="filter-select"
+                    on:change={handleDashboardRangePresetChange}
+                    value={dashboardRangePreset}
+                  >
+                    {#each dashboardTimeRangeOptions as option}
+                      <option value={option.value}>{option.label}</option>
+                    {/each}
+                  </select>
+                </div>
+
+                {#if dashboardRangePreset === "custom"}
+                  <div class="filter-block">
+                    <span class="filter-label">Intervallo personalizzato</span>
                   <div class="range-inputs">
                     <input
                       type="datetime-local"
                       bind:value={dashboardFromInput}
                       aria-label="Data ora inizio"
-                      readonly={dashboardAllTime}
-                      on:focus={enableDashboardPeriod}
-                      on:click={enableDashboardPeriod}
                     />
                     <input
                       type="datetime-local"
                       bind:value={dashboardToInput}
                       aria-label="Data ora fine"
-                      readonly={dashboardAllTime}
-                      on:focus={enableDashboardPeriod}
-                      on:click={enableDashboardPeriod}
                     />
                   </div>
-                </div>
+                  </div>
+                {/if}
                 {#if dashboardRangeError}
                   <span class="range-error">{dashboardRangeError}</span>
                 {/if}
@@ -484,10 +559,6 @@
         {:else if $dashboardState.loading && !$dashboardState.data}
           <div class="status">Caricamento dashboard...</div>
         {:else if $dashboardState.data}
-          {#if $dashboardState.loading}
-            <div class="refresh-indicator">Aggiornamento in corso...</div>
-          {/if}
-
           <div class="dashboard-grid">
             {#each getOrderedChartSettings() as chartSetting}
               {#if chartSetting.enabled}
@@ -953,15 +1024,6 @@
     padding: 16px;
   }
 
-  .refresh-indicator {
-    text-align: center;
-    color: #64748b;
-    font-size: 13px;
-    padding: 8px 16px;
-    background: rgba(37, 99, 235, 0.05);
-    border-radius: 8px;
-  }
-
   .metrics-controls {
     display: flex;
     align-items: flex-end;
@@ -983,10 +1045,15 @@
     border-radius: 8px;
     border: 1px solid #cbd5e1;
     background: #ffffff;
-    color: #1e293b;
+    color: #334155;
     font-size: 12px;
-    font-weight: 500;
+    font-weight: 600;
     cursor: pointer;
+    transition:
+      background 0.15s ease,
+      border-color 0.15s ease,
+      color 0.15s ease,
+      box-shadow 0.15s ease;
   }
 
   .filters-btn:hover {
@@ -995,9 +1062,14 @@
   }
 
   .filters-btn.active {
-    border-color: #2563eb;
-    color: #1d4ed8;
-    background: #eff6ff;
+    border-color: #6366f1;
+    color: #4338ca;
+    background: #eef2ff;
+  }
+
+  .filters-btn:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.2);
   }
 
   .filters-icon {
@@ -1014,7 +1086,7 @@
     height: 18px;
     padding: 0 5px;
     border-radius: 999px;
-    background: #2563eb;
+    background: #6366f1;
     color: #ffffff;
     font-size: 11px;
     font-weight: 700;
@@ -1104,15 +1176,32 @@
     padding: 9px 14px;
     border: none;
     border-radius: 8px;
-    background: #2563eb;
+    background: #6366f1;
     color: #ffffff;
     font-size: 12px;
     font-weight: 600;
     cursor: pointer;
+    transition:
+      background 0.15s ease,
+      transform 0.15s ease,
+      box-shadow 0.15s ease;
+  }
+
+  .apply-filters-btn:hover:not(:disabled) {
+    background: #4f46e5;
+  }
+
+  .apply-filters-btn:active:not(:disabled) {
+    transform: scale(0.98);
+  }
+
+  .apply-filters-btn:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.2);
   }
 
   .apply-filters-btn:disabled {
-    opacity: 0.7;
+    opacity: 0.6;
     cursor: not-allowed;
   }
 
@@ -1135,10 +1224,26 @@
     font-size: 12px;
     font-weight: 600;
     cursor: pointer;
+    transition:
+      background 0.15s ease,
+      border-color 0.15s ease,
+      color 0.15s ease,
+      box-shadow 0.15s ease;
+  }
+
+  .reset-filters-btn:hover:not(:disabled) {
+    background: #f8fafc;
+    border-color: #94a3b8;
+    color: #334155;
+  }
+
+  .reset-filters-btn:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 3px rgba(148, 163, 184, 0.22);
   }
 
   .reset-filters-btn:disabled {
-    opacity: 0.7;
+    opacity: 0.6;
     cursor: not-allowed;
   }
 
@@ -1166,11 +1271,12 @@
     border: none;
     border-radius: 8px;
     font-size: 12px;
-    font-weight: 500;
+    font-weight: 600;
     cursor: pointer;
     transition:
       background 0.15s ease,
-      transform 0.15s ease;
+      transform 0.15s ease,
+      box-shadow 0.15s ease;
   }
 
   .refresh-btn:hover:not(:disabled) {
@@ -1181,8 +1287,13 @@
     transform: scale(0.98);
   }
 
+  .refresh-btn:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.2);
+  }
+
   .refresh-btn:disabled {
-    opacity: 0.7;
+    opacity: 0.6;
     cursor: not-allowed;
   }
 

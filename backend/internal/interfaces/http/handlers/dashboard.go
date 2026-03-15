@@ -28,9 +28,9 @@ func (h *DashboardHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Default time range: all data
-	defaultFrom := time.Unix(0, 0).UTC()
+	// Default time range: last 6 hours
 	defaultTo := time.Now().UTC()
+	defaultFrom := defaultTo.Add(-6 * time.Hour)
 
 	var from, to time.Time
 	var err error
@@ -56,7 +56,7 @@ func (h *DashboardHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if !to.After(from) {
-		log.Printf("dashboard.metrics invalid range: from=%s to=%s, using default all-time",
+		log.Printf("dashboard.metrics invalid range: from=%s to=%s, using default last 6h",
 			from.Format(time.RFC3339), to.Format(time.RFC3339))
 		from = defaultFrom
 		to = defaultTo
