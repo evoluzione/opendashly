@@ -16,6 +16,8 @@
     description: string;
   };
 
+  type PreviewKind = 'gauge' | 'timeseries' | 'distribution' | 'table' | 'kpi';
+
   type DragState = {
     key: string;
     source: 'grid' | 'disabled';
@@ -118,6 +120,24 @@
 
   const chartByKey = new Map(chartCatalog.map((chart) => [chart.key, chart]));
   const defaultByKey = new Map(getDefaultDashboardSettings().map((setting) => [setting.key, setting]));
+
+  const previewKindByKey: Record<string, PreviewKind> = {
+    apdex_gauge: 'gauge',
+    error_rate_gauge: 'gauge',
+    throughput_gauge: 'gauge',
+    latency_distribution: 'distribution',
+    latency_percentiles: 'timeseries',
+    throughput_timeseries: 'timeseries',
+    error_rate_timeseries: 'timeseries',
+    slo_compliance: 'kpi',
+    error_budget_burn: 'kpi',
+    service_latency_rank: 'table',
+    service_throughput: 'table',
+    availability_trend: 'timeseries',
+    slowest_endpoints: 'table',
+    top_endpoints_throughput: 'table',
+    error_hotspots: 'table'
+  };
 
   let localSettings: DashboardChartSetting[] = [];
   let savedSnapshot: DashboardChartSetting[] = [];
@@ -370,6 +390,10 @@
     return `grid-column:${(setting.x ?? 0) + 1} / span ${setting.w ?? 3};grid-row:${(setting.y ?? 0) + 1} / span ${FIXED_H};`;
   }
 
+  function getPreviewKind(key: string): PreviewKind {
+    return previewKindByKey[key] ?? 'timeseries';
+  }
+
   function pointInsideRect(x: number, y: number, rect: DOMRect): boolean {
     return x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom;
   }
@@ -606,7 +630,6 @@
               <span class="drag-handle" title="Trascina">⋮⋮</span>
               <div>
                 <h3>{chartByKey.get(setting.key)?.label}</h3>
-                <p>{chartByKey.get(setting.key)?.description}</p>
               </div>
               <span class="chip-size" aria-label={`Larghezza ${setting.w}/6`}>
                 {setting.w}/6
@@ -614,14 +637,75 @@
             </header>
 
             <div class="widget-preview">
-              <div class="mock-line"></div>
-              <div class="mock-bars">
-                <span style="height: 36%"></span>
-                <span style="height: 62%"></span>
-                <span style="height: 48%"></span>
-                <span style="height: 78%"></span>
-                <span style="height: 54%"></span>
-              </div>
+              {#if getPreviewKind(setting.key) === 'gauge'}
+                <div class="preview-gauge-wrap">
+                  <div class="preview-gauge">
+                    <span class="preview-gauge-value">94%</span>
+                  </div>
+                  <div class="preview-gauge-track"></div>
+                </div>
+              {:else if getPreviewKind(setting.key) === 'timeseries'}
+                <div class="preview-cartesian-wrap">
+                  <div class="preview-cartesian" aria-hidden="true">
+                    <svg viewBox="0 0 120 56" preserveAspectRatio="none">
+                      <line x1="8" y1="48" x2="114" y2="48" class="axis" />
+                      <line x1="8" y1="8" x2="8" y2="48" class="axis" />
+                      <polyline
+                        points="10,38 28,34 44,36 62,24 78,28 94,20 112,16"
+                        class="series-a"
+                      />
+                      <polyline
+                        points="10,40 28,39 44,33 62,30 78,22 94,26 112,21"
+                        class="series-b"
+                      />
+                    </svg>
+                  </div>
+                  <div class="preview-legend">
+                    <span class="dot blue"></span>
+                    <span class="dot orange"></span>
+                    <span class="dot red"></span>
+                  </div>
+                </div>
+              {:else if getPreviewKind(setting.key) === 'distribution'}
+                <div class="preview-histogram">
+                  <span style="height: 26%"></span>
+                  <span style="height: 46%"></span>
+                  <span style="height: 74%"></span>
+                  <span style="height: 58%"></span>
+                  <span style="height: 34%"></span>
+                </div>
+              {:else if getPreviewKind(setting.key) === 'table'}
+                <div class="preview-table">
+                  <div class="preview-table-header">
+                    <span class="cell cell-title"></span>
+                    <span class="cell cell-trend"></span>
+                    <span class="cell cell-value"></span>
+                  </div>
+                  <div class="preview-table-body">
+                    <div class="preview-table-line">
+                      <span class="cell cell-title"></span>
+                      <span class="cell cell-trend"></span>
+                      <span class="cell cell-value"></span>
+                    </div>
+                    <div class="preview-table-line">
+                      <span class="cell cell-title"></span>
+                      <span class="cell cell-trend"></span>
+                      <span class="cell cell-value"></span>
+                    </div>
+                    <div class="preview-table-line">
+                      <span class="cell cell-title"></span>
+                      <span class="cell cell-trend"></span>
+                      <span class="cell cell-value"></span>
+                    </div>
+                  </div>
+                </div>
+              {:else}
+                <div class="preview-kpi-grid">
+                  <div class="kpi-pill">99.9%</div>
+                  <div class="kpi-pill">+12%</div>
+                  <div class="kpi-pill">1.2x</div>
+                </div>
+              {/if}
             </div>
             {#if canEdit}
               <button
@@ -824,7 +908,7 @@
   .widget-header {
     display: flex;
     gap: 8px;
-    align-items: flex-start;
+    align-items: center;
     padding: 10px;
     border-bottom: 1px solid #e2e8f0;
     cursor: grab;
@@ -856,13 +940,6 @@
     color: var(--text-strong);
   }
 
-  .widget-header p {
-    margin: 2px 0 0;
-    font-size: 11px;
-    color: var(--text-muted);
-    line-height: 1.3;
-  }
-
   .chip-size {
     margin-left: auto;
     border: 1px solid #c7d2fe;
@@ -881,33 +958,239 @@
   }
 
   .widget-preview {
+    --preview-accent: #6366f1;
+    --preview-accent-soft: #a5b4fc;
+    --preview-accent-2: #7c3aed;
+    --preview-bg: #f8fafc;
+    --preview-bg-2: #f1f5f9;
+    --preview-text: #4338ca;
+    --preview-track: #dbe5f3;
     flex: 1;
     min-height: 0;
     padding: 10px;
     display: flex;
     flex-direction: column;
-    gap: 12px;
+    gap: 10px;
+    justify-content: center;
+    background: linear-gradient(180deg, var(--preview-bg) 0%, var(--preview-bg-2) 100%);
+    border-top: 1px solid #eef2f7;
   }
 
-  .mock-line {
+  .preview-gauge-wrap {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .preview-gauge {
+    width: 64px;
+    height: 64px;
+    border-radius: 999px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: conic-gradient(var(--preview-accent) 0 72%, var(--preview-track) 72% 100%);
+    position: relative;
+  }
+
+  .preview-gauge::after {
+    content: '';
+    width: 46px;
+    height: 46px;
+    border-radius: 999px;
+    background: #ffffff;
+    position: absolute;
+  }
+
+  .preview-gauge-value {
+    position: relative;
+    z-index: 1;
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--preview-text);
+  }
+
+  .preview-gauge-track {
+    width: 80%;
     height: 8px;
     border-radius: 999px;
-    background: linear-gradient(90deg, #e2e8f0 0%, #cbd5e1 48%, #e2e8f0 100%);
+    background: linear-gradient(90deg, var(--preview-accent-2) 0%, var(--preview-accent) 58%, var(--preview-track) 58%);
   }
 
-  .mock-bars {
+  .preview-cartesian,
+  .preview-histogram {
+    flex: 1;
+  }
+
+  .preview-cartesian-wrap {
+    position: relative;
+    flex: 1;
+    min-height: 0;
+  }
+
+  .preview-cartesian {
+    position: absolute;
+    inset: 0;
+    border: 1px solid #dbe2f0;
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.72);
+    padding: 6px;
+  }
+
+  .preview-cartesian svg {
+    width: 100%;
+    height: 100%;
+    display: block;
+  }
+
+  .preview-cartesian .axis {
+    stroke: #cbd5e1;
+    stroke-width: 1;
+  }
+
+  .preview-cartesian .series-a {
+    fill: none;
+    stroke: var(--preview-accent);
+    stroke-width: 2;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+
+  .preview-cartesian .series-b {
+    fill: none;
+    stroke: var(--preview-accent-2);
+    stroke-width: 2;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    opacity: 0.9;
+  }
+
+  .preview-histogram {
     display: grid;
     grid-template-columns: repeat(5, minmax(0, 1fr));
     align-items: end;
     gap: 6px;
+  }
+
+  .preview-histogram span {
+    display: block;
+    width: 100%;
+    border-radius: 4px 4px 2px 2px;
+    background: linear-gradient(180deg, var(--preview-accent-soft) 0%, var(--preview-accent-2) 100%);
+  }
+
+  .preview-legend {
+    position: absolute;
+    right: 6px;
+    bottom: 6px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    justify-content: flex-end;
+    padding: 3px 5px;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.82);
+    border: 1px solid #e2e8f0;
+  }
+
+  .dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 999px;
+    display: inline-block;
+  }
+
+  .dot.blue {
+    background: var(--preview-accent);
+  }
+
+  .dot.orange {
+    background: var(--preview-accent-2);
+  }
+
+  .dot.red {
+    background: var(--preview-track);
+  }
+
+  .preview-table {
+    height: 100%;
+    border: 1px solid #dbe2f0;
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.78);
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .preview-table-header {
+    display: grid;
+    grid-template-columns: 1.35fr 0.7fr 0.9fr;
+    gap: 6px;
+    align-items: center;
+    padding: 6px 8px;
+    border-bottom: 1px solid #e2e8f0;
+    background: linear-gradient(90deg, rgba(99, 102, 241, 0.08) 0%, rgba(139, 92, 246, 0.1) 100%);
+  }
+
+  .preview-table-body {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding: 6px 8px;
     flex: 1;
   }
 
-  .mock-bars span {
+  .preview-table-line {
+    display: grid;
+    grid-template-columns: 1.35fr 0.7fr 0.9fr;
+    gap: 6px;
+    align-items: center;
+    padding: 3px 0;
+    border-bottom: 1px dashed #e2e8f0;
+  }
+
+  .preview-table-line:last-child {
+    border-bottom: 0;
+  }
+
+  .preview-table .cell {
     display: block;
-    width: 100%;
-    border-radius: 6px 6px 2px 2px;
-    background: linear-gradient(180deg, #a5b4fc 0%, #6366f1 100%);
+    height: 9px;
+    border-radius: 999px;
+    background: linear-gradient(90deg, rgba(99, 102, 241, 0.22) 0%, rgba(139, 92, 246, 0.36) 100%);
+  }
+
+  .preview-table .cell-title {
+    width: 84%;
+  }
+
+  .preview-table .cell-trend {
+    width: 62%;
+  }
+
+  .preview-table .cell-value {
+    width: 74%;
+    justify-self: end;
+  }
+
+  .preview-kpi-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 6px;
+  }
+
+  .kpi-pill {
+    height: 30px;
+    border-radius: 8px;
+    background: linear-gradient(135deg, var(--preview-bg) 0%, var(--preview-bg-2) 100%);
+    border: 1px solid var(--preview-track);
+    color: var(--preview-text);
+    font-size: 10px;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    justify-content: center;
   }
 
   .controls {
