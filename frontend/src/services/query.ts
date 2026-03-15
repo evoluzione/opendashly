@@ -1,4 +1,5 @@
 import { apiRequest } from './api';
+import { buildAttributesQuery, toStringList } from './query.mapper';
 
 export interface FilterItem {
   connector: 'AND' | 'OR';
@@ -58,9 +59,6 @@ export function generateSmartQuery(payload: { prompt: string; contextType: 'logs
 }
 
 export function getLogAttributes(search: string): Promise<string[]> {
-  const params = new URLSearchParams({ q: search });
-  return apiRequest<unknown>(`/api/query/attributes?${params.toString()}`).then((payload) => {
-    if (!Array.isArray(payload)) return [];
-    return payload.filter((item): item is string => typeof item === 'string');
-  });
+  const query = buildAttributesQuery(search);
+  return apiRequest<unknown>(`/api/query/attributes?${query}`).then((payload) => toStringList(payload));
 }

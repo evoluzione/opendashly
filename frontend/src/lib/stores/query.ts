@@ -2,6 +2,11 @@ import { get, writable } from 'svelte/store';
 import type { QueryRunResult, QueryRequest } from '../../services/query';
 import { runQuery } from '../../services/query';
 import { fetchServices } from '../../services/services';
+import {
+  buildAutoRefreshRequest,
+  mergeResult,
+  mergeSingleSignalResult
+} from './query.domain';
 
 type QueryState = {
   loading: boolean;
@@ -49,113 +54,6 @@ export function selectLogLevel(value: string) {
 
 let refreshTimer: ReturnType<typeof setInterval> | null = null;
 
-function logKey(entry: any) {
-  const timestamp = entry?.timestamp ?? '';
-  const traceId = entry?.traceId ?? '';
-  const spanId = entry?.spanId ?? '';
-  const body =
-    typeof entry?.body === 'string' ? entry.body : JSON.stringify(entry?.body ?? '');
-  return `${timestamp}|${traceId}|${spanId}|${body}`;
-}
-
-function traceKey(entry: any) {
-  return entry?.traceId ?? '';
-}
-
-function mergeByKey<T>(
-  latest: T[],
-  previous: T[],
-  keyFn: (item: T) => string,
-  limit?: number
-) {
-  const seen = new Set<string>();
-  const merged: T[] = [];
-  for (const item of latest) {
-    const key = keyFn(item);
-    if (seen.has(key)) continue;
-    seen.add(key);
-    merged.push(item);
-  }
-  for (const item of previous) {
-    const key = keyFn(item);
-    if (seen.has(key)) continue;
-    seen.add(key);
-    merged.push(item);
-  }
-  return typeof limit === 'number' && limit > 0 ? merged.slice(0, limit) : merged;
-}
-
-function mergeResult(
-  previous: QueryRunResult,
-  latest: QueryRunResult,
-  request: QueryRequest
-) {
-  const logLimit = request.limit ?? latest.pagination?.logs?.limit;
-  const traceLimit = request.limit ?? latest.pagination?.traces?.limit;
-  return {
-    ...latest,
-    results: {
-      ...latest.results,
-      logs: mergeByKey(latest.results.logs ?? [], previous.results.logs ?? [], logKey, logLimit),
-      traces: mergeByKey(
-        latest.results.traces ?? [],
-        previous.results.traces ?? [],
-        traceKey,
-        traceLimit
-      )
-    }
-  };
-}
-
-function mergeSingleSignalResult(
-  previous: QueryRunResult,
-  latest: QueryRunResult,
-  signal: 'logs' | 'traces' | 'metrics',
-  request: QueryRequest
-) {
-  const merged: QueryRunResult = {
-    ...previous,
-    runId: latest.runId,
-    status: latest.status,
-    summary: { ...previous.summary },
-    pagination: { ...previous.pagination },
-    results: { ...previous.results }
-  };
-
-  if (signal === 'logs') {
-    const logLimit = request.limit ?? latest.pagination?.logs?.limit;
-    const isFirstPage = request.page === undefined || request.page === 1;
-    merged.results.logs = isFirstPage
-      ? mergeByKey(latest.results.logs ?? [], previous.results.logs ?? [], logKey, logLimit)
-      : (latest.results.logs ?? []);
-    if (latest.pagination?.logs) {
-      merged.pagination = { ...merged.pagination, logs: latest.pagination.logs };
-    }
-    merged.summary.logCount = latest.summary?.logCount ?? merged.results.logs.length;
-    return merged;
-  }
-
-  if (signal === 'traces') {
-    const traceLimit = request.limit ?? latest.pagination?.traces?.limit;
-    const isFirstPage = request.page === undefined || request.page === 1;
-    merged.results.traces = isFirstPage
-      ? mergeByKey(latest.results.traces ?? [], previous.results.traces ?? [], traceKey, traceLimit)
-      : (latest.results.traces ?? []);
-    if (latest.pagination?.traces) {
-      merged.pagination = { ...merged.pagination, traces: latest.pagination.traces };
-    }
-    merged.summary.traceCount = latest.summary?.traceCount ?? merged.results.traces.length;
-    return merged;
-  }
-
-  merged.results.metrics = latest.results.metrics ?? [];
-  if (latest.pagination?.metrics) {
-    merged.pagination = { ...merged.pagination, metrics: latest.pagination.metrics };
-  }
-  merged.summary.metricCount = latest.summary?.metricCount ?? merged.results.metrics.length;
-  return merged;
-}
-
 function resetRefreshTimer() {
   if (refreshTimer) {
     clearInterval(refreshTimer);
@@ -170,67 +68,20 @@ function scheduleAutoRefresh() {
     return;
   }
   refreshTimer = setInterval(() => {
-    const currentState = get(queryState);
-    if (!currentState.lastRequest) {
+    const latest = get(queryState);
+    const request = buildAutoRefreshRequest({
+      lastRequest: latest.lastRequest,
+      autoRefreshSeconds: latest.autoRefreshSeconds,
+      autoRefreshRangeMinutes: latest.autoRefreshRangeMinutes,
+      result: latest.result
+    });
+
+    if (!request) {
       return;
-    }
-
-    let request = currentState.lastRequest;
-
-    // Incremental polling optimization for "Live" mode (1s)
-    if (currentState.autoRefreshSeconds === 1) {
-      const maxTimestamp = getMaxTimestamp(currentState.result);
-      if (maxTimestamp) {
-        // Fetch only new data from last max timestamp
-        // Add minimal offset to avoid duplicates if precision allows, or rely on merge dedup
-        const fromDate = new Date(new Date(maxTimestamp).getTime() + 1);
-        request = {
-          ...currentState.lastRequest,
-          timeRange: {
-            from: fromDate.toISOString(),
-            to: new Date().toISOString()
-          }
-        };
-      } else if (currentState.autoRefreshRangeMinutes) {
-        // Fallback to rolling if no data yet
-        request = buildRollingRangeRequest(currentState.lastRequest, currentState.autoRefreshRangeMinutes);
-      }
-    } else if (currentState.autoRefreshRangeMinutes) {
-      request = buildRollingRangeRequest(currentState.lastRequest, currentState.autoRefreshRangeMinutes);
     }
 
     void executeQuery(request, { retainResult: true, isBackground: true });
   }, currentState.autoRefreshSeconds * 1000);
-}
-
-function buildRollingRangeRequest(request: QueryRequest, minutes: number): QueryRequest {
-  const now = new Date();
-  const from = new Date(now.getTime() - minutes * 60 * 1000);
-  return {
-    ...request,
-    timeRange: { from: from.toISOString(), to: now.toISOString() }
-  };
-}
-
-function getMaxTimestamp(result: QueryRunResult | null): string | null {
-  if (!result || !result.results) return null;
-  let maxTime = "";
-
-  // Check logs
-  if (result.results.logs) {
-    for (const log of result.results.logs) {
-      if (log.timestamp > maxTime) maxTime = log.timestamp;
-    }
-  }
-
-  // Check traces
-  if (result.results.traces) {
-    for (const trace of result.results.traces) {
-      if (trace.timestamp > maxTime) maxTime = trace.timestamp;
-    }
-  }
-
-  return maxTime || null;
 }
 
 // Debug helper

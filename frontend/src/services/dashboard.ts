@@ -1,4 +1,5 @@
 import { apiRequest } from './api';
+import { buildDashboardMetricsPayload } from './dashboard.mapper';
 
 export interface LatencyBucket {
   rangeStart: number;
@@ -124,6 +125,6 @@ export interface DashboardRequest {
 export async function fetchDashboardMetrics(request: DashboardRequest): Promise<DashboardResponse> {
   return apiRequest<DashboardResponse>('/api/dashboard/metrics', {
     method: 'POST',
-    body: JSON.stringify(request)
+    body: JSON.stringify(buildDashboardMetricsPayload(request))
   });
 }

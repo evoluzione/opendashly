@@ -7,8 +7,8 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"opendashly/backend/internal/api"
-	"opendashly/backend/internal/query"
+	"opendashly/backend/internal/application/query"
+	"opendashly/backend/internal/interfaces/api"
 )
 
 func TestSavedQueriesContract(t *testing.T) {
@@ -22,7 +22,7 @@ func TestSavedQueriesContract(t *testing.T) {
 	})
 
 	payload := map[string]any{
-		"name": "Errors",
+		"name":        "Errors",
 		"description": "",
 		"request": map[string]any{
 			"signals": []string{"logs"},

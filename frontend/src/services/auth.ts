@@ -1,4 +1,9 @@
 import { apiRequest } from './api';
+import {
+  buildChangePasswordPayload,
+  buildFirstLoginPasswordPayload,
+  buildLoginPayload
+} from './auth.mapper';
 
 export type User = {
   id: string;
@@ -15,7 +20,7 @@ export type AuthSession = {
 export function login(username: string, password: string): Promise<AuthSession> {
   return apiRequest<AuthSession>('/api/auth/login', {
     method: 'POST',
-    body: JSON.stringify({ username, password })
+    body: JSON.stringify(buildLoginPayload(username, password))
   });
 }
 
@@ -24,10 +29,7 @@ export function logout(): Promise<void> {
 }
 
 export function changePassword(newPassword: string, currentPassword?: string): Promise<AuthSession> {
-  const body: { newPassword: string; currentPassword?: string } = { newPassword };
-  if (currentPassword) {
-    body.currentPassword = currentPassword;
-  }
+  const body = buildChangePasswordPayload(newPassword, currentPassword);
   return apiRequest<AuthSession>('/api/auth/change-password', {
     method: 'POST',
     body: JSON.stringify(body)
@@ -37,7 +39,7 @@ export function changePassword(newPassword: string, currentPassword?: string): P
 export function firstLoginChangePassword(newPassword: string): Promise<AuthSession> {
   return apiRequest<AuthSession>('/api/auth/first-login-change-password', {
     method: 'POST',
-    body: JSON.stringify({ newPassword })
+    body: JSON.stringify(buildFirstLoginPasswordPayload(newPassword))
   });
 }
 

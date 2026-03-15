@@ -9,10 +9,10 @@ import (
 	"testing"
 	"time"
 
-	"opendashly/backend/internal/api"
-	"opendashly/backend/internal/api/handlers"
-	"opendashly/backend/internal/auth"
-	"opendashly/backend/internal/query"
+	"opendashly/backend/internal/application/auth"
+	"opendashly/backend/internal/application/query"
+	"opendashly/backend/internal/interfaces/api"
+	"opendashly/backend/internal/interfaces/http/handlers"
 )
 
 func TestUsersContract(t *testing.T) {

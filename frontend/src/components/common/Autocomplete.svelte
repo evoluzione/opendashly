@@ -1,6 +1,5 @@
 <script lang="ts">
     import { createEventDispatcher } from "svelte";
-    import { onMount, tick } from "svelte";
 
     export let value = "";
     export let placeholder = "";
@@ -117,12 +116,16 @@
                 <li class="loading">Caricamento...</li>
             {:else}
                 {#each options as option, i}
-                    <li
-                        class:active={i === focusedIndex}
-                        on:click={() => selectOption(option)}
-                        on:mouseenter={() => (focusedIndex = i)}
-                    >
-                        {option}
+                    <li class="option-item">
+                        <button
+                            type="button"
+                            class="option-btn"
+                            class:active={i === focusedIndex}
+                            on:click={() => selectOption(option)}
+                            on:mouseenter={() => (focusedIndex = i)}
+                        >
+                            {option}
+                        </button>
                     </li>
                 {/each}
             {/if}
@@ -170,15 +173,23 @@
         padding: 0;
     }
 
-    li {
-        padding: 8px 12px;
-        font-size: 13px;
-        cursor: pointer;
-        color: #334155;
+    .option-item {
+        padding: 0;
     }
 
-    li:hover,
-    li.active {
+    .option-btn {
+        width: 100%;
+        text-align: left;
+        padding: 8px 12px;
+        font-size: 13px;
+        color: #334155;
+        background: transparent;
+        border: none;
+        cursor: pointer;
+    }
+
+    .option-btn:hover,
+    .option-btn.active {
         background: #f1f5f9;
         color: #0f172a;
     }
