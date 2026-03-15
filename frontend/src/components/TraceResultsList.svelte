@@ -175,6 +175,9 @@
   {#if pagination}
     <div class="pager">
       <div class="pager-meta">
+        {#if lastUpdatedLabel}
+          <span class="last-refresh">{lastUpdatedLabel}</span>
+        {/if}
         <div class="page-size-selector">
           <label for="traces-page-size">Risultati</label>
           <select
@@ -262,10 +265,10 @@
     role="button"
     tabindex="0"
     aria-label="Chiudi dettagli traccia"
-    on:click={closeModal}
+    on:click|self={closeModal}
     on:keydown={handleBackdropKeydown}
   >
-    <div class="modal" role="dialog" aria-modal="true" on:click|stopPropagation>
+    <div class="modal" role="dialog" aria-modal="true">
       <header class="modal-header">
         <div class="header-content">
           <div class="header-icon">

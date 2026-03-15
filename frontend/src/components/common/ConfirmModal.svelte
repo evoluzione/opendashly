@@ -58,7 +58,6 @@
       class="modal"
       role="dialog"
       aria-modal="true"
-      on:click|stopPropagation
       transition:scale={{ duration: 200, start: 0.95 }}
     >
       <header style="background: {style.gradient}">

@@ -1084,12 +1084,6 @@
     color: #0f172a;
   }
 
-  .range-inputs input[readonly] {
-    background: #f8fafc;
-    color: #64748b;
-    cursor: pointer;
-  }
-
   .range-inputs input:focus {
     outline: none;
     border-color: #2563eb;
@@ -1248,35 +1242,6 @@
     }
   }
 
-  .gauges-row {
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: 20px;
-  }
-
-
-  .charts-row {
-    display: grid;
-    grid-template-columns: repeat(2, 1fr);
-    gap: 20px;
-    min-width: 0;
-  }
-
-  .charts-row > :global(*) {
-    min-width: 0;
-  }
-
-  .tables-row {
-    display: grid;
-    grid-template-columns: repeat(2, 1fr);
-    gap: 20px;
-    min-width: 0;
-  }
-
-  .tables-row > :global(*) {
-    min-width: 0;
-  }
-
   @media (max-width: 1200px) {
     .dashboard {
       grid-template-columns: 1fr;
@@ -1291,13 +1256,6 @@
     .filters .panel {
       padding: 24px;
     }
-    .gauges-row {
-      grid-template-columns: repeat(3, 1fr);
-    }
-    .charts-row,
-    .tables-row {
-      grid-template-columns: 1fr;
-    }
   }
 
 
@@ -1309,9 +1267,6 @@
     .dashboard-item {
       grid-column: 1 / -1 !important;
       grid-row: auto !important;
-    }
-    .gauges-row {
-      grid-template-columns: 1fr;
     }
     .range-inputs {
       grid-template-columns: 1fr;
