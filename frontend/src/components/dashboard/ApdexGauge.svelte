@@ -1,6 +1,7 @@
 <script lang="ts">
   import type { ApdexScore } from '../../services/dashboard';
   import InfoTooltip from '../common/InfoTooltip.svelte';
+  import { locale, t } from '../../lib/i18n';
 
   export let data: ApdexScore | null = null;
 
@@ -13,11 +14,11 @@
   }
 
   function getLabel(score: number): string {
-    if (score >= 0.94) return 'Eccellente';
-    if (score >= 0.85) return 'Buono';
-    if (score >= 0.70) return 'Discreto';
-    if (score >= 0.50) return 'Scarso';
-    return 'Inaccettabile';
+    if (score >= 0.94) return t($locale, 'dashboard.apdex.excellent');
+    if (score >= 0.85) return t($locale, 'dashboard.apdex.good');
+    if (score >= 0.70) return t($locale, 'dashboard.apdex.fair');
+    if (score >= 0.50) return t($locale, 'dashboard.apdex.poor');
+    return t($locale, 'dashboard.apdex.unacceptable');
   }
 
   $: score = data?.score ?? 0;
@@ -34,7 +35,7 @@
       APDEX
       <InfoTooltip text="Application Performance Index: misura la soddisfazione degli utenti. Valori tra 0 e 1, dove 1 = tutti soddisfatti. Soglia T: tempo di risposta accettabile." position="bottom" align="left" />
     </span>
-    <span class="gauge-subtitle">T={data?.threshold ?? 2000}ms</span>
+    <span class="gauge-subtitle">{t($locale, 'dashboard.apdex.threshold', { threshold: data?.threshold ?? 2000 })}</span>
   </div>
 
   <div class="gauge-container">
@@ -70,17 +71,17 @@
   <div class="breakdown">
     <div class="breakdown-row">
       <span class="dot satisfied"></span>
-      <span class="breakdown-label">Soddisfatti</span>
+      <span class="breakdown-label">{t($locale, 'dashboard.apdex.satisfied')}</span>
       <span class="breakdown-value">{data?.satisfied ?? 0}</span>
     </div>
     <div class="breakdown-row">
       <span class="dot tolerating"></span>
-      <span class="breakdown-label">Tollerati</span>
+      <span class="breakdown-label">{t($locale, 'dashboard.apdex.tolerating')}</span>
       <span class="breakdown-value">{data?.tolerating ?? 0}</span>
     </div>
     <div class="breakdown-row">
       <span class="dot frustrated"></span>
-      <span class="breakdown-label">Frustrati</span>
+      <span class="breakdown-label">{t($locale, 'dashboard.apdex.frustrated')}</span>
       <span class="breakdown-value">{data?.frustrated ?? 0}</span>
     </div>
   </div>

@@ -1,6 +1,7 @@
 <script lang="ts">
   import type { ErrorRatePoint } from '../../services/dashboard';
   import InfoTooltip from '../common/InfoTooltip.svelte';
+  import { locale, t } from '../../lib/i18n';
 
   export let data: ErrorRatePoint[] = [];
   export let budgetPercent = 0.1; // 99.9% availability budget
@@ -49,20 +50,20 @@
       Error Budget Burn Rate
       <InfoTooltip text="Consumo del budget errori su finestre brevi/lunghe. >1x significa che stai bruciando budget troppo velocemente." />
     </span>
-    <span class="table-subtitle">Budget: {budgetPercent.toFixed(2)}% errori</span>
+    <span class="table-subtitle">{t($locale, 'dashboard.errorBudget.subtitle', { percent: budgetPercent.toFixed(2) })}</span>
   </div>
 
   <div class="burn-grid">
     <div class={`burn-card ${tone(burn1h)}`}>
-      <span class="label">Burn 1h</span>
+      <span class="label">{t($locale, 'dashboard.errorBudget.burn1h')}</span>
       <span class="value">{burn1h.toFixed(2)}x</span>
-      <span class="rate">Err avg: {rate1h.toFixed(2)}%</span>
+      <span class="rate">{t($locale, 'dashboard.errorBudget.errAvg', { rate: rate1h.toFixed(2) })}</span>
     </div>
 
     <div class={`burn-card ${tone(burn6h)}`}>
-      <span class="label">Burn 6h</span>
+      <span class="label">{t($locale, 'dashboard.errorBudget.burn6h')}</span>
       <span class="value">{burn6h.toFixed(2)}x</span>
-      <span class="rate">Err avg: {rate6h.toFixed(2)}%</span>
+      <span class="rate">{t($locale, 'dashboard.errorBudget.errAvg', { rate: rate6h.toFixed(2) })}</span>
     </div>
   </div>
 </div>

@@ -1,6 +1,7 @@
 <script lang="ts">
   import type { ThroughputSummary } from '../../services/dashboard';
   import InfoTooltip from '../common/InfoTooltip.svelte';
+  import { locale, t } from '../../lib/i18n';
 
   export let data: ThroughputSummary | null = null;
 
@@ -28,18 +29,18 @@
 
   <div class="main-stat">
     <span class="value">{formatNumber(reqPerMin)}</span>
-    <span class="unit">req/min</span>
+    <span class="unit">{t($locale, 'dashboard.throughput.unitReqPerMin')}</span>
   </div>
 
   <div class="secondary-stats">
     <div class="stat">
       <span class="stat-value">{formatNumber(errPerMin)}</span>
-      <span class="stat-label">err/min</span>
+      <span class="stat-label">{t($locale, 'dashboard.throughput.errPerMin')}</span>
     </div>
     <div class="divider"></div>
     <div class="stat">
       <span class="stat-value">{totalReq.toLocaleString()}</span>
-      <span class="stat-label">totale</span>
+      <span class="stat-label">{t($locale, 'dashboard.throughput.total')}</span>
     </div>
   </div>
 </div>

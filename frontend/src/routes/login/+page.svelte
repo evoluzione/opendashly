@@ -1,6 +1,7 @@
 <script lang="ts">
   import { goto } from '$app/navigation';
   import { authState, loginUser } from '../../lib/stores/auth';
+  import { locale, t } from '$lib/i18n';
   let username = '';
   let password = '';
 
@@ -36,7 +37,7 @@
         </div>
         <div class="brand-text">
           <h1>Opendashly</h1>
-          <span>Dashboard</span>
+          <span>{t($locale, 'common.dashboard')}</span>
         </div>
       </div>
       
@@ -50,7 +51,7 @@
           </div>
           <div>
             <strong>Log</strong>
-            <p>Esplora e filtra i log in tempo reale</p>
+            <p>{t($locale, 'login.logExplore')}</p>
           </div>
         </div>
         <div class="feature">
@@ -62,8 +63,8 @@
             </svg>
           </div>
           <div>
-            <strong>Metriche</strong>
-            <p>Visualizza metriche e performance</p>
+            <strong>{t($locale, 'home.metrics')}</strong>
+            <p>{t($locale, 'login.metricsView')}</p>
           </div>
         </div>
         <div class="feature">
@@ -73,8 +74,8 @@
             </svg>
           </div>
           <div>
-            <strong>Tracce</strong>
-            <p>Analizza le tracce distribuite</p>
+            <strong>{t($locale, 'home.traces')}</strong>
+            <p>{t($locale, 'login.tracesAnalyze')}</p>
           </div>
         </div>
       </div>
@@ -84,13 +85,13 @@
   <div class="login-right">
     <div class="card">
       <div class="card-header">
-        <h2>Bentornato</h2>
-        <p>Inserisci le credenziali per accedere</p>
+        <h2>{t($locale, 'login.welcomeBack')}</h2>
+        <p>{t($locale, 'login.enterCredentials')}</p>
       </div>
 
       <div class="form">
         <div class="field">
-          <label for="username">Nome utente</label>
+          <label for="username">{t($locale, 'login.username')}</label>
           <div class="input-wrapper">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
@@ -99,14 +100,14 @@
             <input 
               id="username" 
               bind:value={username} 
-              placeholder="Inserisci il tuo username"
+              placeholder={t($locale, 'login.usernamePlaceholder')}
               on:keydown={handleKeydown}
             />
           </div>
         </div>
         
         <div class="field">
-          <label for="password">Password</label>
+          <label for="password">{t($locale, 'login.password')}</label>
           <div class="input-wrapper">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
@@ -116,7 +117,7 @@
               id="password" 
               type="password" 
               bind:value={password} 
-              placeholder="Inserisci la password"
+              placeholder={t($locale, 'login.passwordPlaceholder')}
               on:keydown={handleKeydown}
             />
           </div>
@@ -136,9 +137,9 @@
         <button class="submit-btn" on:click={submit} disabled={$authState.loading || !username || !password}>
           {#if $authState.loading}
             <span class="spinner"></span>
-            Accesso in corso...
+            {t($locale, 'login.signingIn')}
           {:else}
-            Accedi
+            {t($locale, 'login.signIn')}
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <line x1="5" y1="12" x2="19" y2="12"/>
               <polyline points="12 5 19 12 12 19"/>
@@ -155,6 +156,7 @@
     min-height: 100vh;
     display: grid;
     grid-template-columns: 1fr 1fr;
+    position: relative;
   }
   
   .login-left {
@@ -290,7 +292,7 @@
     box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.1);
     border: 1px solid rgba(15, 23, 42, 0.06);
   }
-  
+
   .card-header {
     text-align: center;
     margin-bottom: 32px;

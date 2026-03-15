@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount } from "svelte";
   import { fetchRelated, fetchTraceSpans, type TraceSpan } from "../services/traces";
+  import { getLocaleTag, locale, t } from "../lib/i18n";
 
   export let traceId: string;
 
@@ -60,7 +61,7 @@
       error =
         spansResult.reason instanceof Error
           ? spansResult.reason.message
-          : "Impossibile caricare gli span";
+          : t($locale, "correlation.loadError");
       loading = false;
       return;
     }
@@ -82,7 +83,7 @@
   function formatTimestamp(value: string | number | Date | undefined) {
     if (!value) return "-";
     const date = value instanceof Date ? value : new Date(value);
-    return new Intl.DateTimeFormat("it-IT", {
+    return new Intl.DateTimeFormat(getLocaleTag($locale), {
       dateStyle: "short",
       timeStyle: "medium",
     }).format(date);
@@ -156,7 +157,7 @@
   }
 
   function spanSource(span: TraceSpan) {
-    return span.source || span.service || "origine sconosciuta";
+    return span.source || span.service || t($locale, "traceTimeline.unknownServiceLower");
   }
 
   function colorForSource(value: string) {
@@ -200,7 +201,7 @@
     if (attrs["exception.type"] || attrs["exception.message"] || attrs["exception.stacktrace"]) {
       exceptions.push({
         type: attrs["exception.type"] || "Unknown",
-        message: attrs["exception.message"] || "Nessun messaggio",
+        message: attrs["exception.message"] || "-",
         stacktrace: attrs["exception.stacktrace"],
         source: "attributes",
       });
@@ -218,7 +219,7 @@
 
       exceptions.push({
         type: eventAttrs["exception.type"] || "Unknown",
-        message: eventAttrs["exception.message"] || "Nessun messaggio",
+        message: eventAttrs["exception.message"] || "-",
         stacktrace: eventAttrs["exception.stacktrace"],
         source: `event:${event.name || "exception"}`,
       });
@@ -344,7 +345,7 @@
 
   function extractIpv4Candidates(value: string): string[] {
     if (!value) return [];
-    const matches = value.match(/\b(?:\d{1,3}\.){3}\d{1,3}\b/g) ?? [];
+    const matches: string[] = value.match(/\b(?:\d{1,3}\.){3}\d{1,3}\b/g) ?? [];
     return matches.filter((ip) => {
       const parts = ip.split(".").map((part) => Number(part));
       return parts.length === 4 && parts.every((part) => Number.isInteger(part) && part >= 0 && part <= 255);
@@ -486,23 +487,23 @@
 
 <section class="timeline">
   <header>
-    <h4>Linea temporale degli span</h4>
-    <p>Durata totale: {Math.round(rangeMs)} ms</p>
+    <h4>{t($locale, "traceTimeline.title")}</h4>
+    <p>{t($locale, "traceTimeline.totalDuration", { ms: Math.round(rangeMs) })}</p>
   </header>
 
   {#if loading}
-    <p class="status">Caricamento span...</p>
+    <p class="status">{t($locale, "traceTimeline.loading")}</p>
   {:else if error}
     <p class="status error">{error}</p>
   {:else if spans.length === 0}
-    <p class="status">Nessuno span disponibile.</p>
+    <p class="status">{t($locale, "traceTimeline.none")}</p>
   {:else}
     <div class="timeline-layout" class:with-details={!!selectedSpan}>
       <div class="span-list">
         <div class="span-header">
-          <span>Span</span>
-          <span>Linea temporale</span>
-          <span>Durata</span>
+          <span>{t($locale, "traceTimeline.spanColumn")}</span>
+          <span>{t($locale, "traceTimeline.timelineColumn")}</span>
+          <span>{t($locale, "traceTimeline.durationColumn")}</span>
         </div>
 
         <div class="span-grid">
@@ -523,7 +524,7 @@
                 <div class="meta-title">
                   <span class="depth-branch" style={`opacity:${row.depth > 0 ? 1 : 0}`}>↳</span>
                   <span class="source-dot" style={`background:${color}`}></span>
-                  <span class="name">{span.name || "Span"}</span>
+                  <span class="name">{span.name || t($locale, "traceTimeline.span")}</span>
                   {#if kind && kind.kind !== "internal"}
                     <span
                       class="kind-badge"
@@ -550,7 +551,7 @@
                   {#if externalIp}
                     <span
                       class="external-ip-badge"
-                      title={`Chiamata verso IP esterno: ${externalIp.ip} (${externalIp.sourceKey})`}
+                      title={t($locale, "traceTimeline.callToExternalIp", { ip: externalIp.ip, source: externalIp.sourceKey })}
                     >
                       <svg class="external-ip-icon" viewBox="0 0 14 14" aria-hidden="true" focusable="false">
                         <path d="M2.5 11.5 11.5 2.5" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
@@ -562,7 +563,7 @@
                   {#if row.parallelSiblingCount > 0}
                     <span
                       class="parallel-badge"
-                      title={`Span parallelo con ${row.parallelSiblingCount} sibling nello stesso ramo`}
+                      title={t($locale, "traceTimeline.parallelSpan", { count: row.parallelSiblingCount })}
                     >
                       <svg class="parallel-icon" viewBox="0 0 14 14" aria-hidden="true" focusable="false">
                         <path d="M4 2v10M10 2v10" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
@@ -572,7 +573,7 @@
                     </span>
                   {/if}
                 </div>
-                <span class="service">{span.service || "servizio sconosciuto"}</span>
+                <span class="service">{span.service || t($locale, "traceTimeline.unknownServiceLower")}</span>
               </div>
 
               <div class="bar-track">
@@ -600,36 +601,36 @@
           <div class="details-header">
             <div class="details-title-row">
               <div>
-                <h5>{selectedSpan.name || "Span senza nome"}</h5>
-                <p>{selectedSpan.service || "Servizio sconosciuto"}</p>
+                <h5>{selectedSpan.name || t($locale, "traceTimeline.unnamedSpan")}</h5>
+                <p>{selectedSpan.service || t($locale, "traceTimeline.unknownService")}</p>
               </div>
               <button
                 type="button"
                 class="details-close"
                 on:click={() => (selectedSpanId = "")}
               >
-                Nascondi dettagli
+                {t($locale, "traceTimeline.hideDetails")}
               </button>
             </div>
           </div>
 
           <div class="details-section">
-            <span class="section-title">Generale</span>
+            <span class="section-title">{t($locale, "traceTimeline.general")}</span>
             <div class="kv-grid">
-              <div class="kv"><span>Trace ID</span><code>{shortId(selectedSpan.traceId)}</code></div>
-              <div class="kv"><span>Span ID</span><code>{shortId(selectedSpan.spanId)}</code></div>
-              <div class="kv"><span>Parent</span><code>{shortId(selectedSpan.parentSpanId)}</code></div>
-              <div class="kv"><span>Source</span><code>{spanSource(selectedSpan)}</code></div>
-              <div class="kv"><span>Status</span><code class:error={isErrorStatus(selectedSpan.status)}>{selectedSpan.status || "UNSET"}</code></div>
-              <div class="kv"><span>Start</span><code>{formatTimestamp(selectedSpan.startTime)}</code></div>
-              <div class="kv"><span>Durata</span><code>{formatDuration(durationMs(selectedSpan))}</code></div>
+              <div class="kv"><span>{t($locale, "logs.traceId")}</span><code>{shortId(selectedSpan.traceId)}</code></div>
+              <div class="kv"><span>{t($locale, "logs.spanId")}</span><code>{shortId(selectedSpan.spanId)}</code></div>
+              <div class="kv"><span>{t($locale, "traceTimeline.parent")}</span><code>{shortId(selectedSpan.parentSpanId)}</code></div>
+              <div class="kv"><span>{t($locale, "traceTimeline.source")}</span><code>{spanSource(selectedSpan)}</code></div>
+              <div class="kv"><span>{t($locale, "traceTimeline.status")}</span><code class:error={isErrorStatus(selectedSpan.status)}>{selectedSpan.status || "UNSET"}</code></div>
+              <div class="kv"><span>{t($locale, "traceTimeline.start")}</span><code>{formatTimestamp(selectedSpan.startTime)}</code></div>
+              <div class="kv"><span>{t($locale, "traceTimeline.duration")}</span><code>{formatDuration(durationMs(selectedSpan))}</code></div>
             </div>
           </div>
 
           <div class="details-section">
             <div class="section-head">
               <span class="section-title-wrap">
-                <span class="section-title">Eccezioni</span>
+                <span class="section-title">{t($locale, "traceTimeline.exceptions")}</span>
                 <span class="section-count" title={`Totale: ${selectedExceptions.length}`}>
                   <span>{selectedExceptions.length}</span>
                 </span>
@@ -640,12 +641,12 @@
                 on:click={() => (showExceptions = !showExceptions)}
                 aria-expanded={showExceptions}
               >
-                {showExceptions ? "Chiudi" : "Espandi"}
+                {showExceptions ? t($locale, "common.close") : t($locale, "traceTimeline.expand")}
               </button>
             </div>
             {#if showExceptions}
               {#if selectedExceptions.length === 0}
-                <p class="empty-section">Nessuna eccezione disponibile.</p>
+                <p class="empty-section">{t($locale, "traceTimeline.noExceptions")}</p>
               {:else}
                 <div class="scroll-block">
                   {#each selectedExceptions as item}
@@ -668,7 +669,7 @@
           <div class="details-section">
             <div class="section-head">
               <span class="section-title-wrap">
-                <span class="section-title">Eventi Span</span>
+                <span class="section-title">{t($locale, "traceTimeline.events")}</span>
                 <span class="section-count" title={`Totale: ${selectedEvents.length}`}>
                   <span>{selectedEvents.length}</span>
                 </span>
@@ -679,12 +680,12 @@
                 on:click={() => (showSpanEvents = !showSpanEvents)}
                 aria-expanded={showSpanEvents}
               >
-                {showSpanEvents ? "Chiudi" : "Espandi"}
+                {showSpanEvents ? t($locale, "common.close") : t($locale, "traceTimeline.expand")}
               </button>
             </div>
             {#if showSpanEvents}
               {#if selectedEvents.length === 0}
-                <p class="empty-section">Nessun evento disponibile nello span.</p>
+                <p class="empty-section">{t($locale, "traceTimeline.noEvents")}</p>
               {:else}
                 <div class="scroll-block">
                   {#each selectedEvents as event}
@@ -713,7 +714,7 @@
           <div class="details-section">
             <div class="section-head">
               <span class="section-title-wrap">
-                <span class="section-title">Logs</span>
+                <span class="section-title">{t($locale, "traceTimeline.logs")}</span>
                 <span class="section-count" title={`Totale: ${selectedSpanLogs.length}`}>
                   <span>{selectedSpanLogs.length}</span>
                 </span>
@@ -724,12 +725,12 @@
                 on:click={() => (showRelatedEvents = !showRelatedEvents)}
                 aria-expanded={showRelatedEvents}
               >
-                {showRelatedEvents ? "Chiudi" : "Espandi"}
+                {showRelatedEvents ? t($locale, "common.close") : t($locale, "traceTimeline.expand")}
               </button>
             </div>
             {#if showRelatedEvents}
               {#if selectedSpanLogs.length === 0}
-                <p class="empty-section">Nessun log correlato trovato con questo span ID.</p>
+                <p class="empty-section">{t($locale, "traceTimeline.noLogs")}</p>
               {:else}
                 <div class="scroll-block">
                   {#each selectedSpanLogs as log}
@@ -747,9 +748,9 @@
           </div>
 
           <div class="details-section">
-            <span class="section-title">Attributi</span>
+            <span class="section-title">{t($locale, "traceTimeline.attributes")}</span>
             {#if !selectedSpan.attributes || Object.keys(selectedSpan.attributes).length === 0}
-              <p class="empty-section">Nessun attributo disponibile.</p>
+              <p class="empty-section">{t($locale, "traceTimeline.noAttributes")}</p>
             {:else}
               <div class="scroll-block attributes-scroll">
                 {#each Object.entries(selectedSpan.attributes) as [key, value]}

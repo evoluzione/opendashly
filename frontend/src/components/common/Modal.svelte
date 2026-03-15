@@ -1,6 +1,7 @@
 <script lang="ts">
     import { createEventDispatcher } from "svelte";
     import { fade, scale } from "svelte/transition";
+    import { locale, t } from "../../lib/i18n";
 
     export let open = false;
     export let title = "";
@@ -57,7 +58,7 @@
                     </div>
                     <h3>{title}</h3>
                 </div>
-                <button class="close-btn" on:click={close} aria-label="Chiudi">
+                <button class="close-btn" on:click={close} aria-label={t($locale, "common.close")}>
                     <svg
                         xmlns="http://www.w3.org/2000/svg"
                         width="20"

@@ -1,6 +1,7 @@
 <script lang="ts">
   import type { EndpointLatency } from "../../services/dashboard";
   import InfoTooltip from "../common/InfoTooltip.svelte";
+  import { locale, t, getLocaleTag } from '../../lib/i18n';
 
   export let data: EndpointLatency[] = [];
 
@@ -20,27 +21,27 @@
 <div class="table-card">
   <div class="table-header">
     <span class="table-title">
-      Endpoint Piu Lenti
+      {t($locale, 'dashboard.slowestEndpoints.title')}
       <InfoTooltip
-        text="Endpoint ordinati per P95 (95° percentile). Il P95 indica che il 95% delle richieste è più veloce di questo valore. Utile per identificare colli di bottiglia."
+        text={t($locale, 'dashboard.slowestEndpoints.tooltip')}
       />
     </span>
-    <span class="table-subtitle">Top 10 per P95</span>
+    <span class="table-subtitle">{t($locale, 'dashboard.slowestEndpoints.subtitle')}</span>
   </div>
 
   {#if data.length === 0}
-    <div class="empty">Nessun dato disponibile</div>
+    <div class="empty">{t($locale, 'dashboard.noData')}</div>
   {:else}
     <div class="table-wrapper">
       <table>
         <thead>
           <tr>
-            <th class="col-endpoint">Endpoint</th>
-            <th class="col-service">Servizio</th>
+            <th class="col-endpoint">{t($locale, 'dashboard.table.endpoint')}</th>
+            <th class="col-service">{t($locale, 'dashboard.table.service')}</th>
             <th class="col-latency">P50</th>
             <th class="col-latency">P95</th>
             <th class="col-latency">P99</th>
-            <th class="col-count">Count</th>
+            <th class="col-count">{t($locale, 'dashboard.table.count')}</th>
           </tr>
         </thead>
         <tbody>
@@ -78,7 +79,7 @@
                   {formatMs(row.p99)}
                 </span>
               </td>
-              <td class="col-count">{row.count.toLocaleString()}</td>
+              <td class="col-count">{row.count.toLocaleString(getLocaleTag($locale))}</td>
             </tr>
           {/each}
         </tbody>

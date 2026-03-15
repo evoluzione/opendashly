@@ -1,5 +1,6 @@
 <script lang="ts">
     import { servicesState, selectLogLevel } from "../lib/stores/query";
+    import { locale, t } from "../lib/i18n";
 
     const levels = [
         "Tutti",
@@ -56,7 +57,7 @@
 </script>
 
 <div class="loglevel-dropdown">
-    <label for="level-select">Livello</label>
+    <label for="level-select">{t($locale, "logLevel.label")}</label>
     <div class="select-wrapper">
         <select id="level-select" on:change={handleChange}>
             {#each levels as level}

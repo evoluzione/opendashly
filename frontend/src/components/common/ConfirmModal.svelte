@@ -1,12 +1,13 @@
 <script lang="ts">
   import { createEventDispatcher } from "svelte";
   import { fade, scale } from "svelte/transition";
+  import { locale, t } from "../../lib/i18n";
 
   export let open = false;
-  export let title = "Conferma";
+  export let title = "";
   export let message = "";
-  export let confirmLabel = "Conferma";
-  export let cancelLabel = "Annulla";
+  export let confirmLabel = "";
+  export let cancelLabel = "";
   export let variant: "danger" | "warning" | "info" = "warning";
 
   const dispatch = createEventDispatcher();
@@ -42,6 +43,9 @@
   };
 
   $: style = variantStyles[variant] || variantStyles.warning;
+  $: resolvedTitle = title || t($locale, "assistant.resetConversationTitle");
+  $: resolvedConfirmLabel = confirmLabel || t($locale, "common.apply");
+  $: resolvedCancelLabel = cancelLabel || t($locale, "common.cancel");
 </script>
 
 {#if open}
@@ -49,7 +53,7 @@
     class="modal-backdrop"
     role="button"
     tabindex="0"
-    aria-label={title}
+    aria-label={resolvedTitle}
     on:click|self={cancel}
     on:keydown={handleBackdropKeydown}
     transition:fade={{ duration: 200 }}
@@ -115,13 +119,13 @@
               </svg>
             {/if}
           </div>
-          <h3>{title}</h3>
+          <h3>{resolvedTitle}</h3>
         </div>
         <button
           type="button"
           class="close-btn"
           on:click={cancel}
-          aria-label="Chiudi"
+          aria-label={t($locale, "common.close")}
         >
           <svg
             xmlns="http://www.w3.org/2000/svg"
@@ -144,10 +148,10 @@
       </div>
       <div class="actions">
         <button type="button" class="secondary" on:click={cancel}>
-          {cancelLabel}
+          {resolvedCancelLabel}
         </button>
         <button type="button" class="primary {variant}" on:click={confirm}>
-          {confirmLabel}
+          {resolvedConfirmLabel}
         </button>
       </div>
     </div>

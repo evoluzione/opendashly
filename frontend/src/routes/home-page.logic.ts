@@ -1,4 +1,5 @@
 import type { QueryRequest, QueryRunResult } from '../services/query';
+import { t, type Locale, getLocaleTag } from '../lib/i18n';
 
 export type DashboardTab = 'logs' | 'metriche' | 'tracce';
 
@@ -13,20 +14,22 @@ export type DashboardRangePreset =
   | 'all'
   | 'custom';
 
-export const dashboardTimeRangeOptions: Array<{
+export function getDashboardTimeRangeOptions(locale: Locale): Array<{
   value: DashboardRangePreset;
   label: string;
-}> = [
-  { value: '5m', label: 'Ultimi 5 minuti' },
-  { value: '15m', label: 'Ultimi 15 minuti' },
-  { value: '30m', label: 'Ultimi 30 minuti' },
-  { value: '1h', label: 'Ultima ora' },
-  { value: '6h', label: 'Ultime 6 ore' },
-  { value: '24h', label: 'Ultime 24 ore' },
-  { value: '7d', label: 'Ultimi 7 giorni' },
-  { value: 'all', label: 'Tutto' },
-  { value: 'custom', label: 'Personalizzato' }
-];
+}> {
+  return [
+    { value: '5m', label: t(locale, 'range.last5m') },
+    { value: '15m', label: t(locale, 'range.last15m') },
+    { value: '30m', label: t(locale, 'range.last30m') },
+    { value: '1h', label: t(locale, 'range.last1h') },
+    { value: '6h', label: t(locale, 'range.last6h') },
+    { value: '24h', label: t(locale, 'range.last24h') },
+    { value: '7d', label: t(locale, 'range.last7d') },
+    { value: 'all', label: t(locale, 'range.all') },
+    { value: 'custom', label: t(locale, 'range.custom') }
+  ];
+}
 
 const dashboardPresetMinutes: Record<Exclude<DashboardRangePreset, 'custom'>, number | null> = {
   '5m': 5,
@@ -76,10 +79,12 @@ export function buildDashboardRequest(args: {
   rangePreset: DashboardRangePreset;
   fromInput: string;
   toInput: string;
+  locale?: Locale;
 }): {
   request: { from?: string; to?: string; serviceName?: string };
   error: string | null;
 } {
+  const activeLocale = args.locale ?? 'it';
   const request: { from?: string; to?: string; serviceName?: string } = {};
 
   if (args.selectedService) {
@@ -93,14 +98,14 @@ export function buildDashboardRequest(args: {
     if (!fromIso || !toIso) {
       return {
         request,
-        error: 'Inserisci una data/ora valida per inizio e fine.'
+        error: t(activeLocale, 'range.errorInvalidDate')
       };
     }
 
     if (new Date(toIso).getTime() <= new Date(fromIso).getTime()) {
       return {
         request,
-        error: "La data/ora di fine deve essere successiva all'inizio."
+        error: t(activeLocale, 'range.errorEndBeforeStart')
       };
     }
 
@@ -123,9 +128,9 @@ export function buildDashboardRequest(args: {
   return { request, error: null };
 }
 
-export function formatLastRefresh(date: Date | null): string {
+export function formatLastRefresh(date: Date | null, locale: Locale): string {
   if (!date) return '--';
-  return date.toLocaleTimeString('it-IT', {
+  return date.toLocaleTimeString(getLocaleTag(locale), {
     hour: '2-digit',
     minute: '2-digit',
     second: '2-digit'

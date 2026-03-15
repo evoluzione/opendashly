@@ -1,6 +1,7 @@
 <script lang="ts">
   import type { LogLevelCount } from '../../services/dashboard';
   import InfoTooltip from '../common/InfoTooltip.svelte';
+  import { locale, t, getLocaleTag } from '../../lib/i18n';
 
   export let data: LogLevelCount[] = [];
 
@@ -23,13 +24,13 @@
   <div class="table-header">
     <span class="table-title">
       Livelli Log
-      <InfoTooltip text="Distribuzione dei log per livello (ERROR/WARN/INFO/DEBUG/TRACE)." />
+      <InfoTooltip text={t($locale, 'dashboard.logLevels.tooltip')} />
     </span>
-    <span class="table-subtitle">Qualita e severita del rumore applicativo</span>
+    <span class="table-subtitle">{t($locale, 'dashboard.logLevels.subtitle')}</span>
   </div>
 
   {#if data.length === 0}
-    <div class="empty">Nessun dato disponibile</div>
+    <div class="empty">{t($locale, 'dashboard.noData')}</div>
   {:else}
     <div class="breakdown">
       {#each data as row}
@@ -42,7 +43,7 @@
             <span class="bar" style="width: {Math.min(row.percentage, 100)}%; background: {colorFor(row.level)}"></span>
           </div>
           <div class="breakdown-value">
-            <span>{row.count.toLocaleString()}</span>
+            <span>{row.count.toLocaleString(getLocaleTag($locale))}</span>
             <span class="pct">{row.percentage.toFixed(1)}%</span>
           </div>
         </div>

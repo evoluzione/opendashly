@@ -1,6 +1,7 @@
 <script lang="ts">
   import type { ErrorHotspot } from '../../services/dashboard';
   import InfoTooltip from '../common/InfoTooltip.svelte';
+  import { locale, t, getLocaleTag } from '../../lib/i18n';
 
   export let data: ErrorHotspot[] = [];
 
@@ -15,24 +16,24 @@
 <div class="table-card">
   <div class="table-header">
     <span class="table-title">
-      Hotspot Errori
-      <InfoTooltip text="Endpoint con il più alto tasso di errore. Mostra quali API generano più problemi e richiedono attenzione prioritaria." />
+      {t($locale, 'dashboard.errorHotspots.title')}
+      <InfoTooltip text={t($locale, 'dashboard.errorHotspots.tooltip')} />
     </span>
-    <span class="table-subtitle">Top 10 per error rate</span>
+    <span class="table-subtitle">{t($locale, 'dashboard.errorHotspots.subtitle')}</span>
   </div>
 
   {#if data.length === 0}
-    <div class="empty">Nessun errore rilevato</div>
+    <div class="empty">{t($locale, 'dashboard.errorHotspots.none')}</div>
   {:else}
     <div class="table-wrapper">
       <table>
         <thead>
           <tr>
-            <th class="col-endpoint">Endpoint</th>
-            <th class="col-service">Servizio</th>
-            <th class="col-count">Errori</th>
-            <th class="col-count">Totale</th>
-            <th class="col-rate">Error Rate</th>
+            <th class="col-endpoint">{t($locale, 'dashboard.table.endpoint')}</th>
+            <th class="col-service">{t($locale, 'dashboard.table.service')}</th>
+            <th class="col-count">{t($locale, 'dashboard.table.errors')}</th>
+            <th class="col-count">{t($locale, 'dashboard.table.total')}</th>
+            <th class="col-rate">{t($locale, 'dashboard.table.errorRate')}</th>
           </tr>
         </thead>
         <tbody>
@@ -44,8 +45,8 @@
               <td class="col-service">
                 <span class="service-badge">{row.service}</span>
               </td>
-              <td class="col-count error-count">{row.errorCount.toLocaleString()}</td>
-              <td class="col-count">{row.totalCount.toLocaleString()}</td>
+              <td class="col-count error-count">{row.errorCount.toLocaleString(getLocaleTag($locale))}</td>
+              <td class="col-count">{row.totalCount.toLocaleString(getLocaleTag($locale))}</td>
               <td class="col-rate">
                 <div class="rate-cell">
                   <div class="rate-bar-bg">

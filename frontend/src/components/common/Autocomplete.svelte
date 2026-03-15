@@ -1,5 +1,6 @@
 <script lang="ts">
     import { createEventDispatcher } from "svelte";
+    import { locale, t } from "../../lib/i18n";
 
     export let value = "";
     export let placeholder = "";
@@ -113,7 +114,7 @@
     {#if showOptions && (options.length > 0 || loading)}
         <ul class="options">
             {#if loading}
-                <li class="loading">Caricamento...</li>
+                <li class="loading">{t($locale, "autocomplete.loading")}</li>
             {:else}
                 {#each options as option, i}
                     <li class="option-item">

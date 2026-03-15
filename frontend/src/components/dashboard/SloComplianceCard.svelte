@@ -1,6 +1,7 @@
 <script lang="ts">
   import type { LatencyPercentilePoint } from '../../services/dashboard';
   import InfoTooltip from '../common/InfoTooltip.svelte';
+  import { locale, t } from '../../lib/i18n';
 
   export let data: LatencyPercentilePoint[] = [];
   export let targetMs = 500;
@@ -21,10 +22,10 @@
   $: tail = samples.slice(-20);
 
   function statusLabel(value: number): string {
-    if (value >= 99) return 'Ottimo';
-    if (value >= 95) return 'Buono';
-    if (value >= 90) return 'Attenzione';
-    return 'Critico';
+    if (value >= 99) return t($locale, 'dashboard.slo.excellent');
+    if (value >= 95) return t($locale, 'dashboard.slo.good');
+    if (value >= 90) return t($locale, 'dashboard.slo.warn');
+    return t($locale, 'dashboard.slo.critical');
   }
 
   function statusColor(value: number): string {
@@ -41,18 +42,18 @@
       SLO Compliance
       <InfoTooltip text="Percentuale finestre in cui il P95 e entro la soglia target." />
     </span>
-    <span class="table-subtitle">Target P95 &lt;= {targetMs}ms</span>
+    <span class="table-subtitle">{t($locale, 'dashboard.slo.subtitle', { target: targetMs })}</span>
   </div>
 
   {#if total === 0}
-    <div class="empty">Nessun dato disponibile</div>
+    <div class="empty">{t($locale, 'dashboard.noData')}</div>
   {:else}
     <div class="slo-main">
       <div class="score" style={`color:${statusColor(compliancePct)}`}>{compliancePct.toFixed(1)}%</div>
       <div class="meta">
         <span>{statusLabel(compliancePct)}</span>
-        <span>{compliant}/{total} finestre conformi</span>
-        <span>P95 attuale: {latestP95.toFixed(0)}ms</span>
+        <span>{t($locale, 'dashboard.slo.compliantWindows', { compliant, total })}</span>
+        <span>{t($locale, 'dashboard.slo.currentP95', { value: latestP95.toFixed(0) })}</span>
       </div>
     </div>
 

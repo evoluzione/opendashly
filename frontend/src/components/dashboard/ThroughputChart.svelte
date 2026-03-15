@@ -4,6 +4,7 @@
   import 'uplot/dist/uPlot.min.css';
   import type { ThroughputPoint } from '../../services/dashboard';
   import InfoTooltip from '../common/InfoTooltip.svelte';
+  import { locale, t } from '../../lib/i18n';
 
   export let data: ThroughputPoint[] = [];
 
@@ -124,7 +125,7 @@
           show: true
         }
       },
-      chartData,
+      chartData as uPlot.AlignedData,
       chartEl
     );
 
@@ -135,7 +136,7 @@
         canvas.style.width = '100%';
         canvas.style.height = '100%';
       });
-      chart?.setData(chartData);
+      chart?.setData(chartData as uPlot.AlignedData);
     });
   }
 
@@ -199,11 +200,11 @@
       Throughput nel Tempo
       <InfoTooltip text="Andamento delle richieste e degli errori nel tempo. Utile per identificare picchi di carico e correlazioni tra traffico ed errori." />
     </span>
-    <span class="chart-subtitle">Richieste ed errori nel tempo</span>
+    <span class="chart-subtitle">{t($locale, 'dashboard.throughput.subtitle')}</span>
   </div>
 
   {#if data.length === 0}
-    <div class="empty">Nessun dato disponibile</div>
+    <div class="empty">{t($locale, 'dashboard.noData')}</div>
   {/if}
   <div class="chart-container" class:hidden={data.length === 0} bind:this={chartEl}></div>
 </div>

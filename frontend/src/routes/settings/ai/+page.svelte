@@ -2,6 +2,7 @@
   import { onMount } from 'svelte';
   import { getAISettings, updateAISettings } from '../../../services/settings';
   import type { AISettings } from '../../../services/settings';
+  import { locale, t } from '$lib/i18n';
 
   let settings: AISettings | null = null;
   let loading = true;
@@ -36,7 +37,7 @@
         apiKey = '';
       }
     } catch (err) {
-      error = 'Impossibile caricare le impostazioni AI.';
+      error = t($locale, 'aiSettings.loadError');
     } finally {
       loading = false;
     }
@@ -55,9 +56,9 @@
       });
       settings = updated;
       apiKey = '';
-      successMessage = 'Impostazioni salvate con successo.';
+      successMessage = t($locale, 'aiSettings.saveSuccess');
     } catch (err) {
-      error = 'Errore durante il salvataggio.';
+      error = t($locale, 'aiSettings.saveError');
     } finally {
       saving = false;
     }
@@ -66,42 +67,42 @@
 
 <div class="settings-page">
   <header>
-    <h1>Impostazioni Intelligenza Artificiale</h1>
-    <p class="subtitle">Configura l'agente AI per la ricerca smart e altre funzionalità.</p>
+    <h1>{t($locale, 'aiSettings.title')}</h1>
+    <p class="subtitle">{t($locale, 'aiSettings.subtitle')}</p>
   </header>
 
   {#if loading}
-    <div class="loading">Caricamento...</div>
+    <div class="loading">{t($locale, 'common.loading')}</div>
   {:else}
     <form on:submit|preventDefault={save} class="settings-form">
       
       <div class="field-group">
         <label class="toggle-label">
           <input type="checkbox" bind:checked={enabled} />
-          <span class="toggle-text">Abilita Smart Search</span>
+          <span class="toggle-text">{t($locale, 'aiSettings.enableSmartSearch')}</span>
         </label>
-        <p class="helper">Attiva le funzionalità AI in tutta la piattaforma.</p>
+        <p class="helper">{t($locale, 'aiSettings.enableSmartSearchHelp')}</p>
       </div>
 
       <div class="field-group">
-        <label for="provider">Provider</label>
+        <label for="provider">{t($locale, 'aiSettings.provider')}</label>
         <select id="provider" bind:value={provider} disabled>
           <option value="openai">OpenAI</option>
         </select>
       </div>
 
       <div class="field-group">
-        <label for="model">Modello</label>
+        <label for="model">{t($locale, 'aiSettings.model')}</label>
         <select id="model" bind:value={model}>
           {#each models as m}
             <option value={m.value}>{m.label}</option>
           {/each}
         </select>
-        <p class="helper">Seleziona il modello da utilizzare per la generazione delle query.</p>
+        <p class="helper">{t($locale, 'aiSettings.modelHelp')}</p>
       </div>
 
       <div class="field-group">
-        <label for="apikey">API Key OpenAI</label>
+        <label for="apikey">{t($locale, 'aiSettings.apiKey')}</label>
         <input 
             type="password" 
             id="apikey" 
@@ -110,9 +111,9 @@
         />
         <p class="helper">
             {#if settings?.apiKey && apiKey.trim() === ''}
-                Chiave salvata (mascherata). Modifica per aggiornare.
+            {t($locale, 'aiSettings.apiKeySavedHint')}
             {:else}
-                Inserisci la tua chiave API di OpenAI.
+            {t($locale, 'aiSettings.apiKeyHelp')}
             {/if}
         </p>
       </div>
@@ -127,7 +128,7 @@
 
       <div class="actions">
         <button type="submit" disabled={saving}>
-          {saving ? 'Salvataggio...' : 'Salva Impostazioni'}
+          {saving ? t($locale, 'aiSettings.saving') : t($locale, 'aiSettings.save')}
         </button>
       </div>
     </form>
@@ -136,17 +137,15 @@
 
 <style>
   .settings-page {
-    max-width: 800px;
-    margin: 0 auto;
-    padding: 24px;
+    width: 100%;
   }
 
   header {
-    margin-bottom: 32px;
+    margin-bottom: 20px;
   }
 
   h1 {
-    font-size: 24px;
+    font-size: 22px;
     font-weight: 700;
     color: #0f172a;
     margin: 0 0 8px 0;
@@ -154,7 +153,8 @@
 
   .subtitle {
     color: #64748b;
-    margin: 0;
+    margin: 6px 0 0;
+    font-size: 14px;
   }
 
   .settings-form {

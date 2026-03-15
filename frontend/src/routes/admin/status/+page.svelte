@@ -7,6 +7,7 @@
     type TelemetryCounts,
     type RuntimeSummary,
   } from "../../../services/status";
+  import { getLocaleTag, locale, t } from "../../../lib/i18n";
 
   let summary: StatusSummary | null = null;
   let runtimeSummary: RuntimeSummary | null = null;
@@ -16,15 +17,6 @@
   let statusRefreshSpinning = false;
   let statusRefreshToken = 0;
 
-  const numberFormat = new Intl.NumberFormat("it-IT");
-  const compactFormat = new Intl.NumberFormat("it-IT", {
-    notation: "compact",
-    maximumFractionDigits: 1,
-  });
-  const percentFormat = new Intl.NumberFormat("it-IT", {
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 1,
-  });
   const STATUS_REFRESH_MIN_SPIN_MS = 700;
 
   type SignalKey = "logs" | "traces" | "metrics";
@@ -51,13 +43,10 @@
     detail: string;
   };
 
-  const signalConfig: Record<
-    SignalKey,
-    { label: string; color: string; tint: string }
-  > = {
-    logs: { label: "Log", color: "#2563eb", tint: "#dbeafe" },
-    traces: { label: "Tracce", color: "#14b8a6", tint: "#ccfbf1" },
-    metrics: { label: "Metriche", color: "#f59e0b", tint: "#fef3c7" },
+  const signalConfig: Record<SignalKey, { color: string; tint: string }> = {
+    logs: { color: "#2563eb", tint: "#dbeafe" },
+    traces: { color: "#14b8a6", tint: "#ccfbf1" },
+    metrics: { color: "#f59e0b", tint: "#fef3c7" },
   };
 
   let rows: SignalSeries[] = [];
@@ -123,17 +112,23 @@
 
   function formatCount(value: number | undefined) {
     if (value === undefined || value === null) return "-";
-    return numberFormat.format(value);
+    return new Intl.NumberFormat(getLocaleTag($locale)).format(value);
   }
 
   function formatCompact(value: number | undefined) {
     if (value === undefined || value === null) return "-";
-    return compactFormat.format(value);
+    return new Intl.NumberFormat(getLocaleTag($locale), {
+      notation: "compact",
+      maximumFractionDigits: 1,
+    }).format(value);
   }
 
   function formatPercent(value: number | undefined) {
     if (value === undefined || value === null || Number.isNaN(value)) return "-";
-    return `${percentFormat.format(value)}%`;
+    return `${new Intl.NumberFormat(getLocaleTag($locale), {
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 1,
+    }).format(value)}%`;
   }
 
   function formatBytes(value: number | undefined) {
@@ -167,7 +162,7 @@
 
   function formatLastUpdated(date: Date | null): string {
     if (!date) return "";
-    return date.toLocaleTimeString("it-IT", {
+    return date.toLocaleTimeString(getLocaleTag($locale), {
       hour: "2-digit",
       minute: "2-digit",
       second: "2-digit",
@@ -190,16 +185,16 @@
   } {
     if (!value) {
       return {
-        label: "In attesa",
+        label: t($locale, "status.healthPending"),
         tone: "warn",
-        reason: "Nessun dato ancora caricato",
+        reason: t($locale, "status.healthPendingReason"),
       };
     }
     if (!value.checks.database || !value.ok) {
       return {
-        label: "Critico",
+        label: t($locale, "status.healthCritical"),
         tone: "error",
-        reason: value.error || "Problemi nel controllo database",
+        reason: value.error || t($locale, "status.healthCriticalReason"),
       };
     }
     const inactiveSignals = seriesRows.filter(
@@ -207,16 +202,16 @@
     ).length;
     if (seriesRows.length > 0 && inactiveSignals === seriesRows.length) {
       return {
-        label: "Inattivo",
+        label: t($locale, "status.healthInactive"),
         tone: "warn",
-        reason: "Nessun segnale riceve dati recenti",
+        reason: t($locale, "status.healthInactiveRecent"),
       };
     }
     if (seriesRows.some((row) => row.trend15m !== null && row.trend15m <= -45)) {
       return {
-        label: "Degradato",
+        label: t($locale, "status.healthDegraded"),
         tone: "warn",
-        reason: "Calo significativo nel volume negli ultimi 15 minuti",
+        reason: t($locale, "status.healthDegradedReason"),
       };
     }
     const recentTotal =
@@ -225,20 +220,20 @@
       value.counts.metrics.last60m;
     if (recentTotal === 0) {
       return {
-        label: "Inattivo",
+        label: t($locale, "status.healthInactive"),
         tone: "warn",
-        reason: "Nessun segnale recente negli ultimi 60 minuti",
+        reason: t($locale, "status.healthInactive60m"),
       };
     }
     return {
-      label: "Operativo",
+      label: t($locale, "status.healthOperational"),
       tone: "ok",
-      reason: "Sistema e raccolta telemetria regolari",
+      reason: t($locale, "status.healthOperationalReason"),
     };
   }
 
   function formatTrend(value: number | null) {
-    if (value === null) return "n/d";
+    if (value === null) return t($locale, "status.na");
     const rounded = Math.round(value);
     if (rounded > 0) return `+${rounded}%`;
     return `${rounded}%`;
@@ -288,6 +283,11 @@
       { key: "traces", data: value.counts.traces },
       { key: "metrics", data: value.counts.metrics },
     ];
+    const labels: Record<SignalKey, string> = {
+      logs: t($locale, "sidebar.logs"),
+      traces: t($locale, "sidebar.traces"),
+      metrics: t($locale, "sidebar.metrics"),
+    };
     return base.map(({ key, data }) => {
       const cfg = signalConfig[key];
       const points = buildPoints(data);
@@ -300,7 +300,7 @@
       const trend15m = computeTrend(recent15m, previous15m);
       return {
         key,
-        label: cfg.label,
+        label: labels[key],
         color: cfg.color,
         tint: cfg.tint,
         data,
@@ -368,7 +368,7 @@
 
   function bucketLabel(index: number, count: number): string {
     const minutesAgo = Math.max(0, (count - 1 - index) * 5);
-    return minutesAgo === 0 ? "ora" : `-${minutesAgo}m`;
+    return minutesAgo === 0 ? t($locale, "status.now") : `-${minutesAgo}m`;
   }
 
   function handleTimelineMove(event: MouseEvent) {
@@ -392,20 +392,26 @@
       if (row.freshnessMinutes >= 15) {
         list.push({
           tone: "error",
-          label: `${row.label} fermo`,
-          detail: `Nessun evento da ${row.freshnessMinutes} minuti`,
+          label: t($locale, "status.insightStopped", { label: row.label }),
+          detail: t($locale, "status.insightStoppedDetail", {
+            minutes: row.freshnessMinutes,
+          }),
         });
       } else if (row.trend15m !== null && row.trend15m <= -40) {
         list.push({
           tone: "warn",
-          label: `${row.label} in calo`,
-          detail: `${formatTrend(row.trend15m)} negli ultimi 15 minuti`,
+          label: t($locale, "status.insightDropping", { label: row.label }),
+          detail: t($locale, "status.insightTrendDetail", {
+            trend: formatTrend(row.trend15m),
+          }),
         });
       } else if (row.trend15m !== null && row.trend15m >= 35) {
         list.push({
           tone: "ok",
-          label: `${row.label} in crescita`,
-          detail: `${formatTrend(row.trend15m)} negli ultimi 15 minuti`,
+          label: t($locale, "status.insightGrowing", { label: row.label }),
+          detail: t($locale, "status.insightTrendDetail", {
+            trend: formatTrend(row.trend15m),
+          }),
         });
       }
     }
@@ -413,8 +419,8 @@
     if (list.length === 0) {
       list.push({
         tone: currentHealth.tone,
-        label: "Flusso stabile",
-        detail: "Nessun segnale di degrado rilevato nella finestra di 60 minuti",
+        label: t($locale, "status.insightStable"),
+        detail: t($locale, "status.insightStableDetail"),
       });
     }
 
@@ -450,7 +456,7 @@
     } catch (err) {
       summary = null;
       runtimeSummary = null;
-      error = err instanceof Error ? err.message : "Errore sconosciuto";
+      error = err instanceof Error ? err.message : t($locale, "status.unknownError");
     } finally {
       const elapsed = Date.now() - spinStartedAt;
       const remaining = STATUS_REFRESH_MIN_SPIN_MS - elapsed;
@@ -472,12 +478,12 @@
 <section class="status-page">
   <header class="status-header">
     <div>
-      <h1>Monitor sistema</h1>
-      <p>Controllo stato servizi e volumi telemetrici.</p>
+      <h1>{t($locale, "status.title")}</h1>
+      <p>{t($locale, "status.subtitle")}</p>
     </div>
     <div class="status-actions">
       {#if lastUpdated}
-        <span class="last-updated">Ultimo aggiornamento: {formatLastUpdated(lastUpdated)}</span>
+        <span class="last-updated">{t($locale, "status.lastRefresh", { time: formatLastUpdated(lastUpdated) })}</span>
       {/if}
       <button type="button" class="refresh-btn" on:click={loadStatus} disabled={loading}>
         <svg
@@ -495,7 +501,7 @@
           <polyline points="1 20 1 14 7 14"></polyline>
           <path d="M3.51 9a9 9 0 0 1 14.14-3.36L23 10M1 14l5.35 4.36A9 9 0 0 0 20.49 15"></path>
         </svg>
-        Aggiorna
+        {t($locale, "status.refresh")}
       </button>
     </div>
   </header>
@@ -506,25 +512,25 @@
 
   <section class="health-strip">
     <article class={`health-card ${health.tone}`}>
-      <span class="health-kicker">Salute applicazione</span>
+      <span class="health-kicker">{t($locale, "status.healthKicker")}</span>
       <strong>{health.label}</strong>
       <p>{health.reason}</p>
     </article>
 
     <article class="mini-card">
-      <span>Ingestione attuale (5m)</span>
+      <span>{t($locale, "status.ingestionNow")}</span>
       <strong>{summary ? formatCompact(latestTotal) : "-"}</strong>
     </article>
 
     <article class="mini-card">
-      <span>Trend 15m</span>
+      <span>{t($locale, "status.trend15m")}</span>
       <strong class={"trend " + ((overallTrend15m !== null && overallTrend15m < 0) ? "down" : "up")}>
         {summary ? formatTrend(overallTrend15m) : "-"}
       </strong>
     </article>
 
     <article class="mini-card">
-      <span>Segnali silenziosi</span>
+      <span>{t($locale, "status.quietSignals")}</span>
       <strong>{summary ? quietSignals : "-"}</strong>
     </article>
   </section>
@@ -533,10 +539,10 @@
     <article class="timeline-card">
       <header class="timeline-header">
         <div>
-          <h2>Timeline ingestione (ultimi 60m)</h2>
-          <p>Confronto tra Log, Tracce e Metriche per bucket da 5 minuti.</p>
+          <h2>{t($locale, "status.timelineTitle")}</h2>
+          <p>{t($locale, "status.timelineSubtitle")}</p>
         </div>
-        <div class="timeline-legend" role="list" aria-label="Legenda segnali">
+        <div class="timeline-legend" role="list" aria-label={t($locale, "status.legendAria")}>
           {#each rows as row}
             <span role="listitem" class="legend-item">
               <span class="dot" style={`--dot:${row.color}`}></span>{row.label}
@@ -545,7 +551,7 @@
         </div>
       </header>
 
-      <div class="timeline-chart" aria-label="Andamento ingestione ultimi 60 minuti">
+      <div class="timeline-chart" aria-label={t($locale, "status.timelineAria")}>
         <svg
           viewBox={`0 0 ${timelineWidth} ${timelineSvgHeight}`}
           preserveAspectRatio="xMidYMid meet"
@@ -553,7 +559,7 @@
           on:mousemove={handleTimelineMove}
           on:mouseleave={clearTimelineHover}
         >
-          <text x="8" y="14" class="unit-label">eventi / 5m</text>
+          <text x="8" y="14" class="unit-label">{t($locale, "status.eventsPer5m")}</text>
           {#each yTicks as tick}
             <line x1="0" y1={tick.y} x2={timelineWidth} y2={tick.y} class={tick.value === 0 ? "axis" : "grid"}></line>
             <text x="8" y={tick.y - 6} class="tick-label">{formatCompact(tick.value)}</text>
@@ -596,7 +602,7 @@
           <span>-25m</span>
           <span>-15m</span>
           <span>-5m</span>
-          <span>ora</span>
+          <span>{t($locale, "status.now")}</span>
         </div>
       </div>
     </article>
@@ -604,23 +610,26 @@
     <div class="status-grid">
       <article class="heatmap-card">
         <header>
-          <h3>Buchi di telemetria</h3>
-          <p>Intensita per bucket (5 minuti). Celle chiare = segnale debole o assente.</p>
+          <h3>{t($locale, "status.telemetryGapsTitle")}</h3>
+          <p>{t($locale, "status.telemetryGapsSubtitle")}</p>
         </header>
         <div class="heatmap">
           {#each rows as row}
             <div class="heatmap-row">
               <span class="row-label">{row.label}</span>
-              <div class="cells" role="img" aria-label={`Heatmap ${row.label}`}>
+              <div class="cells" role="img" aria-label={t($locale, "status.heatmapAria", { label: row.label })}>
                 {#each row.points as point}
                   <span
                     class="cell"
                     style={`--cell:${row.color};--a:${heatAlpha(point, row.max)}`}
-                    title={`${row.label}: ${formatCount(point)} eventi`}
+                    title={t($locale, "status.eventsTooltip", {
+                      label: row.label,
+                      count: formatCount(point),
+                    })}
                   ></span>
                 {/each}
               </div>
-              <span class="row-meta">freshness {row.freshnessMinutes}m</span>
+              <span class="row-meta">{t($locale, "status.freshness", { minutes: row.freshnessMinutes })}</span>
             </div>
           {/each}
         </div>
@@ -628,8 +637,8 @@
 
       <article class="insights-card">
         <header>
-          <h3>Insight automatici</h3>
-          <p>Segnali rilevati da trend e freshness.</p>
+          <h3>{t($locale, "status.insightsTitle")}</h3>
+          <p>{t($locale, "status.insightsSubtitle")}</p>
         </header>
         <div class="insights-list">
           {#each insights as item}
@@ -643,22 +652,22 @@
 
       <article class="signal-card-list">
         <header>
-          <h3>Dettaglio per segnale</h3>
-          <p>Metriche operative sintetiche per confronto rapido.</p>
+          <h3>{t($locale, "status.signalDetailTitle")}</h3>
+          <p>{t($locale, "status.signalDetailSubtitle")}</p>
         </header>
         <div class="signal-list">
           {#each rows as row}
             <div class="signal-row">
               <div class="signal-meta">
                 <span class="signal-name">{row.label}</span>
-                <span class="signal-total">totale {formatCompact(row.data.total)}</span>
+                <span class="signal-total">{t($locale, "status.total", { count: formatCompact(row.data.total) })}</span>
               </div>
               <div class="signal-kpis">
                 <span>{formatCompact(row.lastBucket)} /5m</span>
                 <span class={"trend " + ((row.trend15m !== null && row.trend15m < 0) ? "down" : "up")}>
                   {formatTrend(row.trend15m)} 15m
                 </span>
-                <span>fresh {row.freshnessMinutes}m</span>
+                <span>{t($locale, "status.fresh", { minutes: row.freshnessMinutes })}</span>
               </div>
             </div>
           {/each}
@@ -670,17 +679,17 @@
       <section class="infra-section">
         <header class="infra-header">
           <div>
-            <h2>Salute infrastruttura</h2>
-            <p>Deploy, componenti runtime e pressione query in tempo reale.</p>
+            <h2>{t($locale, "status.infrastructureTitle")}</h2>
+            <p>{t($locale, "status.infrastructureSubtitle")}</p>
           </div>
           <span class={`infra-badge ${runtimeSummary.ok ? "ok" : "error"}`}>
-            {runtimeSummary.ok ? "Stack operativo" : "Stack con criticita"}
+            {runtimeSummary.ok ? t($locale, "status.stackHealthy") : t($locale, "status.stackIssue")}
           </span>
         </header>
 
         <div class="infra-grid">
           <article class="infra-card components-card">
-            <h3>Componenti deploy</h3>
+            <h3>{t($locale, "status.deployComponents")}</h3>
             <div class="components-list">
               {#each runtimeSummary.components as component}
                 <div class="component-row">
@@ -689,7 +698,7 @@
                     {#if component.error}
                       <p>{component.error}</p>
                     {:else if component.latencyMs !== undefined}
-                      <p>latenza {component.latencyMs} ms</p>
+                      <p>{t($locale, "status.latency", { ms: component.latencyMs })}</p>
                     {/if}
                   </div>
                   <span class={`chip ${componentTone(component.status)}`}>{component.status}</span>
@@ -699,64 +708,64 @@
           </article>
 
           <article class="infra-card queries-card">
-            <h3>Salute query database</h3>
+            <h3>{t($locale, "status.dbHealthTitle")}</h3>
             <div class="query-kpis">
               <div>
-                <span>Query attive ora</span>
+                <span>{t($locale, "status.dbRunningNow")}</span>
                 <strong>{formatCount(runtimeSummary.queries.runningNow)}</strong>
               </div>
               <div>
-                <span>Query lente ora (&gt; {runtimeSummary.queries.slowThresholdSec}s)</span>
+                <span>{t($locale, "status.dbSlowNow", { sec: runtimeSummary.queries.slowThresholdSec })}</span>
                 <strong>{formatCount(runtimeSummary.queries.slowRunningNow)}</strong>
               </div>
               <div>
-                <span>Durata max query attiva</span>
+                <span>{t($locale, "status.dbMaxElapsed")}</span>
                 <strong>{runtimeSummary.queries.maxRunningElapsedSec.toFixed(1)}s</strong>
               </div>
               <div>
-                <span>Query lente ultimi 15m</span>
+                <span>{t($locale, "status.dbSlow15m")}</span>
                 <strong>{formatCount(runtimeSummary.queries.slowQueriesLast15m)}</strong>
               </div>
               <div>
-                <span>Query fallite ultimi 15m</span>
+                <span>{t($locale, "status.dbFailed15m")}</span>
                 <strong>{formatCount(runtimeSummary.queries.failedQueriesLast15m)}</strong>
               </div>
             </div>
           </article>
 
           <article class="infra-card resources-card">
-            <h3>Risorse backend</h3>
+            <h3>{t($locale, "status.backendResources")}</h3>
             <div class="resource-kpis">
               <div>
-                <span>CPU disponibili</span>
+                <span>{t($locale, "status.cpuAvailable")}</span>
                 <strong>{runtimeSummary.resources.cpuCoresAvailable.toFixed(2)} core</strong>
               </div>
               <div>
-                <span>CPU usata (backend, 1 core)</span>
+                <span>{t($locale, "status.cpuUsedOneCore")}</span>
                 <strong>{formatPercent(runtimeSummary.resources.cpuUsedPercentOneCore)}</strong>
               </div>
               <div>
-                <span>RAM usata</span>
+                <span>{t($locale, "status.memoryUsed")}</span>
                 <strong>{formatBytes(runtimeSummary.resources.memoryUsedBytes)}</strong>
               </div>
               <div>
-                <span>RAM disponibile (limite container)</span>
+                <span>{t($locale, "status.memoryLimit")}</span>
                 <strong>{formatBytes(runtimeSummary.resources.memoryLimitBytes)}</strong>
               </div>
               <div>
-                <span>Percentuale RAM usata</span>
+                <span>{t($locale, "status.memoryUsedPercent")}</span>
                 <strong>{formatPercent(runtimeSummary.resources.memoryUsedPercent)}</strong>
               </div>
               <div>
-                <span>Heap Go</span>
+                <span>{t($locale, "status.goHeap")}</span>
                 <strong>{formatBytes(runtimeSummary.resources.goHeapAllocBytes)}</strong>
               </div>
               <div>
-                <span>Goroutine</span>
+                <span>{t($locale, "status.goroutines")}</span>
                 <strong>{formatCount(runtimeSummary.resources.goRoutines)}</strong>
               </div>
               <div>
-                <span>Uptime backend</span>
+                <span>{t($locale, "status.backendUptime")}</span>
                 <strong>{formatUptime(runtimeSummary.resources.backendUptimeSeconds)}</strong>
               </div>
             </div>
@@ -774,7 +783,7 @@
     {/if}
 
   {:else if !loading}
-    <div class="status-empty">Nessun dato disponibile.</div>
+    <div class="status-empty">{t($locale, "status.empty")}</div>
   {/if}
 </section>
 
@@ -795,7 +804,7 @@
 
   h1 {
     margin: 0;
-    font-size: 24px;
+    font-size: 22px;
     color: #0f172a;
   }
 

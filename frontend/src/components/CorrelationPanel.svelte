@@ -3,6 +3,7 @@
   import { fetchRelated } from "../services/traces";
   import LogResultsTable from "./LogResultsTable.svelte";
   import MetricChart from "./MetricChart.svelte";
+  import { locale, t } from "../lib/i18n";
 
   export let traceId: string;
   let related: { logs: any[]; metrics: any[] } | null = null;
@@ -15,7 +16,7 @@
       error =
         err instanceof Error
           ? err.message
-          : "Impossibile caricare la telemetria correlata";
+          : t($locale, "correlation.loadError");
     }
   });
 </script>
@@ -23,18 +24,18 @@
 <section class="panel">
   <header>
     <div>
-      <h3>Telemetry correlata</h3>
-      <p>Log legati alla traccia selezionata.</p>
+      <h3>{t($locale, "correlation.title")}</h3>
+      <p>{t($locale, "correlation.subtitle")}</p>
     </div>
   </header>
   {#if error}
     <p class="error">{error}</p>
   {:else if !related}
-    <p class="loading">Caricamento...</p>
+    <p class="loading">{t($locale, "correlation.loading")}</p>
   {:else}
     <div class="grid">
       <div class="block">
-        <h4>Log</h4>
+        <h4>{t($locale, "correlation.logs")}</h4>
         <LogResultsTable logs={related.logs} />
       </div>
     </div>

@@ -1,15 +1,16 @@
 <script lang="ts">
   import { page } from '$app/stores';
   import CorrelationPanel from '../../../components/CorrelationPanel.svelte';
+  import { locale, t } from '../../../lib/i18n';
 </script>
 
 <section class="trace-detail">
   <header>
     <div>
-      <p class="kicker">Dettaglio traccia</p>
+      <p class="kicker">{t($locale, 'traceDetail.kicker')}</p>
       <h2>{$page.params.traceId}</h2>
     </div>
-    <a class="back" href="/">Torna alla dashboard</a>
+    <a class="back" href="/">{t($locale, 'traceDetail.backToDashboard')}</a>
   </header>
   <CorrelationPanel traceId={$page.params.traceId} />
 </section>

@@ -14,6 +14,7 @@
   import FilterBuilder from "./FilterBuilder.svelte";
   import Modal from "./common/Modal.svelte";
   import ServiceDropdown from "./ServiceDropdown.svelte";
+  import { getLocaleTag, locale, t } from "../lib/i18n";
 
   const dispatch = createEventDispatcher();
 
@@ -91,16 +92,16 @@
   let customToInput = "";
   let activeAdvancedFiltersCount = 0;
 
-  const timeRangeOptions: Array<{ value: TimeRangePreset; label: string }> = [
-    { value: "5m", label: "Ultimi 5 minuti" },
-    { value: "15m", label: "Ultimi 15 minuti" },
-    { value: "30m", label: "Ultimi 30 minuti" },
-    { value: "1h", label: "Ultima ora" },
-    { value: "6h", label: "Ultime 6 ore" },
-    { value: "24h", label: "Ultime 24 ore" },
-    { value: "7d", label: "Ultimi 7 giorni" },
-    { value: "all", label: "Tutto" },
-  ];
+  $: timeRangeOptions = [
+    { value: "5m", label: t($locale, "range.last5m") },
+    { value: "15m", label: t($locale, "range.last15m") },
+    { value: "30m", label: t($locale, "range.last30m") },
+    { value: "1h", label: t($locale, "range.last1h") },
+    { value: "6h", label: t($locale, "range.last6h") },
+    { value: "24h", label: t($locale, "range.last24h") },
+    { value: "7d", label: t($locale, "range.last7d") },
+    { value: "all", label: t($locale, "range.all") },
+  ] as Array<{ value: TimeRangePreset; label: string }>;
 
   const availableLogLevels = ["TRACE", "DEBUG", "INFO", "WARN", "ERROR", "FATAL"];
 
@@ -220,7 +221,7 @@
     if (Number.isNaN(parsed.getTime())) {
       return value.replace("T", " ");
     }
-    return parsed.toLocaleString("it-IT", {
+    return parsed.toLocaleString(getLocaleTag($locale), {
       day: "2-digit",
       month: "short",
       hour: "2-digit",
@@ -229,7 +230,7 @@
   }
 
   function formatRangeDate(date: Date): string {
-    return date.toLocaleString("it-IT", {
+    return date.toLocaleString(getLocaleTag($locale), {
       day: "2-digit",
       month: "short",
       hour: "2-digit",
@@ -251,7 +252,7 @@
 
   function getLogLevelSummary() {
     if (selectedLogLevels.length === 0) {
-      return "Tutti i livelli";
+      return t($locale, "query.allLevels");
     }
     return selectedLogLevels.join(", ");
   }
@@ -284,11 +285,11 @@
     const fromIso = toIso(customFromInput);
     const toIsoValue = toIso(customToInput);
     if (!fromIso || !toIsoValue) {
-      rangeError = "Inserisci data e ora valide per inizio e fine.";
+      rangeError = t($locale, "range.errorInvalidDate");
       return;
     }
     if (new Date(toIsoValue).getTime() <= new Date(fromIso).getTime()) {
-      rangeError = "La data/ora di fine deve essere successiva all'inizio.";
+      rangeError = t($locale, "range.errorEndBeforeStart");
       return;
     }
     fromInput = customFromInput;
@@ -320,13 +321,13 @@
       if (fromInput && toInput) {
         rangeSummary = `${formatRangeDateTime(fromInput)} → ${formatRangeDateTime(toInput)}`;
       } else {
-        rangeSummary = "Seleziona intervallo personalizzato";
+        rangeSummary = t($locale, "query.selectCustomRange");
       }
     } else {
       const minutes = presetMinutes[selectedRange as Exclude<TimeRangePreset, "custom">];
       const now = new Date();
       if (minutes === null) {
-        rangeSummary = `Da sempre → ${formatRangeDate(now)}`;
+        rangeSummary = `${t($locale, "query.fromEver")} → ${formatRangeDate(now)}`;
       } else {
         const from = new Date(now.getTime() - minutes * 60 * 1000);
         rangeSummary = `${formatRangeDate(from)} → ${formatRangeDate(now)}`;
@@ -346,11 +347,11 @@
       const fromIso = toIso(fromInput);
       const toIsoValue = toIso(toInput);
       if (!fromIso || !toIsoValue) {
-        rangeError = "Inserisci data e ora valide per inizio e fine.";
+        rangeError = t($locale, "range.errorInvalidDate");
         return null;
       }
       if (new Date(toIsoValue).getTime() <= new Date(fromIso).getTime()) {
-        rangeError = "La data/ora di fine deve essere successiva all'inizio.";
+        rangeError = t($locale, "range.errorEndBeforeStart");
         return null;
       }
       rangeError = "";
@@ -680,7 +681,7 @@
 
   {#if activeTab === "logs"}
     <div class="log-level-filter">
-      <label for="log-level-trigger">Livello log</label>
+      <label for="log-level-trigger">{t($locale, "query.logLevel")}</label>
       <div class="log-level-multi">
         <button
           id="log-level-trigger"
@@ -716,7 +717,7 @@
                 <span class="level-chip" style={getLogLevelStyle(level)}>{level}</span>
               </label>
             {/each}
-            <button type="button" class="btn-secondary clear-levels" on:click={resetLogLevels}>Reset livelli</button>
+            <button type="button" class="btn-secondary clear-levels" on:click={resetLogLevels}>{t($locale, "query.resetLevels")}</button>
           </div>
         {/if}
       </div>
@@ -724,13 +725,13 @@
   {/if}
 
   <div class="time-range-block">
-    <label for="time-range-select">Range temporale</label>
+    <label for="time-range-select">{t($locale, "query.timeRange")}</label>
     <div class="time-range-controls">
       <select id="time-range-select" bind:value={selectedRange} on:change={handleRangeChange}>
         {#each timeRangeOptions as option}
           <option value={option.value}>{option.label}</option>
         {/each}
-        <option value="custom">Personalizzato</option>
+        <option value="custom">{t($locale, "range.custom")}</option>
       </select>
     </div>
     <p class="time-range-summary">{rangeSummary}</p>
@@ -742,11 +743,11 @@
   <div class="manual-filters">
     {#if activeTab === "tracce"}
       <div class="filter-field">
-        <label for="filter-trace-search">Ricerca testuale</label>
+        <label for="filter-trace-search">{t($locale, "query.textSearch")}</label>
         <input
           id="filter-trace-search"
           type="text"
-          placeholder="Cerca tramite trace id o nome span..."
+          placeholder={t($locale, "query.traceSearchPlaceholder")}
           bind:value={traceSearch}
           on:input={() => {
             traceSearchExact = false;
@@ -756,42 +757,42 @@
       </div>
       <div class="duration-row">
         <div class="filter-field compact operator">
-          <label for="filter-duration-op">Durata</label>
+          <label for="filter-duration-op">{t($locale, "query.duration")}</label>
           <select id="filter-duration-op" bind:value={filterDurationOperator} on:keydown={handleManualEnter}>
             <option value=">">&gt;</option>
             <option value="<">&lt;</option>
           </select>
         </div>
         <div class="filter-field compact">
-          <label for="filter-duration-ms">Durata (ms)</label>
+          <label for="filter-duration-ms">{t($locale, "query.durationMs")}</label>
           <input
             id="filter-duration-ms"
             type="number"
             min="0"
             step="1"
-            placeholder="es. 300"
+            placeholder="300"
             bind:value={filterDurationMs}
             on:keydown={handleManualEnter}
           />
         </div>
       </div>
       <div class="filter-field">
-        <p class="group-label">Errori Traccia</p>
-        <div class="trace-error-scope" role="group" aria-label="Filtro errori traccia">
-          <button type="button" class:active={traceErrorScope === "all"} on:click={() => (traceErrorScope = "all")}>Tutte</button>
-          <button type="button" class:active={traceErrorScope === "with_errors"} on:click={() => (traceErrorScope = "with_errors")}>Con errori</button>
-          <button type="button" class:active={traceErrorScope === "without_errors"} on:click={() => (traceErrorScope = "without_errors")}>Senza errori</button>
+        <p class="group-label">{t($locale, "query.traceErrors")}</p>
+        <div class="trace-error-scope" role="group" aria-label={t($locale, "query.traceErrorsAria")}>
+          <button type="button" class:active={traceErrorScope === "all"} on:click={() => (traceErrorScope = "all")}>{t($locale, "query.traceErrorsAll")}</button>
+          <button type="button" class:active={traceErrorScope === "with_errors"} on:click={() => (traceErrorScope = "with_errors")}>{t($locale, "query.traceErrorsWith")}</button>
+          <button type="button" class:active={traceErrorScope === "without_errors"} on:click={() => (traceErrorScope = "without_errors")}>{t($locale, "query.traceErrorsWithout")}</button>
         </div>
       </div>
     {/if}
 
     {#if activeTab === "logs"}
       <div class="filter-field">
-        <label for="filter-log-text-search">Ricerca testuale</label>
+        <label for="filter-log-text-search">{t($locale, "query.textSearch")}</label>
         <input
           id="filter-log-text-search"
           type="text"
-          placeholder="Cerca nel messaggio del log..."
+          placeholder={t($locale, "query.logSearchPlaceholder")}
           bind:value={logTextSearch}
           on:keydown={handleManualEnter}
         />
@@ -801,7 +802,7 @@
         {#if activeAdvancedFiltersCount > 0}
           <div class="advanced-filters-indicator" aria-live="polite">
             <span class="indicator-dot" aria-hidden="true"></span>
-            <span>{activeAdvancedFiltersCount} filtri avanzati attivi</span>
+            <span>{t($locale, "query.activeAdvancedFilters", { count: activeAdvancedFiltersCount })}</span>
           </div>
         {/if}
 
@@ -810,7 +811,7 @@
           class="btn-secondary advanced-filters-btn"
           class:active={activeAdvancedFiltersCount > 0}
           on:click={openFilters}
-          aria-label={`Filtri avanzati, ${activeAdvancedFiltersCount} attivi`}
+          aria-label={t($locale, "query.advancedFiltersAria", { count: activeAdvancedFiltersCount })}
         >
           <svg
             xmlns="http://www.w3.org/2000/svg"
@@ -824,36 +825,36 @@
             stroke-linejoin="round"
             ><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"></polygon></svg
           >
-          <span>Filtri avanzati</span>
+          <span>{t($locale, "query.advancedFilters")}</span>
           {#if activeAdvancedFiltersCount > 0}
             <span class="badge">{activeAdvancedFiltersCount}</span>
           {/if}
         </button>
       </div>
 
-      <Modal open={showFilterModal} title="Filtri Avanzati" on:close={closeFilters}>
+      <Modal open={showFilterModal} title={t($locale, "query.advancedFiltersTitle")} on:close={closeFilters}>
         <FilterBuilder bind:filters={advancedFilters} />
         <div class="modal-actions">
-          <button class="btn-primary" on:click={applyAdvancedFilters}>Applica Filtri</button>
+          <button class="btn-primary" on:click={applyAdvancedFilters}>{t($locale, "query.applyFilters")}</button>
         </div>
       </Modal>
     {/if}
   </div>
 
-  <Modal open={showCustomRangeModal} title="Range temporale personalizzato" on:close={closeCustomRangeModal}>
+  <Modal open={showCustomRangeModal} title={t($locale, "query.customTimeRangeTitle")} on:close={closeCustomRangeModal}>
     <div class="custom-range-grid">
       <div class="filter-field">
-        <label for="custom-from">Da</label>
+        <label for="custom-from">{t($locale, "query.from")}</label>
         <input id="custom-from" type="datetime-local" bind:value={customFromInput} />
       </div>
       <div class="filter-field">
-        <label for="custom-to">A</label>
+        <label for="custom-to">{t($locale, "query.to")}</label>
         <input id="custom-to" type="datetime-local" bind:value={customToInput} />
       </div>
     </div>
     <div class="modal-actions">
-      <button class="btn-secondary" on:click={closeCustomRangeModal}>Annulla</button>
-      <button class="btn-primary" on:click={applyCustomRange}>Applica</button>
+      <button class="btn-secondary" on:click={closeCustomRangeModal}>{t($locale, "common.cancel")}</button>
+      <button class="btn-primary" on:click={applyCustomRange}>{t($locale, "common.apply")}</button>
     </div>
   </Modal>
 </div>

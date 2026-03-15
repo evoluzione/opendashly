@@ -3,6 +3,7 @@
   import { createEventDispatcher } from 'svelte';
   import uPlot from 'uplot';
   import 'uplot/dist/uPlot.min.css';
+  import { locale, t } from '../lib/i18n';
 
   export let series: { name?: string; unit?: string; points: { timestamp: string; value: number }[] }[] = [];
   export let pagination: { page: number; hasNext: boolean } | null = null;
@@ -79,13 +80,13 @@
 
     chart = new uPlot(
       {
-        title: selected?.name ? `${selected.name}${selected.unit ? ` (${selected.unit})` : ''}` : 'Metriche',
+        title: selected?.name ? `${selected.name}${selected.unit ? ` (${selected.unit})` : ''}` : t($locale, 'metric.label'),
         width,
         height: 260,
         series: [
           {},
           {
-            label: selected?.name ?? 'serie',
+            label: selected?.name ?? t($locale, 'metric.label'),
             stroke: palette[selectedIndex % palette.length],
             width: 2
           }
@@ -94,7 +95,7 @@
           x: { time: true }
         }
       },
-      data,
+      data as uPlot.AlignedData,
       chartEl
     );
 
@@ -105,7 +106,7 @@
         canvas.style.width = '100%';
         canvas.style.height = '100%';
       });
-      chart?.setData(data);
+      chart?.setData(data as uPlot.AlignedData);
     });
   }
 
@@ -165,10 +166,10 @@
 
 <div class="metric-panel" bind:this={containerEl}>
   {#if series.length === 0}
-    <div class="empty">Nessuna metrica disponibile per l'intervallo selezionato.</div>
+    <div class="empty">{t($locale, 'metric.noneForRange')}</div>
   {:else}
     <div class="metric-toolbar">
-      <label for="metric-select">Metriche</label>
+      <label for="metric-select">{t($locale, 'metric.label')}</label>
       <select id="metric-select" bind:value={activeSeries}>
         {#each series as metric, idx}
           <option value={idx}>
@@ -179,7 +180,7 @@
     </div>
     <div class="chart">
       {#if !series[activeSeries]?.points || series[activeSeries].points.length === 0}
-        <div class="empty">Nessun punto disponibile per questa metrica.</div>
+        <div class="empty">{t($locale, 'metric.noneForMetric')}</div>
       {/if}
     </div>
   {/if}
@@ -193,15 +194,15 @@
       on:click={() => changePage(pagination.page - 1)}
       disabled={pagination.page <= 1}
     >
-      Precedente
+      {t($locale, 'pagination.previousPage')}
     </button>
-    <span>Pagina {pagination.page}</span>
+    <span>{t($locale, 'pagination.page', { page: pagination.page })}</span>
     <button
       type="button"
       on:click={() => changePage(pagination.page + 1)}
       disabled={!pagination.hasNext}
     >
-      Successiva
+      {t($locale, 'pagination.nextPage')}
     </button>
   </div>
 {/if}

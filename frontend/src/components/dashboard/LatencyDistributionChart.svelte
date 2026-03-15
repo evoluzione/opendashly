@@ -1,6 +1,7 @@
 <script lang="ts">
   import type { LatencyBucket } from '../../services/dashboard';
   import InfoTooltip from '../common/InfoTooltip.svelte';
+  import { locale, t, getLocaleTag } from '../../lib/i18n';
 
   export let data: LatencyBucket[] = [];
 
@@ -24,14 +25,14 @@
 <div class="chart-card">
   <div class="chart-header">
     <span class="chart-title">
-      Distribuzione Latenza
-      <InfoTooltip text="Distribuzione dei tempi di risposta. Mostra quante richieste rientrano in ogni intervallo di latenza. I colori vanno dal verde (veloce) al rosso (lento)." />
+      {t($locale, 'dashboard.latencyDistribution.title')}
+      <InfoTooltip text={t($locale, 'dashboard.latencyDistribution.tooltip')} />
     </span>
-    <span class="chart-subtitle">Istogramma delle latenze</span>
+    <span class="chart-subtitle">{t($locale, 'dashboard.latencyDistribution.subtitle')}</span>
   </div>
 
   {#if data.length === 0}
-    <div class="empty">Nessun dato disponibile</div>
+    <div class="empty">{t($locale, 'dashboard.noData')}</div>
   {:else}
     <div class="histogram">
       {#each data as bucket, i}
@@ -45,7 +46,7 @@
             </div>
           </div>
           <span class="bar-label">{bucket.label}</span>
-          <span class="bar-count">{bucket.count.toLocaleString()}</span>
+          <span class="bar-count">{bucket.count.toLocaleString(getLocaleTag($locale))}</span>
         </div>
       {/each}
     </div>
