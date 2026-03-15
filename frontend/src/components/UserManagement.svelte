@@ -126,19 +126,19 @@
   header h2 {
     margin: 0 0 6px 0;
     font-size: 22px;
-    color: #0f172a;
+    color: var(--color-slate-950);
   }
   header p {
     margin: 0;
-    color: #64748b;
+    color: var(--color-slate-500);
     font-size: 14px;
   }
   .panel {
-    background: #fff;
+    background: var(--color-white);
     border-radius: 16px;
     padding: 20px;
-    border: 1px solid rgba(15, 23, 42, 0.06);
-    box-shadow: 0 1px 3px rgba(15, 23, 42, 0.08);
+    border: 1px solid rgba(var(--rgb-slate-950), 0.06);
+    box-shadow: 0 1px 3px rgba(var(--rgb-slate-950), 0.08);
   }
   .form {
     display: grid;
@@ -151,7 +151,7 @@
     font-weight: 600;
     text-transform: uppercase;
     letter-spacing: 0.05em;
-    color: #64748b;
+    color: var(--color-slate-500);
     margin-bottom: 6px;
   }
   input,
@@ -159,18 +159,18 @@
     width: 100%;
     padding: 12px 14px;
     border-radius: 10px;
-    border: 1px solid #e2e8f0;
-    background: #f8fafc;
+    border: 1px solid var(--color-slate-200);
+    background: var(--color-slate-50);
     font-size: 14px;
-    color: #0f172a;
+    color: var(--color-slate-950);
     transition: all 0.2s ease;
   }
   input:focus,
   select:focus {
     outline: none;
-    border-color: #6366f1;
-    box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.12);
-    background: #fff;
+    border-color: var(--color-primary-600);
+    box-shadow: 0 0 0 3px rgba(var(--rgb-primary-600), 0.12);
+    background: var(--color-white);
   }
   button {
     width: fit-content;
@@ -180,16 +180,16 @@
     justify-self: end;
     border-radius: 10px;
     border: none;
-    background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
-    color: #fff;
+    background: linear-gradient(135deg, var(--color-primary-600) 0%, var(--color-primary-500) 100%);
+    color: var(--color-white);
     cursor: pointer;
     font-weight: 600;
     transition: all 0.2s ease;
-    box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3);
+    box-shadow: 0 4px 12px rgba(var(--rgb-primary-600), 0.3);
   }
   button:hover:not(:disabled) {
     transform: translateY(-1px);
-    box-shadow: 0 6px 16px rgba(99, 102, 241, 0.4);
+    box-shadow: 0 6px 16px rgba(var(--rgb-primary-600), 0.4);
   }
   button:disabled {
     opacity: 0.6;
@@ -204,13 +204,13 @@
   td {
     text-align: left;
     padding: 10px 6px;
-    border-bottom: 1px solid rgba(15, 23, 42, 0.06);
+    border-bottom: 1px solid rgba(var(--rgb-slate-950), 0.06);
   }
   th {
     font-size: 12px;
     text-transform: uppercase;
     letter-spacing: 0.05em;
-    color: #64748b;
+    color: var(--color-slate-500);
   }
   .status {
     color: #6b6f76;

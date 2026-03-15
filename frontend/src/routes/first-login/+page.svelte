@@ -105,7 +105,7 @@
   }
 
   .login-left {
-    background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+    background: linear-gradient(135deg, var(--color-slate-950) 0%, var(--color-slate-900) 100%);
     padding: 60px;
     display: flex;
     align-items: center;
@@ -121,7 +121,7 @@
     right: -50%;
     width: 100%;
     height: 100%;
-    background: radial-gradient(circle, rgba(99, 102, 241, 0.15) 0%, transparent 70%);
+    background: radial-gradient(circle, rgba(var(--rgb-primary-600), 0.15) 0%, transparent 70%);
     pointer-events: none;
   }
 
@@ -144,22 +144,22 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+    background: linear-gradient(135deg, var(--color-primary-600) 0%, var(--color-primary-500) 100%);
     border-radius: 16px;
     color: white;
-    box-shadow: 0 8px 24px rgba(99, 102, 241, 0.4);
+    box-shadow: 0 8px 24px rgba(var(--rgb-primary-600), 0.4);
   }
 
   .brand-text h1 {
     margin: 0;
     font-size: 24px;
     font-weight: 700;
-    color: #f8fafc;
+    color: var(--color-slate-50);
   }
 
   .brand-text span {
     font-size: 13px;
-    color: #64748b;
+    color: var(--color-slate-500);
     text-transform: uppercase;
     letter-spacing: 0.1em;
   }
@@ -168,18 +168,18 @@
     margin: 0 0 8px 0;
     font-size: 30px;
     font-weight: 700;
-    color: #f8fafc;
+    color: var(--color-slate-50);
   }
 
   .notice p {
     margin: 0;
     font-size: 15px;
     line-height: 1.6;
-    color: #94a3b8;
+    color: var(--color-slate-400);
   }
 
   .login-right {
-    background: linear-gradient(135deg, #f0f4f8 0%, #e2e8f0 100%);
+    background: linear-gradient(135deg, #f0f4f8 0%, var(--color-slate-200) 100%);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -187,11 +187,11 @@
   }
 
   .card {
-    background: #fff;
+    background: var(--color-white);
     border-radius: 24px;
     padding: 40px;
     width: min(460px, 100%);
-    box-shadow: 0 20px 60px rgba(15, 23, 42, 0.12), 0 8px 24px rgba(15, 23, 42, 0.08);
+    box-shadow: 0 20px 60px rgba(var(--rgb-slate-950), 0.12), 0 8px 24px rgba(var(--rgb-slate-950), 0.08);
     border: 1px solid rgba(148, 163, 184, 0.2);
   }
 
@@ -203,13 +203,13 @@
     margin: 0 0 8px 0;
     font-size: 28px;
     font-weight: 700;
-    color: #0f172a;
+    color: var(--color-slate-950);
     letter-spacing: -0.02em;
   }
 
   .card-header p {
     margin: 0;
-    color: #64748b;
+    color: var(--color-slate-500);
     font-size: 15px;
     line-height: 1.5;
   }
@@ -228,7 +228,7 @@
   label {
     font-size: 13px;
     font-weight: 600;
-    color: #334155;
+    color: var(--color-slate-700);
     text-transform: uppercase;
     letter-spacing: 0.05em;
   }
@@ -242,7 +242,7 @@
   .input-wrapper svg {
     position: absolute;
     left: 14px;
-    color: #94a3b8;
+    color: var(--color-slate-400);
     pointer-events: none;
   }
 
@@ -250,18 +250,18 @@
     width: 100%;
     padding: 14px 16px 14px 44px;
     border-radius: 12px;
-    border: 1px solid #cbd5e1;
-    background: #f8fafc;
-    color: #0f172a;
+    border: 1px solid var(--color-slate-300);
+    background: var(--color-slate-50);
+    color: var(--color-slate-950);
     font-size: 15px;
     transition: all 0.2s;
   }
 
   input:focus {
     outline: none;
-    border-color: #6366f1;
-    background: #ffffff;
-    box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
+    border-color: var(--color-primary-600);
+    background: var(--color-white);
+    box-shadow: 0 0 0 3px rgba(var(--rgb-primary-600), 0.1);
   }
 
   .submit-btn {
@@ -269,8 +269,8 @@
     padding: 14px 20px;
     border-radius: 12px;
     border: none;
-    background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
-    color: #fff;
+    background: linear-gradient(135deg, var(--color-primary-600) 0%, var(--color-primary-500) 100%);
+    color: var(--color-white);
     font-weight: 600;
     font-size: 15px;
     cursor: pointer;
@@ -283,7 +283,7 @@
 
   .submit-btn:hover:not(:disabled) {
     transform: translateY(-1px);
-    box-shadow: 0 8px 20px rgba(99, 102, 241, 0.35);
+    box-shadow: 0 8px 20px rgba(var(--rgb-primary-600), 0.35);
   }
 
   .submit-btn:disabled {
@@ -311,11 +311,11 @@
     display: flex;
     align-items: center;
     gap: 8px;
-    color: #dc2626;
+    color: var(--color-danger-600);
     font-size: 14px;
     padding: 12px 14px;
-    background: #fef2f2;
-    border: 1px solid #fecaca;
+    background: var(--color-danger-50);
+    border: 1px solid var(--color-danger-75);
     border-radius: 12px;
   }
 

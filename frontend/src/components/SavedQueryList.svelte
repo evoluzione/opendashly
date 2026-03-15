@@ -42,7 +42,7 @@
 
 <style>
   .error {
-    color: #b91c1c;
+    color: var(--color-danger-700);
   }
   ul {
     list-style: none;

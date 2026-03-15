@@ -203,10 +203,10 @@
     color: #666;
   }
   .error {
-    color: #b91c1c;
+    color: var(--color-danger-700);
   }
   .loading {
-    color: #0f172a;
+    color: var(--color-slate-950);
     font-weight: 600;
   }
   .save {
@@ -222,14 +222,14 @@
   .page-size label {
     font-size: 12px;
     font-weight: 600;
-    color: #475569;
+    color: var(--color-slate-600);
   }
   .page-size select {
     padding: 8px 12px;
     border-radius: 8px;
-    border: 1px solid #e2e8f0;
-    background: #f8fafc;
-    color: #0f172a;
+    border: 1px solid var(--color-slate-200);
+    background: var(--color-slate-50);
+    color: var(--color-slate-950);
     font-size: 13px;
     font-weight: 600;
   }

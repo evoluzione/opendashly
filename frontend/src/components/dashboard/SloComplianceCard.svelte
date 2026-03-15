@@ -29,10 +29,10 @@
   }
 
   function statusColor(value: number): string {
-    if (value >= 99) return '#22c55e';
-    if (value >= 95) return '#3b82f6';
-    if (value >= 90) return '#f59e0b';
-    return '#ef4444';
+    if (value >= 99) return 'var(--color-success-500)';
+    if (value >= 95) return 'var(--color-info-500)';
+    if (value >= 90) return 'var(--color-warning-500)';
+    return 'var(--color-danger-500)';
   }
 </script>
 
@@ -61,7 +61,7 @@
       {#each tail as point}
         <span
           class="tick"
-          style={`height:${Math.max(16, Math.min(100, (point.p95 / (targetMs * 2)) * 100))}%;background:${point.p95 <= targetMs ? '#22c55e' : '#ef4444'};`}
+          style={`height:${Math.max(16, Math.min(100, (point.p95 / (targetMs * 2)) * 100))}%;background:${point.p95 <= targetMs ? 'var(--color-success-500)' : 'var(--color-danger-500)'};`}
         ></span>
       {/each}
     </div>
@@ -74,7 +74,7 @@
     border-radius: 16px;
     padding: 20px;
     box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05), 0 4px 12px rgba(0, 0, 0, 0.03);
-    border: 1px solid rgba(15, 23, 42, 0.06);
+    border: 1px solid rgba(var(--rgb-slate-950), 0.06);
     min-width: 0;
     display: flex;
     flex-direction: column;
@@ -82,9 +82,9 @@
   }
 
   .table-header { margin-bottom: 12px; }
-  .table-title { display: block; font-size: 14px; font-weight: 600; color: #0f172a; }
-  .table-subtitle { display: block; font-size: 12px; color: #94a3b8; margin-top: 2px; }
-  .empty { text-align: center; color: #94a3b8; padding: 40px 0; font-size: 14px; }
+  .table-title { display: block; font-size: 14px; font-weight: 600; color: var(--color-slate-950); }
+  .table-subtitle { display: block; font-size: 12px; color: var(--color-slate-400); margin-top: 2px; }
+  .empty { text-align: center; color: var(--color-slate-400); padding: 40px 0; font-size: 14px; }
 
   .slo-main {
     display: flex;
@@ -105,7 +105,7 @@
     display: flex;
     flex-direction: column;
     gap: 4px;
-    color: #475569;
+    color: var(--color-slate-600);
     font-size: 12px;
     text-align: right;
   }
@@ -118,7 +118,7 @@
     align-items: end;
     gap: 4px;
     padding-top: 6px;
-    border-top: 1px solid #f1f5f9;
+    border-top: 1px solid var(--color-slate-100);
   }
 
   .tick {

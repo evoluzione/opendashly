@@ -45,17 +45,17 @@
         font-weight: 600;
         text-transform: uppercase;
         letter-spacing: 0.08em;
-        color: #64748b;
+        color: var(--color-slate-500);
     }
 
     select {
         padding: 10px 14px;
         border-radius: 10px;
-        border: 1px solid #e2e8f0;
+        border: 1px solid var(--color-slate-200);
         background: white;
         font-size: 13px;
         font-weight: 500;
-        color: #0f172a;
+        color: var(--color-slate-950);
         cursor: pointer;
         transition: all 0.2s ease;
         appearance: none;
@@ -66,13 +66,13 @@
     }
 
     select:hover {
-        border-color: #cbd5e1;
-        background-color: #f8fafc;
+        border-color: var(--color-slate-300);
+        background-color: var(--color-slate-50);
     }
 
     select:focus {
         outline: none;
-        border-color: #2563eb;
+        border-color: var(--color-info-600);
         box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
     }
 </style>

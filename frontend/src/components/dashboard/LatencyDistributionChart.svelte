@@ -9,14 +9,14 @@
 
   function getBarColor(index: number, total: number): string {
     const colors = [
-      '#22c55e', // 0-100ms - green
+      'var(--color-success-500)', // 0-100ms - green
       '#84cc16', // 100-250ms - lime
       '#a3e635', // 250-500ms - light lime
       '#eab308', // 500ms-1s - yellow
       '#f97316', // 1-2s - orange
       '#fb923c', // 2-5s - light orange
-      '#ef4444', // 5-10s - red
-      '#dc2626'  // >10s - dark red
+      'var(--color-danger-500)', // 5-10s - red
+      'var(--color-danger-600)'  // >10s - dark red
     ];
     return colors[Math.min(index, colors.length - 1)];
   }
@@ -59,7 +59,7 @@
     border-radius: 16px;
     padding: 20px;
     box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05), 0 4px 12px rgba(0, 0, 0, 0.03);
-    border: 1px solid rgba(15, 23, 42, 0.06);
+    border: 1px solid rgba(var(--rgb-slate-950), 0.06);
     display: flex;
     flex-direction: column;
     min-height: 0;
@@ -74,19 +74,19 @@
     display: block;
     font-size: 14px;
     font-weight: 600;
-    color: #0f172a;
+    color: var(--color-slate-950);
   }
 
   .chart-subtitle {
     display: block;
     font-size: 12px;
-    color: #94a3b8;
+    color: var(--color-slate-400);
     margin-top: 2px;
   }
 
   .empty {
     text-align: center;
-    color: #94a3b8;
+    color: var(--color-slate-400);
     padding: 40px 0;
     font-size: 14px;
   }
@@ -132,13 +132,13 @@
     transform: translateX(-50%);
     font-size: 10px;
     font-weight: 600;
-    color: #64748b;
+    color: var(--color-slate-500);
     white-space: nowrap;
   }
 
   .bar-label {
     font-size: clamp(9px, 2.6cqw, 10px);
-    color: #64748b;
+    color: var(--color-slate-500);
     margin-top: 8px;
     text-align: center;
     white-space: nowrap;
@@ -147,7 +147,7 @@
   .bar-count {
     font-size: clamp(9px, 2.8cqw, 10px);
     font-weight: 600;
-    color: #0f172a;
+    color: var(--color-slate-950);
     margin-top: 2px;
     font-variant-numeric: tabular-nums;
   }

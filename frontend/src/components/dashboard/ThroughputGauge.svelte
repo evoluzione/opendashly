@@ -51,7 +51,7 @@
     border-radius: 16px;
     padding: 20px;
     box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05), 0 4px 12px rgba(0, 0, 0, 0.03);
-    border: 1px solid rgba(15, 23, 42, 0.06);
+    border: 1px solid rgba(var(--rgb-slate-950), 0.06);
     display: flex;
     flex-direction: column;
     gap: 16px;
@@ -70,7 +70,7 @@
     font-weight: 700;
     text-transform: uppercase;
     letter-spacing: 0.08em;
-    color: #64748b;
+    color: var(--color-slate-500);
   }
 
   .main-stat {
@@ -86,7 +86,7 @@
     display: block;
     font-size: clamp(26px, 9cqw, 36px);
     font-weight: 700;
-    color: #2563eb;
+    color: var(--color-info-600);
     line-height: 1.1;
   }
 
@@ -94,7 +94,7 @@
     display: block;
     font-size: clamp(10px, 3cqw, 12px);
     font-weight: 600;
-    color: #64748b;
+    color: var(--color-slate-500);
     text-transform: uppercase;
     letter-spacing: 0.05em;
     margin-top: 4px;
@@ -106,7 +106,7 @@
     justify-content: center;
     gap: clamp(10px, 3cqw, 16px);
     padding-top: 16px;
-    border-top: 1px solid #f1f5f9;
+    border-top: 1px solid var(--color-slate-100);
   }
 
   .stat {
@@ -117,14 +117,14 @@
     display: block;
     font-size: clamp(14px, 4.4cqw, 16px);
     font-weight: 700;
-    color: #0f172a;
+    color: var(--color-slate-950);
     font-variant-numeric: tabular-nums;
   }
 
   .stat-label {
     display: block;
     font-size: clamp(9px, 2.8cqw, 10px);
-    color: #94a3b8;
+    color: var(--color-slate-400);
     text-transform: uppercase;
     letter-spacing: 0.05em;
     margin-top: 2px;
@@ -133,6 +133,6 @@
   .divider {
     width: 1px;
     height: 32px;
-    background: #e2e8f0;
+    background: var(--color-slate-200);
   }
 </style>

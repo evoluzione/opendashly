@@ -252,9 +252,9 @@
         justify-content: center;
         padding: 40px 24px;
         text-align: center;
-        background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+        background: linear-gradient(135deg, var(--color-slate-50) 0%, var(--color-slate-100) 100%);
         border-radius: 16px;
-        border: 2px dashed #cbd5e1;
+        border: 2px dashed var(--color-slate-300);
     }
 
     .empty-icon {
@@ -263,23 +263,23 @@
         justify-content: center;
         width: 80px;
         height: 80px;
-        background: linear-gradient(135deg, #e0e7ff 0%, #c7d2fe 100%);
+        background: linear-gradient(135deg, var(--color-primary-100) 0%, var(--color-primary-200) 100%);
         border-radius: 50%;
         margin-bottom: 16px;
-        color: #6366f1;
+        color: var(--color-primary-600);
     }
 
     .empty-state h4 {
         margin: 0 0 8px 0;
         font-size: 16px;
         font-weight: 600;
-        color: #1e293b;
+        color: var(--color-slate-900);
     }
 
     .empty-state p {
         margin: 0;
         font-size: 14px;
-        color: #64748b;
+        color: var(--color-slate-500);
         max-width: 280px;
     }
 
@@ -301,7 +301,7 @@
         top: -6px;
         width: 2px;
         height: 6px;
-        background: linear-gradient(to bottom, #6366f1, #8b5cf6);
+        background: linear-gradient(to bottom, var(--color-primary-600), var(--color-primary-500));
         border-radius: 1px;
     }
 
@@ -310,16 +310,16 @@
         align-items: flex-start;
         gap: 12px;
         padding: 16px;
-        background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%);
+        background: linear-gradient(135deg, var(--color-white) 0%, var(--color-slate-50) 100%);
         border-radius: 12px;
-        border: 1px solid #e2e8f0;
+        border: 1px solid var(--color-slate-200);
         box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
         transition: all 0.2s ease;
     }
 
     .filter-card:hover {
-        border-color: #c7d2fe;
-        box-shadow: 0 4px 12px rgba(99, 102, 241, 0.1);
+        border-color: var(--color-primary-200);
+        box-shadow: 0 4px 12px rgba(var(--rgb-primary-600), 0.1);
     }
 
     /* Connector */
@@ -345,19 +345,19 @@
     }
 
     .connector select.and {
-        background: linear-gradient(135deg, #dbeafe 0%, #bfdbfe 100%);
-        color: #1d4ed8;
+        background: linear-gradient(135deg, var(--color-info-100) 0%, #bfdbfe 100%);
+        color: var(--color-info-700);
     }
 
     .connector select.or {
-        background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
-        color: #b45309;
+        background: linear-gradient(135deg, var(--color-warning-100) 0%, #fde68a 100%);
+        color: var(--color-warning-700);
     }
 
     .where-badge {
         display: inline-block;
         padding: 8px 8px;
-        background: linear-gradient(135deg, #e0e7ff 0%, #c7d2fe 100%);
+        background: linear-gradient(135deg, var(--color-primary-100) 0%, var(--color-primary-200) 100%);
         color: #4338ca;
         font-size: 10px;
         font-weight: 700;
@@ -382,7 +382,7 @@
         font-weight: 600;
         text-transform: uppercase;
         letter-spacing: 0.5px;
-        color: #64748b;
+        color: var(--color-slate-500);
         margin-bottom: 6px;
     }
 
@@ -406,7 +406,7 @@
         display: inline-flex;
         align-items: center;
         justify-content: center;
-        color: #f59e0b;
+        color: var(--color-warning-500);
         transform: translateY(-50%);
         cursor: help;
     }
@@ -415,54 +415,54 @@
         width: 100%;
         padding: 10px 12px;
         border-radius: 8px;
-        border: 1px solid #e2e8f0;
+        border: 1px solid var(--color-slate-200);
         font-size: 13px;
         font-weight: 500;
         background: white;
-        color: #334155;
+        color: var(--color-slate-700);
         cursor: pointer;
         transition: all 0.2s ease;
     }
 
     .operator select:hover {
-        border-color: #6366f1;
+        border-color: var(--color-primary-600);
     }
 
     .operator select:focus {
         outline: none;
-        border-color: #6366f1;
-        box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.15);
+        border-color: var(--color-primary-600);
+        box-shadow: 0 0 0 3px rgba(var(--rgb-primary-600), 0.15);
     }
 
     .field-value input {
         width: 100%;
         padding: 10px 12px;
-        border: 1px solid #e2e8f0;
+        border: 1px solid var(--color-slate-200);
         border-radius: 8px;
         font-size: 13px;
         background: white;
-        color: #0f172a;
+        color: var(--color-slate-950);
         transition: all 0.2s ease;
     }
 
     .field-value input::placeholder {
-        color: #94a3b8;
+        color: var(--color-slate-400);
     }
 
     .field-value input:hover {
-        border-color: #6366f1;
+        border-color: var(--color-primary-600);
     }
 
     .field-value input:focus {
         outline: none;
-        border-color: #6366f1;
-        box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.15);
+        border-color: var(--color-primary-600);
+        box-shadow: 0 0 0 3px rgba(var(--rgb-primary-600), 0.15);
     }
 
     /* Remove Button */
     .remove-btn {
         padding: 8px;
-        color: #94a3b8;
+        color: var(--color-slate-400);
         background: transparent;
         border: none;
         cursor: pointer;
@@ -472,8 +472,8 @@
     }
 
     .remove-btn:hover {
-        color: #ef4444;
-        background: #fef2f2;
+        color: var(--color-danger-500);
+        background: var(--color-danger-50);
         transform: scale(1.1);
     }
 
@@ -487,8 +487,8 @@
         padding: 12px 24px;
         font-size: 14px;
         font-weight: 600;
-        color: #6366f1;
-        background: linear-gradient(135deg, #eef2ff 0%, #e0e7ff 100%);
+        color: var(--color-primary-600);
+        background: linear-gradient(135deg, var(--color-primary-50) 0%, var(--color-primary-100) 100%);
         border: 2px dashed #a5b4fc;
         border-radius: 12px;
         cursor: pointer;
@@ -498,11 +498,11 @@
     }
 
     .add-btn:hover {
-        background: linear-gradient(135deg, #e0e7ff 0%, #c7d2fe 100%);
-        border-color: #6366f1;
-        color: #4f46e5;
+        background: linear-gradient(135deg, var(--color-primary-100) 0%, var(--color-primary-200) 100%);
+        border-color: var(--color-primary-600);
+        color: var(--color-primary-700);
         transform: translateY(-2px);
-        box-shadow: 0 4px 12px rgba(99, 102, 241, 0.25);
+        box-shadow: 0 4px 12px rgba(var(--rgb-primary-600), 0.25);
     }
 
     .add-icon {

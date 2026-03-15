@@ -72,7 +72,7 @@
   }
 
   .settings-content {
-    background: linear-gradient(135deg, #f8fafc 0%, #eef2f7 100%);
+    background: linear-gradient(135deg, var(--color-slate-50) 0%, var(--color-slate-75) 100%);
     padding: 28px;
     overflow-y: auto;
     padding-left: 240px;
@@ -98,7 +98,7 @@
     border-radius: 10px;
     border: 1px solid rgba(148, 163, 184, 0.3);
     background: rgba(255, 255, 255, 0.75);
-    color: #334155;
+    color: var(--color-slate-700);
     text-decoration: none;
     font-size: 13px;
     font-weight: 600;
@@ -106,20 +106,20 @@
   }
 
   .settings-tab:hover {
-    border-color: rgba(99, 102, 241, 0.45);
-    color: #1e293b;
+    border-color: rgba(var(--rgb-primary-600), 0.45);
+    color: var(--color-slate-900);
   }
 
   .settings-tab.active {
-    background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+    background: linear-gradient(135deg, var(--color-primary-600) 0%, var(--color-primary-500) 100%);
     border-color: transparent;
-    color: #ffffff;
-    box-shadow: 0 10px 20px rgba(99, 102, 241, 0.24);
+    color: var(--color-white);
+    box-shadow: 0 10px 20px rgba(var(--rgb-primary-600), 0.24);
   }
 
   .settings-denied {
-    background: #fff;
-    border: 1px solid #e2e8f0;
+    background: var(--color-white);
+    border: 1px solid var(--color-slate-200);
     border-radius: 14px;
     padding: 20px;
   }
@@ -127,17 +127,17 @@
   .settings-denied h2 {
     margin: 0 0 8px;
     font-size: 18px;
-    color: #0f172a;
+    color: var(--color-slate-950);
   }
 
   .settings-denied p {
     margin: 0 0 10px;
-    color: #64748b;
+    color: var(--color-slate-500);
     font-size: 14px;
   }
 
   .settings-denied a {
-    color: #4f46e5;
+    color: var(--color-primary-700);
     text-decoration: none;
     font-size: 14px;
     font-weight: 600;

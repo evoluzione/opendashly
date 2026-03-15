@@ -25,7 +25,7 @@
   }
 
   .admin-content {
-    background: linear-gradient(135deg, #f8fafc 0%, #eef2f7 100%);
+    background: linear-gradient(135deg, var(--color-slate-50) 0%, var(--color-slate-75) 100%);
     padding: 28px;
     overflow-y: auto;
     padding-left: 240px;

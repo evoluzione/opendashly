@@ -29,15 +29,15 @@
 
   const variantStyles = {
     danger: {
-      gradient: "linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%)",
+      gradient: "linear-gradient(135deg, var(--color-primary-600) 0%, var(--color-primary-500) 100%)",
       iconBg: "rgba(255, 255, 255, 0.2)",
     },
     warning: {
-      gradient: "linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%)",
+      gradient: "linear-gradient(135deg, var(--color-primary-600) 0%, var(--color-primary-500) 100%)",
       iconBg: "rgba(255, 255, 255, 0.2)",
     },
     info: {
-      gradient: "linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%)",
+      gradient: "linear-gradient(135deg, var(--color-primary-600) 0%, var(--color-primary-500) 100%)",
       iconBg: "rgba(255, 255, 255, 0.2)",
     },
   };
@@ -162,7 +162,7 @@
   .modal-backdrop {
     position: fixed;
     inset: 0;
-    background: rgba(15, 23, 42, 0.7);
+    background: rgba(var(--rgb-slate-950), 0.7);
     backdrop-filter: blur(8px);
     display: flex;
     align-items: center;
@@ -231,13 +231,13 @@
 
   .modal-content {
     padding: 24px 20px;
-    background: linear-gradient(180deg, #f8fafc 0%, #ffffff 100%);
+    background: linear-gradient(180deg, var(--color-slate-50) 0%, var(--color-white) 100%);
   }
 
   p {
     margin: 0;
     font-size: 14px;
-    color: #334155;
+    color: var(--color-slate-700);
     line-height: 1.6;
   }
 
@@ -246,8 +246,8 @@
     justify-content: flex-end;
     gap: 12px;
     padding: 16px 20px;
-    background: #f8fafc;
-    border-top: 1px solid #e2e8f0;
+    background: var(--color-slate-50);
+    border-top: 1px solid var(--color-slate-200);
   }
 
   button {
@@ -261,13 +261,13 @@
 
   .secondary {
     background: white;
-    color: #475569;
-    border: 1px solid #e2e8f0;
+    color: var(--color-slate-600);
+    border: 1px solid var(--color-slate-200);
   }
 
   .secondary:hover {
-    background: #f1f5f9;
-    border-color: #cbd5e1;
+    background: var(--color-slate-100);
+    border-color: var(--color-slate-300);
   }
 
   .primary {
@@ -277,29 +277,29 @@
   }
 
   .primary.danger {
-    background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+    background: linear-gradient(135deg, var(--color-primary-600) 0%, var(--color-primary-500) 100%);
   }
 
   .primary.danger:hover {
-    box-shadow: 0 6px 20px rgba(99, 102, 241, 0.4);
+    box-shadow: 0 6px 20px rgba(var(--rgb-primary-600), 0.4);
     transform: translateY(-2px);
   }
 
   .primary.warning {
-    background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+    background: linear-gradient(135deg, var(--color-primary-600) 0%, var(--color-primary-500) 100%);
   }
 
   .primary.warning:hover {
-    box-shadow: 0 6px 20px rgba(99, 102, 241, 0.4);
+    box-shadow: 0 6px 20px rgba(var(--rgb-primary-600), 0.4);
     transform: translateY(-2px);
   }
 
   .primary.info {
-    background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+    background: linear-gradient(135deg, var(--color-primary-600) 0%, var(--color-primary-500) 100%);
   }
 
   .primary.info:hover {
-    box-shadow: 0 6px 20px rgba(99, 102, 241, 0.4);
+    box-shadow: 0 6px 20px rgba(var(--rgb-primary-600), 0.4);
     transform: translateY(-2px);
   }
 </style>

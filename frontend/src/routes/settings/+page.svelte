@@ -32,12 +32,12 @@
     font-size: 22px;
     font-weight: 700;
     letter-spacing: -0.02em;
-    color: #0f172a;
+    color: var(--color-slate-950);
   }
 
   .subtitle {
     margin: 6px 0 0;
-    color: #64748b;
+    color: var(--color-slate-500);
     font-size: 14px;
   }
 
@@ -61,12 +61,12 @@
   h3 {
     margin: 0;
     font-size: 15px;
-    color: #0f172a;
+    color: var(--color-slate-950);
   }
 
   .hint {
     margin: 0;
-    color: #64748b;
+    color: var(--color-slate-500);
     font-size: 14px;
     line-height: 1.45;
     max-width: 620px;

@@ -47,7 +47,7 @@
     display: flex;
     flex-direction: column;
     gap: 12px;
-    background: #f8fafc;
+    background: var(--color-slate-50);
     border-radius: 12px;
     padding: 12px;
     border: 1px solid rgba(148, 163, 184, 0.2);
@@ -64,12 +64,12 @@
     font-size: 14px;
     text-transform: uppercase;
     letter-spacing: 0.08em;
-    color: #64748b;
+    color: var(--color-slate-500);
   }
 
   p {
     margin: 0;
-    color: #94a3b8;
+    color: var(--color-slate-400);
     font-size: 12px;
   }
 
@@ -89,19 +89,19 @@
     font-size: 11px;
     text-transform: uppercase;
     letter-spacing: 0.08em;
-    color: #94a3b8;
+    color: var(--color-slate-400);
     font-weight: 600;
   }
 
   .error {
-    color: #b91c1c;
-    background: #fee2e2;
+    color: var(--color-danger-700);
+    background: var(--color-danger-100);
     padding: 12px 16px;
     border-radius: 10px;
   }
 
   .loading {
-    color: #94a3b8;
+    color: var(--color-slate-400);
     font-size: 14px;
   }
 </style>

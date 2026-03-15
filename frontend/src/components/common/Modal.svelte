@@ -89,7 +89,7 @@
     .modal-backdrop {
         position: fixed;
         inset: 0;
-        background: rgba(15, 23, 42, 0.7);
+        background: rgba(var(--rgb-slate-950), 0.7);
         backdrop-filter: blur(8px);
         display: flex;
         align-items: center;
@@ -117,7 +117,7 @@
         align-items: center;
         justify-content: space-between;
         padding: 20px 24px;
-        background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+        background: linear-gradient(135deg, var(--color-primary-600) 0%, var(--color-primary-500) 100%);
         color: white;
     }
 
@@ -165,6 +165,6 @@
     .modal-content {
         padding: 24px;
         overflow-y: auto;
-        background: linear-gradient(180deg, #f8fafc 0%, #ffffff 100%);
+        background: linear-gradient(180deg, var(--color-slate-50) 0%, var(--color-white) 100%);
     }
 </style>

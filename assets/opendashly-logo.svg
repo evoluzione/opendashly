@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="720" height="180" viewBox="0 0 720 180" role="img" aria-labelledby="title desc">
+  <title id="title">OpenDashly Logo</title>
+  <desc id="desc">OpenDashly wordmark with layered telemetry icon.</desc>
+  <defs>
+    <linearGradient id="od-gradient" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#6C5CE7"/>
+      <stop offset="100%" stop-color="#00CEC9"/>
+    </linearGradient>
+  </defs>
+
+  <g transform="translate(24 30)">
+    <rect x="0" y="0" width="120" height="120" rx="24" fill="#0F172A"/>
+    <g transform="translate(20 20)" fill="none" stroke="url(#od-gradient)" stroke-width="7" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M40 0 L0 20 L40 40 L80 20 Z"/>
+      <path d="M0 60 L40 80 L80 60"/>
+      <path d="M0 40 L40 60 L80 40"/>
+    </g>
+  </g>
+
+  <g transform="translate(170 56)">
+    <text x="0" y="46" fill="#0F172A" font-family="Segoe UI, Helvetica, Arial, sans-serif" font-size="56" font-weight="700" letter-spacing="0.5">OpenDashly</text>
+    <text x="2" y="82" fill="#334155" font-family="Segoe UI, Helvetica, Arial, sans-serif" font-size="20" font-weight="500" letter-spacing="1.2">OBSERVABILITY DASHBOARD</text>
+  </g>
+</svg>

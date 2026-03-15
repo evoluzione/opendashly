@@ -6,17 +6,17 @@
   export let data: LogLevelCount[] = [];
 
   const colors: Record<string, string> = {
-    error: '#ef4444',
-    warn: '#f59e0b',
-    warning: '#f59e0b',
-    info: '#3b82f6',
-    debug: '#8b5cf6',
-    trace: '#06b6d4',
-    fatal: '#b91c1c'
+    error: 'var(--color-danger-500)',
+    warn: 'var(--color-warning-500)',
+    warning: 'var(--color-warning-500)',
+    info: 'var(--color-info-500)',
+    debug: 'var(--color-primary-500)',
+    trace: 'var(--color-cyan-500)',
+    fatal: 'var(--color-danger-700)'
   };
 
   function colorFor(level: string): string {
-    return colors[level.toLowerCase()] ?? '#94a3b8';
+    return colors[level.toLowerCase()] ?? 'var(--color-slate-400)';
   }
 </script>
 
@@ -58,7 +58,7 @@
     border-radius: 16px;
     padding: 20px;
     box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05), 0 4px 12px rgba(0, 0, 0, 0.03);
-    border: 1px solid rgba(15, 23, 42, 0.06);
+    border: 1px solid rgba(var(--rgb-slate-950), 0.06);
     min-width: 0;
     min-height: 0;
     display: flex;
@@ -73,19 +73,19 @@
     display: block;
     font-size: 14px;
     font-weight: 600;
-    color: #0f172a;
+    color: var(--color-slate-950);
   }
 
   .table-subtitle {
     display: block;
     font-size: 12px;
-    color: #94a3b8;
+    color: var(--color-slate-400);
     margin-top: 2px;
   }
 
   .empty {
     text-align: center;
-    color: #94a3b8;
+    color: var(--color-slate-400);
     padding: 40px 0;
     font-size: 14px;
   }
@@ -110,7 +110,7 @@
     align-items: center;
     gap: 8px;
     font-size: 13px;
-    color: #0f172a;
+    color: var(--color-slate-950);
   }
 
   .dot {
@@ -121,7 +121,7 @@
 
   .breakdown-bar {
     height: 8px;
-    background: #f1f5f9;
+    background: var(--color-slate-100);
     border-radius: 999px;
     overflow: hidden;
   }
@@ -137,11 +137,11 @@
     flex-direction: column;
     align-items: flex-end;
     font-size: 12px;
-    color: #475569;
+    color: var(--color-slate-600);
   }
 
   .pct {
     font-weight: 600;
-    color: #0f172a;
+    color: var(--color-slate-950);
   }
 </style>

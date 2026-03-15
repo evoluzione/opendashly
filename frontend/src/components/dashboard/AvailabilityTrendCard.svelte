@@ -56,7 +56,7 @@
 
     <div class="trend">
       <svg viewBox="0 0 100 36" preserveAspectRatio="none" aria-label={t($locale, 'dashboard.availability.ariaTrend')}>
-        <polyline points={path} fill="none" stroke="#22c55e" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"></polyline>
+        <polyline points={path} fill="none" stroke="var(--color-success-500)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"></polyline>
       </svg>
     </div>
   {/if}
@@ -68,14 +68,14 @@
     border-radius: 16px;
     padding: 20px;
     box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05), 0 4px 12px rgba(0, 0, 0, 0.03);
-    border: 1px solid rgba(15, 23, 42, 0.06);
+    border: 1px solid rgba(var(--rgb-slate-950), 0.06);
     min-width: 0;
   }
 
   .table-header { margin-bottom: 12px; }
-  .table-title { display: block; font-size: 14px; font-weight: 600; color: #0f172a; }
-  .table-subtitle { display: block; font-size: 12px; color: #94a3b8; margin-top: 2px; }
-  .empty { text-align: center; color: #94a3b8; padding: 40px 0; font-size: 14px; }
+  .table-title { display: block; font-size: 14px; font-weight: 600; color: var(--color-slate-950); }
+  .table-subtitle { display: block; font-size: 12px; color: var(--color-slate-400); margin-top: 2px; }
+  .empty { text-align: center; color: var(--color-slate-400); padding: 40px 0; font-size: 14px; }
 
   .kpis {
     display: grid;
@@ -85,8 +85,8 @@
   }
 
   .kpis div {
-    background: #f8fafc;
-    border: 1px solid #e2e8f0;
+    background: var(--color-slate-50);
+    border: 1px solid var(--color-slate-200);
     border-radius: 10px;
     padding: 8px;
     display: flex;
@@ -96,14 +96,14 @@
 
   .kpis strong {
     font-size: 17px;
-    color: #0f172a;
+    color: var(--color-slate-950);
     font-variant-numeric: tabular-nums;
     line-height: 1;
   }
 
   .kpis span {
     font-size: 10px;
-    color: #64748b;
+    color: var(--color-slate-500);
     text-transform: uppercase;
     letter-spacing: 0.04em;
   }
@@ -112,7 +112,7 @@
     height: 96px;
     border-radius: 10px;
     border: 1px solid #dcfce7;
-    background: linear-gradient(180deg, #f0fdf4 0%, #ffffff 100%);
+    background: linear-gradient(180deg, var(--color-success-50) 0%, var(--color-white) 100%);
     padding: 10px;
   }
 

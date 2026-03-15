@@ -67,14 +67,14 @@
     border-radius: 16px;
     padding: 20px;
     box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05), 0 4px 12px rgba(0, 0, 0, 0.03);
-    border: 1px solid rgba(15, 23, 42, 0.06);
+    border: 1px solid rgba(var(--rgb-slate-950), 0.06);
     min-width: 0;
   }
 
   .table-header { margin-bottom: 12px; }
-  .table-title { display: block; font-size: 14px; font-weight: 600; color: #0f172a; }
-  .table-subtitle { display: block; font-size: 12px; color: #94a3b8; margin-top: 2px; }
-  .empty { text-align: center; color: #94a3b8; padding: 40px 0; font-size: 14px; }
+  .table-title { display: block; font-size: 14px; font-weight: 600; color: var(--color-slate-950); }
+  .table-subtitle { display: block; font-size: 12px; color: var(--color-slate-400); margin-top: 2px; }
+  .empty { text-align: center; color: var(--color-slate-400); padding: 40px 0; font-size: 14px; }
 
   .rows { display: flex; flex-direction: column; gap: 8px; }
 
@@ -87,7 +87,7 @@
 
   .service {
     font-size: 12px;
-    color: #334155;
+    color: var(--color-slate-700);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -95,7 +95,7 @@
 
   .bar-bg {
     height: 8px;
-    background: #e2e8f0;
+    background: var(--color-slate-200);
     border-radius: 999px;
     overflow: hidden;
   }
@@ -104,13 +104,13 @@
     display: block;
     height: 100%;
     border-radius: 999px;
-    background: linear-gradient(90deg, #f59e0b 0%, #ef4444 100%);
+    background: linear-gradient(90deg, var(--color-warning-500) 0%, var(--color-danger-500) 100%);
   }
 
   .value {
     font-size: 12px;
     font-weight: 700;
-    color: #0f172a;
+    color: var(--color-slate-950);
     font-variant-numeric: tabular-nums;
   }
 </style>

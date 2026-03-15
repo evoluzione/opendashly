@@ -8,15 +8,15 @@
         {
             value: "Tutti",
             label: "Tutti i livelli",
-            color: "#0f172a",
-            bg: "#f8fafc",
+            color: "var(--color-slate-950)",
+            bg: "var(--color-slate-50)",
         },
-        { value: "TRACE", label: "TRACE", color: "#64748b", bg: "#f1f5f9" },
-        { value: "DEBUG", label: "DEBUG", color: "#a855f7", bg: "#f3e8ff" },
-        { value: "INFO", label: "INFO", color: "#3b82f6", bg: "#dbeafe" },
-        { value: "WARN", label: "WARN", color: "#f59e0b", bg: "#fef3c7" },
-        { value: "ERROR", label: "ERROR", color: "#ef4444", bg: "#fee2e2" },
-        { value: "FATAL", label: "FATAL", color: "#dc2626", bg: "#fef2f2" },
+        { value: "TRACE", label: "TRACE", color: "var(--color-slate-500)", bg: "var(--color-slate-100)" },
+        { value: "DEBUG", label: "DEBUG", color: "var(--color-primary-400)", bg: "var(--color-primary-25)" },
+        { value: "INFO", label: "INFO", color: "var(--color-info-500)", bg: "var(--color-info-100)" },
+        { value: "WARN", label: "WARN", color: "var(--color-warning-500)", bg: "var(--color-warning-100)" },
+        { value: "ERROR", label: "ERROR", color: "var(--color-danger-500)", bg: "var(--color-danger-100)" },
+        { value: "FATAL", label: "FATAL", color: "var(--color-danger-600)", bg: "var(--color-danger-50)" },
     ];
 
     function getLevel(value: string) {
@@ -124,7 +124,7 @@
         font-weight: 600;
         text-transform: uppercase;
         letter-spacing: 0.05em;
-        color: #64748b;
+        color: var(--color-slate-500);
     }
 
     .trigger {
@@ -133,7 +133,7 @@
         justify-content: space-between;
         padding: 10px 14px;
         border-radius: 10px;
-        border: 1px solid #e2e8f0;
+        border: 1px solid var(--color-slate-200);
         background: white;
         cursor: pointer;
         transition: all 0.2s ease;
@@ -141,12 +141,12 @@
     }
 
     .trigger:hover {
-        border-color: #cbd5e1;
+        border-color: var(--color-slate-300);
     }
 
     .trigger.open {
-        border-color: #6366f1;
-        box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
+        border-color: var(--color-primary-600);
+        box-shadow: 0 0 0 3px rgba(var(--rgb-primary-600), 0.1);
     }
 
     .badge {
@@ -159,7 +159,7 @@
     }
 
     .chevron {
-        color: #64748b;
+        color: var(--color-slate-500);
         transition: transform 0.2s ease;
         flex-shrink: 0;
     }
@@ -174,7 +174,7 @@
         left: 0;
         right: 0;
         background: white;
-        border: 1px solid #e2e8f0;
+        border: 1px solid var(--color-slate-200);
         border-radius: 12px;
         box-shadow:
             0 10px 40px rgba(0, 0, 0, 0.12),
@@ -209,11 +209,11 @@
     }
 
     .option:hover {
-        background: #f8fafc;
+        background: var(--color-slate-50);
     }
 
     .option.selected {
-        background: #f1f5f9;
+        background: var(--color-slate-100);
     }
 
     .option-badge {
@@ -226,7 +226,7 @@
     }
 
     .option svg {
-        color: #6366f1;
+        color: var(--color-primary-600);
         flex-shrink: 0;
     }
 </style>

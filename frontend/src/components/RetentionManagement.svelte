@@ -424,20 +424,20 @@
   header h2 {
     margin: 0 0 6px 0;
     font-size: 22px;
-    color: #0f172a;
+    color: var(--color-slate-950);
   }
   header p {
     margin: 0;
-    color: #64748b;
+    color: var(--color-slate-500);
     font-size: 14px;
   }
 
   .panel {
-    background: #fff;
+    background: var(--color-white);
     border-radius: 16px;
     padding: 20px;
-    border: 1px solid rgba(15, 23, 42, 0.06);
-    box-shadow: 0 1px 3px rgba(15, 23, 42, 0.08);
+    border: 1px solid rgba(var(--rgb-slate-950), 0.06);
+    box-shadow: 0 1px 3px rgba(var(--rgb-slate-950), 0.08);
   }
 
   .panel h3 {
@@ -447,7 +447,7 @@
   }
 
   .help-text {
-    color: #64748b;
+    color: var(--color-slate-500);
     font-size: 14px;
     margin: 0 0 16px 0;
   }
@@ -480,14 +480,14 @@
   td {
     text-align: left;
     padding: 10px 6px;
-    border-bottom: 1px solid rgba(15, 23, 42, 0.06);
+    border-bottom: 1px solid rgba(var(--rgb-slate-950), 0.06);
   }
 
   th {
     font-size: 12px;
     text-transform: uppercase;
     letter-spacing: 0.05em;
-    color: #64748b;
+    color: var(--color-slate-500);
     font-weight: 600;
   }
 
@@ -499,16 +499,16 @@
   .edit-input {
     width: 80px;
     padding: 8px 10px;
-    border: 1px solid #e2e8f0;
+    border: 1px solid var(--color-slate-200);
     border-radius: 8px;
-    background: #f8fafc;
+    background: var(--color-slate-50);
   }
 
   .edit-input:focus {
     outline: none;
-    border-color: #6366f1;
-    box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.12);
-    background: #fff;
+    border-color: var(--color-primary-600);
+    box-shadow: 0 0 0 3px rgba(var(--rgb-primary-600), 0.12);
+    background: var(--color-white);
   }
 
   .action-buttons {
@@ -521,29 +521,29 @@
     font-size: 13px;
     border-radius: 6px;
     border: 1px solid rgba(148, 163, 184, 0.4);
-    background: #fff;
+    background: var(--color-white);
     cursor: pointer;
     transition: all 0.2s ease;
   }
 
   .btn-small.btn-primary {
-    background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+    background: linear-gradient(135deg, var(--color-primary-600) 0%, var(--color-primary-500) 100%);
     color: white;
     border: none;
   }
 
   .btn-small:hover:not(:disabled) {
-    border-color: #cbd5e1;
+    border-color: var(--color-slate-300);
   }
 
   .btn-small.btn-primary:hover:not(:disabled) {
-    box-shadow: 0 4px 10px rgba(99, 102, 241, 0.3);
+    box-shadow: 0 4px 10px rgba(var(--rgb-primary-600), 0.3);
   }
 
   .btn-small.btn-outline {
-    background: #f8fafc;
-    border-color: #cbd5e1;
-    color: #475569;
+    background: var(--color-slate-50);
+    border-color: var(--color-slate-300);
+    color: var(--color-slate-600);
   }
 
   .toggle-jobs {
@@ -569,7 +569,7 @@
     text-transform: uppercase;
     font-weight: 600;
     margin-bottom: 8px;
-    color: #64748b;
+    color: var(--color-slate-500);
     letter-spacing: 0.05em;
   }
 
@@ -591,23 +591,23 @@
     width: 100%;
     padding: 12px 14px;
     border-radius: 10px;
-    border: 1px solid #e2e8f0;
-    background: #f8fafc;
+    border: 1px solid var(--color-slate-200);
+    background: var(--color-slate-50);
     font-size: 14px;
-    color: #0f172a;
+    color: var(--color-slate-950);
     transition: all 0.2s ease;
   }
 
   select:focus {
     outline: none;
-    border-color: #6366f1;
-    box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.12);
-    background: #fff;
+    border-color: var(--color-primary-600);
+    box-shadow: 0 0 0 3px rgba(var(--rgb-primary-600), 0.12);
+    background: var(--color-white);
   }
 
   .hint {
     font-size: 12px;
-    color: #64748b;
+    color: var(--color-slate-500);
     margin: 4px 0 0 0;
   }
 
@@ -615,18 +615,18 @@
     padding: 12px 24px;
     border-radius: 10px;
     border: none;
-    background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+    background: linear-gradient(135deg, var(--color-primary-600) 0%, var(--color-primary-500) 100%);
     color: white;
     font-weight: 600;
     cursor: pointer;
     align-self: flex-start;
     transition: all 0.2s ease;
-    box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3);
+    box-shadow: 0 4px 12px rgba(var(--rgb-primary-600), 0.3);
   }
 
   .btn-danger:hover:not(:disabled) {
     transform: translateY(-1px);
-    box-shadow: 0 6px 16px rgba(99, 102, 241, 0.4);
+    box-shadow: 0 6px 16px rgba(var(--rgb-primary-600), 0.4);
   }
 
   .btn-danger:disabled {
@@ -657,12 +657,12 @@
   }
 
   .status-badge.running {
-    background: #dbeafe;
+    background: var(--color-info-100);
     color: #1e40af;
   }
 
   .status-badge.failed {
-    background: #fee2e2;
+    background: var(--color-danger-100);
     color: #991b1b;
   }
 </style>

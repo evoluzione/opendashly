@@ -19,7 +19,7 @@
   let lastWidth = 0;
 
   const dispatch = createEventDispatcher();
-  const palette = ['#2563eb', '#16a34a', '#f97316', '#ef4444', '#0ea5e9', '#0f766e'];
+  const palette = ['var(--color-info-600)', '#16a34a', '#f97316', 'var(--color-danger-500)', '#0ea5e9', '#0f766e'];
 
   function toEpochSeconds(value: unknown): number | null {
     if (value instanceof Date) {
@@ -215,7 +215,7 @@
   }
 
   .empty {
-    color: #94a3b8;
+    color: var(--color-slate-400);
     font-size: 14px;
     text-align: center;
     padding: 40px 0;
@@ -232,22 +232,22 @@
     font-weight: 600;
     text-transform: uppercase;
     letter-spacing: 0.08em;
-    color: #94a3b8;
+    color: var(--color-slate-400);
   }
 
   .metric-toolbar select {
     padding: 10px 12px;
     border-radius: 10px;
     border: 1px solid rgba(148, 163, 184, 0.35);
-    background: #f8fafc;
-    color: #0f172a;
+    background: var(--color-slate-50);
+    color: var(--color-slate-950);
     font-size: 13px;
     font-weight: 600;
   }
 
   .chart {
-    background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
-    border: 1px solid #e2e8f0;
+    background: linear-gradient(135deg, var(--color-slate-50) 0%, var(--color-slate-100) 100%);
+    border: 1px solid var(--color-slate-200);
     border-radius: 16px;
     padding: 20px;
     min-height: 280px;
@@ -260,7 +260,7 @@
   .chart :global(.u-title) {
     font-size: 14px !important;
     font-weight: 600 !important;
-    color: #334155 !important;
+    color: var(--color-slate-700) !important;
   }
 
   .chart-canvas :global(.u-wrap) {
@@ -293,24 +293,24 @@
     gap: 12px;
     margin-top: 20px;
     padding-top: 20px;
-    border-top: 1px solid #f1f5f9;
+    border-top: 1px solid var(--color-slate-100);
   }
 
   .pager button {
     padding: 10px 16px;
     font-size: 13px;
     font-weight: 500;
-    border: 1px solid #e2e8f0;
+    border: 1px solid var(--color-slate-200);
     border-radius: 8px;
     background: white;
-    color: #475569;
+    color: var(--color-slate-600);
     cursor: pointer;
     transition: all 0.2s ease;
   }
 
   .pager button:hover:not(:disabled) {
-    border-color: #2563eb;
-    color: #2563eb;
+    border-color: var(--color-info-600);
+    color: var(--color-info-600);
   }
 
   .pager button:disabled {
@@ -320,7 +320,7 @@
 
   .pager span {
     font-size: 13px;
-    color: #64748b;
+    color: var(--color-slate-500);
   }
 
 </style>
