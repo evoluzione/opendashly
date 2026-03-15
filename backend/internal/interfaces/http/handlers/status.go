@@ -23,3 +23,16 @@ func (h *StatusHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 }
+
+func (h *StatusHandler) ServeRuntimeHTTP(w http.ResponseWriter, r *http.Request) {
+	if h.Service == nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+	runtimeSummary := h.Service.Runtime(r.Context())
+	w.Header().Set("Content-Type", "application/json")
+	if err := json.NewEncoder(w).Encode(runtimeSummary); err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+}

@@ -2,11 +2,14 @@
   import { onMount } from "svelte";
   import {
     fetchStatusSummary,
+    fetchRuntimeSummary,
     type StatusSummary,
     type TelemetryCounts,
+    type RuntimeSummary,
   } from "../../../services/status";
 
   let summary: StatusSummary | null = null;
+  let runtimeSummary: RuntimeSummary | null = null;
   let loading = false;
   let error = "";
   let lastUpdated: Date | null = null;
@@ -16,6 +19,10 @@
   const numberFormat = new Intl.NumberFormat("it-IT");
   const compactFormat = new Intl.NumberFormat("it-IT", {
     notation: "compact",
+    maximumFractionDigits: 1,
+  });
+  const percentFormat = new Intl.NumberFormat("it-IT", {
+    minimumFractionDigits: 0,
     maximumFractionDigits: 1,
   });
   const STATUS_REFRESH_MIN_SPIN_MS = 700;
@@ -122,6 +129,40 @@
   function formatCompact(value: number | undefined) {
     if (value === undefined || value === null) return "-";
     return compactFormat.format(value);
+  }
+
+  function formatPercent(value: number | undefined) {
+    if (value === undefined || value === null || Number.isNaN(value)) return "-";
+    return `${percentFormat.format(value)}%`;
+  }
+
+  function formatBytes(value: number | undefined) {
+    if (value === undefined || value === null || value <= 0) return "-";
+    const units = ["B", "KB", "MB", "GB", "TB"];
+    let size = value;
+    let unitIndex = 0;
+    while (size >= 1024 && unitIndex < units.length - 1) {
+      size /= 1024;
+      unitIndex += 1;
+    }
+    return `${size.toFixed(size >= 10 ? 0 : 1)} ${units[unitIndex]}`;
+  }
+
+  function formatUptime(seconds: number | undefined) {
+    if (seconds === undefined || seconds === null || seconds < 0) return "-";
+    const total = Math.floor(seconds);
+    const hours = Math.floor(total / 3600);
+    const minutes = Math.floor((total % 3600) / 60);
+    const secs = total % 60;
+    if (hours > 0) return `${hours}h ${minutes}m`;
+    if (minutes > 0) return `${minutes}m ${secs}s`;
+    return `${secs}s`;
+  }
+
+  function componentTone(status: string): "ok" | "warn" | "error" {
+    if (status === "up") return "ok";
+    if (status === "degraded") return "warn";
+    return "error";
   }
 
   function formatLastUpdated(date: Date | null): string {
@@ -388,11 +429,27 @@
     loading = true;
     error = "";
     try {
-      summary = await fetchStatusSummary();
+      const [nextSummary, nextRuntime] = await Promise.allSettled([
+        fetchStatusSummary(),
+        fetchRuntimeSummary(),
+      ]);
+
+      if (nextSummary.status === "rejected") {
+        throw nextSummary.reason;
+      }
+
+      summary = nextSummary.value;
       error = summary.error ?? "";
+
+      if (nextRuntime.status === "fulfilled") {
+        runtimeSummary = nextRuntime.value;
+      } else {
+        runtimeSummary = null;
+      }
       lastUpdated = new Date();
     } catch (err) {
       summary = null;
+      runtimeSummary = null;
       error = err instanceof Error ? err.message : "Errore sconosciuto";
     } finally {
       const elapsed = Date.now() - spinStartedAt;
@@ -608,6 +665,113 @@
         </div>
       </article>
     </div>
+
+    {#if runtimeSummary}
+      <section class="infra-section">
+        <header class="infra-header">
+          <div>
+            <h2>Salute infrastruttura</h2>
+            <p>Deploy, componenti runtime e pressione query in tempo reale.</p>
+          </div>
+          <span class={`infra-badge ${runtimeSummary.ok ? "ok" : "error"}`}>
+            {runtimeSummary.ok ? "Stack operativo" : "Stack con criticita"}
+          </span>
+        </header>
+
+        <div class="infra-grid">
+          <article class="infra-card components-card">
+            <h3>Componenti deploy</h3>
+            <div class="components-list">
+              {#each runtimeSummary.components as component}
+                <div class="component-row">
+                  <div>
+                    <strong>{component.name}</strong>
+                    {#if component.error}
+                      <p>{component.error}</p>
+                    {:else if component.latencyMs !== undefined}
+                      <p>latenza {component.latencyMs} ms</p>
+                    {/if}
+                  </div>
+                  <span class={`chip ${componentTone(component.status)}`}>{component.status}</span>
+                </div>
+              {/each}
+            </div>
+          </article>
+
+          <article class="infra-card queries-card">
+            <h3>Salute query database</h3>
+            <div class="query-kpis">
+              <div>
+                <span>Query attive ora</span>
+                <strong>{formatCount(runtimeSummary.queries.runningNow)}</strong>
+              </div>
+              <div>
+                <span>Query lente ora (&gt; {runtimeSummary.queries.slowThresholdSec}s)</span>
+                <strong>{formatCount(runtimeSummary.queries.slowRunningNow)}</strong>
+              </div>
+              <div>
+                <span>Durata max query attiva</span>
+                <strong>{runtimeSummary.queries.maxRunningElapsedSec.toFixed(1)}s</strong>
+              </div>
+              <div>
+                <span>Query lente ultimi 15m</span>
+                <strong>{formatCount(runtimeSummary.queries.slowQueriesLast15m)}</strong>
+              </div>
+              <div>
+                <span>Query fallite ultimi 15m</span>
+                <strong>{formatCount(runtimeSummary.queries.failedQueriesLast15m)}</strong>
+              </div>
+            </div>
+          </article>
+
+          <article class="infra-card resources-card">
+            <h3>Risorse backend</h3>
+            <div class="resource-kpis">
+              <div>
+                <span>CPU disponibili</span>
+                <strong>{runtimeSummary.resources.cpuCoresAvailable.toFixed(2)} core</strong>
+              </div>
+              <div>
+                <span>CPU usata (backend, 1 core)</span>
+                <strong>{formatPercent(runtimeSummary.resources.cpuUsedPercentOneCore)}</strong>
+              </div>
+              <div>
+                <span>RAM usata</span>
+                <strong>{formatBytes(runtimeSummary.resources.memoryUsedBytes)}</strong>
+              </div>
+              <div>
+                <span>RAM disponibile (limite container)</span>
+                <strong>{formatBytes(runtimeSummary.resources.memoryLimitBytes)}</strong>
+              </div>
+              <div>
+                <span>Percentuale RAM usata</span>
+                <strong>{formatPercent(runtimeSummary.resources.memoryUsedPercent)}</strong>
+              </div>
+              <div>
+                <span>Heap Go</span>
+                <strong>{formatBytes(runtimeSummary.resources.goHeapAllocBytes)}</strong>
+              </div>
+              <div>
+                <span>Goroutine</span>
+                <strong>{formatCount(runtimeSummary.resources.goRoutines)}</strong>
+              </div>
+              <div>
+                <span>Uptime backend</span>
+                <strong>{formatUptime(runtimeSummary.resources.backendUptimeSeconds)}</strong>
+              </div>
+            </div>
+          </article>
+        </div>
+
+        {#if runtimeSummary.warnings && runtimeSummary.warnings.length > 0}
+          <div class="runtime-warnings">
+            {#each runtimeSummary.warnings as warning}
+              <p>{warning}</p>
+            {/each}
+          </div>
+        {/if}
+      </section>
+    {/if}
 
   {:else if !loading}
     <div class="status-empty">Nessun dato disponibile.</div>
@@ -1112,6 +1276,175 @@
     color: #64748b;
   }
 
+  .infra-section {
+    margin-top: 2px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .infra-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+    flex-wrap: wrap;
+  }
+
+  .infra-header h2 {
+    margin: 0;
+    font-size: 18px;
+    color: #0f172a;
+  }
+
+  .infra-header p {
+    margin: 4px 0 0;
+    font-size: 13px;
+  }
+
+  .infra-badge {
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    padding: 6px 10px;
+    border-radius: 999px;
+    border: 1px solid #cbd5e1;
+  }
+
+  .infra-badge.ok {
+    color: #166534;
+    background: #dcfce7;
+    border-color: #86efac;
+  }
+
+  .infra-badge.error {
+    color: #991b1b;
+    background: #fee2e2;
+    border-color: #fecaca;
+  }
+
+  .infra-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 12px;
+  }
+
+  .infra-card {
+    border-radius: 14px;
+    border: 1px solid rgba(15, 23, 42, 0.08);
+    background: #ffffff;
+    padding: 14px;
+    box-shadow: 0 10px 24px rgba(15, 23, 42, 0.06);
+  }
+
+  .infra-card h3 {
+    margin: 0 0 10px;
+    font-size: 15px;
+    color: #0f172a;
+  }
+
+  .components-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .component-row {
+    border-radius: 10px;
+    border: 1px solid #e2e8f0;
+    background: #f8fafc;
+    padding: 10px;
+    display: flex;
+    justify-content: space-between;
+    gap: 8px;
+    align-items: flex-start;
+  }
+
+  .component-row strong {
+    text-transform: capitalize;
+    font-size: 13px;
+    color: #0f172a;
+  }
+
+  .component-row p {
+    margin: 3px 0 0;
+    font-size: 12px;
+    color: #64748b;
+  }
+
+  .chip {
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    border-radius: 999px;
+    padding: 4px 8px;
+    white-space: nowrap;
+  }
+
+  .chip.ok {
+    color: #166534;
+    background: #dcfce7;
+  }
+
+  .chip.warn {
+    color: #854d0e;
+    background: #fef9c3;
+  }
+
+  .chip.error {
+    color: #991b1b;
+    background: #fee2e2;
+  }
+
+  .query-kpis,
+  .resource-kpis {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+  }
+
+  .query-kpis > div,
+  .resource-kpis > div {
+    border-radius: 10px;
+    border: 1px solid #e2e8f0;
+    background: #f8fafc;
+    padding: 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .query-kpis span,
+  .resource-kpis span {
+    font-size: 11px;
+    color: #64748b;
+  }
+
+  .query-kpis strong,
+  .resource-kpis strong {
+    font-size: 14px;
+    color: #0f172a;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .runtime-warnings {
+    border-radius: 10px;
+    border: 1px solid #fde68a;
+    background: #fefce8;
+    padding: 10px 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .runtime-warnings p {
+    margin: 0;
+    font-size: 12px;
+    color: #713f12;
+  }
+
   @media (max-width: 1200px) {
     .health-strip {
       grid-template-columns: 1fr 1fr;
@@ -1122,6 +1455,14 @@
     }
 
     .signal-card-list {
+      grid-column: span 2;
+    }
+
+    .infra-grid {
+      grid-template-columns: 1fr 1fr;
+    }
+
+    .resources-card {
       grid-column: span 2;
     }
   }
@@ -1149,6 +1490,19 @@
 
     .row-meta {
       grid-column: 1 / -1;
+    }
+
+    .infra-grid {
+      grid-template-columns: 1fr;
+    }
+
+    .resources-card {
+      grid-column: auto;
+    }
+
+    .query-kpis,
+    .resource-kpis {
+      grid-template-columns: 1fr;
     }
   }
 </style>

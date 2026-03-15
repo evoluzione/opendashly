@@ -42,7 +42,7 @@ func Build(ctx context.Context) (*App, error) {
 	queryService := &query.Service{Storage: client, Debug: cfg.DebugQuery}
 	relatedService := &query.RelatedService{Storage: client}
 	traceSpansService := &query.TraceSpansService{Storage: client}
-	statusService := &status.Service{Storage: client}
+	statusService := &status.Service{Storage: client, CollectorHealthURL: cfg.CollectorHealthURL}
 	dashboardService := &metrics.Service{Storage: client}
 	savedRepo := query.NewSavedQueryRepo()
 	authRepo := &auth.Repo{Conn: client.Conn}

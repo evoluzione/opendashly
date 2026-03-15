@@ -12,6 +12,7 @@ type Config struct {
 	ClickHouseAddr         string
 	ClickHouseUser         string
 	ClickHousePassword     string
+	CollectorHealthURL     string
 	ListenAddr             string
 	AuthMode               string
 	AuthSecret             string
@@ -27,6 +28,7 @@ func Load() (*Config, error) {
 		ClickHouseAddr:         os.Getenv("CLICKHOUSE_ADDR"),
 		ClickHouseUser:         os.Getenv("CLICKHOUSE_USER"),
 		ClickHousePassword:     os.Getenv("CLICKHOUSE_PASSWORD"),
+		CollectorHealthURL:     os.Getenv("COLLECTOR_HEALTH_URL"),
 		ListenAddr:             os.Getenv("API_LISTEN_ADDR"),
 		AuthMode:               os.Getenv("AUTH_MODE"),
 		AuthSecret:             os.Getenv("AUTH_SECRET"),
@@ -40,6 +42,9 @@ func Load() (*Config, error) {
 	}
 	if cfg.ListenAddr == "" {
 		cfg.ListenAddr = ":8080"
+	}
+	if cfg.CollectorHealthURL == "" {
+		cfg.CollectorHealthURL = "http://otel-collector:13133"
 	}
 	if cfg.AuthMode == "" {
 		cfg.AuthMode = "jwt"

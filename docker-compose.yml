@@ -34,6 +34,7 @@ services:
     ports:
       - "4317:4317"
       - "4318:4318"
+      - "13133:13133"
     environment:
       - CLICKHOUSE_PASSWORD=${CLICKHOUSE_PASSWORD:-otelpass}
     depends_on:
@@ -56,6 +57,7 @@ services:
       - CLICKHOUSE_ADDR=clickhouse:9000
       - CLICKHOUSE_USER=otel
       - CLICKHOUSE_PASSWORD=${CLICKHOUSE_PASSWORD:-otelpass}
+      - COLLECTOR_HEALTH_URL=http://otel-collector:13133
       - API_LISTEN_ADDR=:8080
       - AUTH_MODE=jwt
       - AUTH_SECRET=${AUTH_SECRET:-dev-secret}

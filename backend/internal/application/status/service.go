@@ -40,7 +40,8 @@ type SummaryCounts struct {
 }
 
 type Service struct {
-	Storage *storage.Client
+	Storage            *storage.Client
+	CollectorHealthURL string
 }
 
 const (

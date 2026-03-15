@@ -110,6 +110,7 @@ func registerAPIRoutes(r *chi.Mux, cfg RouterConfig, h routeHandlers) {
 	r.Get("/api/traces/{traceId}/related", h.traceRelatedHandler.ServeHTTP)
 	r.Get("/api/traces/{traceId}/spans", h.traceSpansHandler.ServeHTTP)
 	r.Get("/api/status/summary", h.statusHandler.ServeHTTP)
+	r.Get("/api/status/runtime", h.statusHandler.ServeRuntimeHTTP)
 	r.Post("/api/dashboard/metrics", h.dashboardHandler.ServeHTTP)
 	r.Get("/api/dashboard/settings", h.dashboardSettings.Get)
 
