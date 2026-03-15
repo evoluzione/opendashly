@@ -7,6 +7,8 @@
   export let pagination: { page: number; hasNext: boolean } | null = null;
   export let isLiveUpdate = false;
   export let lastUpdatedLabel = "";
+  export let pageSize = "100";
+  export let pageSizeOptions: string[] = ["25", "50", "100", "200"];
 
   const dispatch = createEventDispatcher();
   let selectedTrace: any | null = null;
@@ -18,6 +20,16 @@
 
   function changePage(nextPage: number) {
     dispatch("pageChange", { page: nextPage });
+  }
+
+  function changePageSize(value: string) {
+    dispatch("pageSizeChange", { size: value });
+  }
+
+  function handlePageSizeChange(event: Event) {
+    const target = event.currentTarget as HTMLSelectElement | null;
+    if (!target) return;
+    changePageSize(target.value);
   }
 
   function closeModal() {
@@ -163,9 +175,18 @@
   {#if pagination}
     <div class="pager">
       <div class="pager-meta">
-        {#if lastUpdatedLabel}
-          <span class="last-refresh">Ultimo aggiornamento: {lastUpdatedLabel}</span>
-        {/if}
+        <div class="page-size-selector">
+          <label for="traces-page-size">Risultati</label>
+          <select
+            id="traces-page-size"
+            value={pageSize}
+            on:change={handlePageSizeChange}
+          >
+            {#each pageSizeOptions as size}
+              <option value={size}>{size}</option>
+            {/each}
+          </select>
+        </div>
       </div>
       <div class="pager-controls">
         <button
@@ -487,6 +508,47 @@
     font-size: 12px;
     color: #94a3b8;
     white-space: nowrap;
+  }
+
+  .page-size-selector {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    max-width: 150px;
+  }
+
+  .page-size-selector label {
+    font-size: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: #64748b;
+  }
+
+  .page-size-selector select {
+    padding: 7px 30px 7px 10px;
+    border-radius: 8px;
+    border: 1px solid #e2e8f0;
+    background: white;
+    font-size: 12px;
+    font-weight: 500;
+    color: #0f172a;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%2364748b' stroke-width='2'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 9px center;
+  }
+
+  .page-size-selector select:hover {
+    border-color: #cbd5e1;
+  }
+
+  .page-size-selector select:focus {
+    outline: none;
+    border-color: #6366f1;
+    box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
   }
 
   .pager-controls {

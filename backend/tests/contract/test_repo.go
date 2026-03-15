@@ -6,7 +6,7 @@ import (
 	"sync"
 	"time"
 
-	"opendashly/backend/internal/auth"
+	"opendashly/backend/internal/application/auth"
 )
 
 var errNotFound = errors.New("not found")
