@@ -147,12 +147,12 @@
   h1 {
     font-size: 22px;
     font-weight: 700;
-    color: #0f172a;
+    color: var(--color-slate-950);
     margin: 0 0 8px 0;
   }
 
   .subtitle {
-    color: #64748b;
+    color: var(--color-slate-500);
     margin: 6px 0 0;
     font-size: 14px;
   }
@@ -161,7 +161,7 @@
     background: white;
     padding: 32px;
     border-radius: 16px;
-    border: 1px solid #e2e8f0;
+    border: 1px solid var(--color-slate-200);
     display: flex;
     flex-direction: column;
     gap: 24px;
@@ -176,7 +176,7 @@
   label {
     font-size: 14px;
     font-weight: 600;
-    color: #334155;
+    color: var(--color-slate-700);
   }
 
   .toggle-label {
@@ -194,28 +194,28 @@
   .toggle-text {
       font-size: 16px;
       font-weight: 600;
-      color: #0f172a;
+      color: var(--color-slate-950);
   }
 
   input[type="password"],
   select {
     padding: 10px 12px;
-    border: 1px solid #cbd5e1;
+    border: 1px solid var(--color-slate-300);
     border-radius: 8px;
     font-size: 14px;
-    color: #0f172a;
+    color: var(--color-slate-950);
   }
   
   input:focus, select:focus {
       outline: none;
-      border-color: #6366f1;
-      box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
+      border-color: var(--color-primary-600);
+      box-shadow: 0 0 0 3px rgba(var(--rgb-primary-600), 0.1);
   }
 
   .helper {
     margin: 0;
     font-size: 13px;
-    color: #94a3b8;
+    color: var(--color-slate-400);
   }
 
   .actions {
@@ -232,17 +232,17 @@
     justify-self: end;
     border-radius: 10px;
     border: none;
-    background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
-    color: #fff;
+    background: linear-gradient(135deg, var(--color-primary-600) 0%, var(--color-primary-500) 100%);
+    color: var(--color-white);
     cursor: pointer;
     font-weight: 600;
     transition: all 0.2s ease;
-    box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3);
+    box-shadow: 0 4px 12px rgba(var(--rgb-primary-600), 0.3);
   }
   button:hover:not(:disabled) {
     transform: translateY(-1px);
-    box-shadow: 0 6px 16px rgba(99, 102, 241, 0.4);
-    background: linear-gradient(135deg, #6366f1 0%, #7c3aed 100%);
+    box-shadow: 0 6px 16px rgba(var(--rgb-primary-600), 0.4);
+    background: linear-gradient(135deg, var(--color-primary-600) 0%, var(--color-primary-450) 100%);
   }
   button:disabled {
     opacity: 0.6;
@@ -257,14 +257,14 @@
   }
 
   .alert.error {
-    background: #fef2f2;
-    color: #b91c1c;
-    border: 1px solid #fecaca;
+    background: var(--color-danger-50);
+    color: var(--color-danger-700);
+    border: 1px solid var(--color-danger-75);
   }
 
   .alert.success {
-    background: #f0fdf4;
-    color: #15803d;
-    border: 1px solid #bbf7d0;
+    background: var(--color-success-50);
+    color: var(--color-success-700);
+    border: 1px solid var(--color-success-100);
   }
 </style>

@@ -6,10 +6,10 @@
   export let data: ErrorHotspot[] = [];
 
   function getErrorRateColor(rate: number): string {
-    if (rate <= 1) return '#22c55e';
+    if (rate <= 1) return 'var(--color-success-500)';
     if (rate <= 5) return '#eab308';
     if (rate <= 10) return '#f97316';
-    return '#ef4444';
+    return 'var(--color-danger-500)';
   }
 </script>
 
@@ -74,7 +74,7 @@
     border-radius: 16px;
     padding: 20px;
     box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05), 0 4px 12px rgba(0, 0, 0, 0.03);
-    border: 1px solid rgba(15, 23, 42, 0.06);
+    border: 1px solid rgba(var(--rgb-slate-950), 0.06);
     min-width: 0;
     min-height: 0;
     display: flex;
@@ -89,19 +89,19 @@
     display: block;
     font-size: 14px;
     font-weight: 600;
-    color: #0f172a;
+    color: var(--color-slate-950);
   }
 
   .table-subtitle {
     display: block;
     font-size: 12px;
-    color: #94a3b8;
+    color: var(--color-slate-400);
     margin-top: 2px;
   }
 
   .empty {
     text-align: center;
-    color: #94a3b8;
+    color: var(--color-slate-400);
     padding: 40px 0;
     font-size: 14px;
   }
@@ -126,15 +126,15 @@
     font-weight: 600;
     text-transform: uppercase;
     letter-spacing: 0.05em;
-    color: #64748b;
-    background: #f8fafc;
-    border-bottom: 1px solid #e2e8f0;
+    color: var(--color-slate-500);
+    background: var(--color-slate-50);
+    border-bottom: 1px solid var(--color-slate-200);
   }
 
   td {
     padding: 12px;
-    border-bottom: 1px solid #f1f5f9;
-    color: #0f172a;
+    border-bottom: 1px solid var(--color-slate-100);
+    color: var(--color-slate-950);
   }
 
   tr:last-child td {
@@ -142,7 +142,7 @@
   }
 
   tr:hover td {
-    background: #f8fafc;
+    background: var(--color-slate-50);
   }
 
   .col-endpoint {
@@ -167,11 +167,11 @@
     display: inline-block;
     max-width: 100%;
     padding: 3px 8px;
-    background: #f1f5f9;
+    background: var(--color-slate-100);
     border-radius: 4px;
     font-size: 11px;
     font-weight: 500;
-    color: #475569;
+    color: var(--color-slate-600);
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -181,12 +181,12 @@
     text-align: right;
     width: 12%;
     font-variant-numeric: tabular-nums;
-    color: #64748b;
+    color: var(--color-slate-500);
     font-size: 11px;
   }
 
   .col-count.error-count {
-    color: #ef4444;
+    color: var(--color-danger-500);
     font-weight: 600;
   }
 
@@ -203,7 +203,7 @@
   .rate-bar-bg {
     flex: 1;
     height: 6px;
-    background: #f1f5f9;
+    background: var(--color-slate-100);
     border-radius: 3px;
     overflow: hidden;
   }

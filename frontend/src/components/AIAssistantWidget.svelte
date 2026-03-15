@@ -438,13 +438,13 @@
 
 <style>
   .assistant-widget {
-    --brand-indigo: #6366f1;
-    --brand-violet: #8b5cf6;
-    --brand-slate-900: #0f172a;
-    --brand-slate-800: #1e293b;
-    --brand-slate-600: #475569;
-    --brand-slate-500: #64748b;
-    --brand-slate-200: #e2e8f0;
+    --brand-indigo: var(--color-primary-600);
+    --brand-violet: var(--color-primary-500);
+    --brand-slate-900: var(--color-slate-950);
+    --brand-slate-800: var(--color-slate-900);
+    --brand-slate-600: var(--color-slate-600);
+    --brand-slate-500: var(--color-slate-500);
+    --brand-slate-200: var(--color-slate-200);
     position: fixed;
     right: 20px;
     bottom: var(--assistant-bottom, 20px);
@@ -467,14 +467,14 @@
     border: none;
     border-radius: 999px;
     background: linear-gradient(135deg, var(--brand-indigo) 0%, var(--brand-violet) 100%);
-    color: #fff;
+    color: var(--color-white);
     display: inline-flex;
     align-items: center;
     justify-content: center;
     line-height: 0;
     cursor: pointer;
     box-shadow:
-      0 10px 26px rgba(99, 102, 241, 0.42),
+      0 10px 26px rgba(var(--rgb-primary-600), 0.42),
       inset 0 1px 0 rgba(255, 255, 255, 0.2);
     transition: transform 0.15s ease, box-shadow 0.15s ease;
   }
@@ -489,19 +489,19 @@
   .fab:hover {
     transform: translateY(-1px);
     box-shadow:
-      0 14px 30px rgba(99, 102, 241, 0.5),
+      0 14px 30px rgba(var(--rgb-primary-600), 0.5),
       inset 0 1px 0 rgba(255, 255, 255, 0.24);
   }
 
   .panel {
     width: min(420px, calc(100vw - 32px));
     max-height: min(72vh, 680px);
-    background: #fff;
-    border: 1px solid rgba(99, 102, 241, 0.22);
+    background: var(--color-white);
+    border: 1px solid rgba(var(--rgb-primary-600), 0.22);
     border-radius: 16px;
     box-shadow:
       0 14px 36px rgba(30, 41, 59, 0.24),
-      0 4px 12px rgba(99, 102, 241, 0.12);
+      0 4px 12px rgba(var(--rgb-primary-600), 0.12);
     display: grid;
     grid-template-rows: auto 1fr auto;
     overflow: hidden;
@@ -513,8 +513,8 @@
     gap: 12px;
     align-items: flex-start;
     padding: 12px 14px;
-    border-bottom: 1px solid rgba(99, 102, 241, 0.2);
-    background: linear-gradient(135deg, rgba(99, 102, 241, 0.12) 0%, rgba(139, 92, 246, 0.1) 100%);
+    border-bottom: 1px solid rgba(var(--rgb-primary-600), 0.2);
+    background: linear-gradient(135deg, rgba(var(--rgb-primary-600), 0.12) 0%, rgba(139, 92, 246, 0.1) 100%);
   }
 
   .panel-header h3 {
@@ -537,9 +537,9 @@
   .icon-btn {
     width: 28px;
     height: 28px;
-    border: 1px solid rgba(99, 102, 241, 0.28);
+    border: 1px solid rgba(var(--rgb-primary-600), 0.28);
     border-radius: 8px;
-    background: #fff;
+    background: var(--color-white);
     color: #4c1d95;
     cursor: pointer;
     font-size: 14px;
@@ -551,7 +551,7 @@
     display: flex;
     flex-direction: column;
     gap: 8px;
-    background: linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%);
+    background: linear-gradient(180deg, var(--color-slate-50) 0%, var(--color-slate-100) 100%);
   }
 
   .status,
@@ -567,7 +567,7 @@
     padding: 9px 10px;
     border: 1px solid var(--brand-slate-200);
     border-radius: 10px;
-    background: #fff;
+    background: var(--color-white);
     color: var(--brand-slate-900);
     font-size: 13px;
     line-height: 1.45;
@@ -575,8 +575,8 @@
 
   .message.user {
     margin-left: auto;
-    background: linear-gradient(135deg, rgba(99, 102, 241, 0.16) 0%, rgba(139, 92, 246, 0.14) 100%);
-    border-color: rgba(99, 102, 241, 0.35);
+    background: linear-gradient(135deg, rgba(var(--rgb-primary-600), 0.16) 0%, rgba(139, 92, 246, 0.14) 100%);
+    border-color: rgba(var(--rgb-primary-600), 0.35);
     color: #312e81;
   }
 
@@ -621,8 +621,8 @@
 
   .md-content :global(code) {
     font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
-    background: rgba(15, 23, 42, 0.06);
-    border: 1px solid rgba(15, 23, 42, 0.12);
+    background: rgba(var(--rgb-slate-950), 0.06);
+    border: 1px solid rgba(var(--rgb-slate-950), 0.12);
     border-radius: 5px;
     padding: 1px 4px;
     font-size: 12px;
@@ -638,7 +638,7 @@
     width: 6px;
     height: 6px;
     border-radius: 999px;
-    background: #94a3b8;
+    background: var(--color-slate-400);
     animation: blink 1s infinite ease-in-out;
   }
 
@@ -664,8 +664,8 @@
   }
 
   .composer {
-    border-top: 1px solid rgba(99, 102, 241, 0.2);
-    background: #fff;
+    border-top: 1px solid rgba(var(--rgb-primary-600), 0.2);
+    background: var(--color-white);
     padding: 10px;
     display: flex;
     flex-direction: column;
@@ -676,7 +676,7 @@
     width: 100%;
     min-height: 72px;
     resize: vertical;
-    border: 1px solid rgba(99, 102, 241, 0.28);
+    border: 1px solid rgba(var(--rgb-primary-600), 0.28);
     border-radius: 10px;
     padding: 10px 11px;
     font-size: 13px;
@@ -688,7 +688,7 @@
   textarea:focus {
     outline: none;
     border-color: var(--brand-indigo);
-    box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.18);
+    box-shadow: 0 0 0 3px rgba(var(--rgb-primary-600), 0.18);
   }
 
   .composer-footer {
@@ -705,13 +705,13 @@
 
   .error {
     font-size: 11px;
-    color: #b91c1c;
+    color: var(--color-danger-700);
   }
 
   .send-btn {
-    border: 1px solid #4f46e5;
+    border: 1px solid var(--color-primary-700);
     background: linear-gradient(135deg, var(--brand-indigo) 0%, var(--brand-violet) 100%);
-    color: #fff;
+    color: var(--color-white);
     border-radius: 9px;
     padding: 8px 12px;
     font-size: 12px;

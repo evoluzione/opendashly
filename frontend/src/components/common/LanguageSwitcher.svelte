@@ -45,10 +45,10 @@
 <style>
   .language-switcher {
     min-width: 140px;
-    border: 1px solid #cbd5e1;
+    border: 1px solid var(--color-slate-300);
     border-radius: 8px;
-    background: #ffffff;
-    color: #0f172a;
+    background: var(--color-white);
+    color: var(--color-slate-950);
     font-size: 14px;
     font-weight: 500;
     line-height: 1.2;
@@ -59,24 +59,24 @@
   }
 
   .language-switcher:hover {
-    border-color: #94a3b8;
+    border-color: var(--color-slate-400);
   }
 
   .language-switcher:focus {
     outline: none;
-    border-color: #2563eb;
+    border-color: var(--color-info-600);
     box-shadow: none;
   }
 
   .language-switcher.compact {
     min-width: 120px;
-    background: rgba(15, 23, 42, 0.35);
+    background: rgba(var(--rgb-slate-950), 0.35);
     border-color: rgba(148, 163, 184, 0.35);
-    color: #f8fafc;
+    color: var(--color-slate-50);
   }
 
   .language-switcher.compact:hover {
-    background: rgba(15, 23, 42, 0.55);
+    background: rgba(var(--rgb-slate-950), 0.55);
     border-color: rgba(148, 163, 184, 0.55);
   }
 

@@ -6,10 +6,10 @@
   export let data: StatusCodeBreakdown[] = [];
 
   const colors: Record<string, string> = {
-    ok: '#22c55e',
-    error: '#ef4444',
-    unset: '#94a3b8',
-    other: '#f59e0b'
+    ok: 'var(--color-success-500)',
+    error: 'var(--color-danger-500)',
+    unset: 'var(--color-slate-400)',
+    other: 'var(--color-warning-500)'
   };
 
   function labelFor(code: string) {
@@ -42,11 +42,11 @@
       {#each data as row}
         <div class="breakdown-row">
           <div class="breakdown-label">
-            <span class="dot" style="background: {colors[row.code] || '#94a3b8'}"></span>
+            <span class="dot" style="background: {colors[row.code] || 'var(--color-slate-400)'}"></span>
             <span>{labelFor(row.code)}</span>
           </div>
           <div class="breakdown-bar">
-            <span class="bar" style="width: {Math.min(row.percentage, 100)}%; background: {colors[row.code] || '#94a3b8'}"></span>
+            <span class="bar" style="width: {Math.min(row.percentage, 100)}%; background: {colors[row.code] || 'var(--color-slate-400)'}"></span>
           </div>
           <div class="breakdown-value">
             <span>{row.count.toLocaleString(getLocaleTag($locale))}</span>
@@ -64,7 +64,7 @@
     border-radius: 16px;
     padding: 20px;
     box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05), 0 4px 12px rgba(0, 0, 0, 0.03);
-    border: 1px solid rgba(15, 23, 42, 0.06);
+    border: 1px solid rgba(var(--rgb-slate-950), 0.06);
     min-width: 0;
   }
 
@@ -76,19 +76,19 @@
     display: block;
     font-size: 14px;
     font-weight: 600;
-    color: #0f172a;
+    color: var(--color-slate-950);
   }
 
   .table-subtitle {
     display: block;
     font-size: 12px;
-    color: #94a3b8;
+    color: var(--color-slate-400);
     margin-top: 2px;
   }
 
   .empty {
     text-align: center;
-    color: #94a3b8;
+    color: var(--color-slate-400);
     padding: 40px 0;
     font-size: 14px;
   }
@@ -111,7 +111,7 @@
     align-items: center;
     gap: 8px;
     font-size: 13px;
-    color: #0f172a;
+    color: var(--color-slate-950);
   }
 
   .dot {
@@ -122,7 +122,7 @@
 
   .breakdown-bar {
     height: 8px;
-    background: #f1f5f9;
+    background: var(--color-slate-100);
     border-radius: 999px;
     overflow: hidden;
   }
@@ -138,11 +138,11 @@
     flex-direction: column;
     align-items: flex-end;
     font-size: 12px;
-    color: #475569;
+    color: var(--color-slate-600);
   }
 
   .pct {
     font-weight: 600;
-    color: #0f172a;
+    color: var(--color-slate-950);
   }
 </style>

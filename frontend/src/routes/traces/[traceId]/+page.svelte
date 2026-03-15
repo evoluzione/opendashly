@@ -51,7 +51,7 @@
   .back {
     padding: 10px 16px;
     border-radius: 999px;
-    background: #1d4ed8;
+    background: var(--color-info-700);
     color: white;
     text-decoration: none;
     font-weight: 600;

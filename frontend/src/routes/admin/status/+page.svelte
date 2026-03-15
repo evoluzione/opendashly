@@ -44,9 +44,9 @@
   };
 
   const signalConfig: Record<SignalKey, { color: string; tint: string }> = {
-    logs: { color: "#2563eb", tint: "#dbeafe" },
-    traces: { color: "#14b8a6", tint: "#ccfbf1" },
-    metrics: { color: "#f59e0b", tint: "#fef3c7" },
+    logs: { color: "var(--color-info-600)", tint: "var(--color-info-100)" },
+    traces: { color: "var(--color-cyan-400)", tint: "var(--color-cyan-100)" },
+    metrics: { color: "var(--color-warning-500)", tint: "var(--color-warning-100)" },
   };
 
   let rows: SignalSeries[] = [];
@@ -805,12 +805,12 @@
   h1 {
     margin: 0;
     font-size: 22px;
-    color: #0f172a;
+    color: var(--color-slate-950);
   }
 
   p {
     margin: 6px 0 0;
-    color: #64748b;
+    color: var(--color-slate-500);
     font-size: 14px;
   }
 
@@ -823,7 +823,7 @@
 
   .last-updated {
     font-size: 12px;
-    color: #64748b;
+    color: var(--color-slate-500);
   }
 
   .refresh-btn {
@@ -836,8 +836,8 @@
     padding: 10px 14px;
     border: none;
     border-radius: 8px;
-    background: #6366f1;
-    color: #ffffff;
+    background: var(--color-primary-600);
+    color: var(--color-white);
     font-size: 12px;
     font-weight: 500;
     cursor: pointer;
@@ -847,7 +847,7 @@
   }
 
   .refresh-btn:hover:not(:disabled) {
-    background: #4f46e5;
+    background: var(--color-primary-700);
   }
 
   .refresh-btn:active:not(:disabled) {
@@ -893,17 +893,17 @@
   .mini-card,
   .signal-card {
     border-radius: 14px;
-    border: 1px solid rgba(15, 23, 42, 0.08);
-    background: #ffffff;
+    border: 1px solid rgba(var(--rgb-slate-950), 0.08);
+    background: var(--color-white);
     padding: 14px;
-    box-shadow: 0 10px 24px rgba(15, 23, 42, 0.06);
+    box-shadow: 0 10px 24px rgba(var(--rgb-slate-950), 0.06);
   }
 
   .health-card {
     display: flex;
     flex-direction: column;
     gap: 6px;
-    background: linear-gradient(140deg, #f8fafc 0%, #ffffff 100%);
+    background: linear-gradient(140deg, var(--color-slate-50) 0%, var(--color-white) 100%);
   }
 
   .health-card.ok {
@@ -915,25 +915,25 @@
   }
 
   .health-card.error {
-    border-color: #fecaca;
+    border-color: var(--color-danger-75);
   }
 
   .health-kicker {
     font-size: 11px;
     text-transform: uppercase;
     letter-spacing: 0.08em;
-    color: #64748b;
+    color: var(--color-slate-500);
   }
 
   .health-card strong {
     font-size: 20px;
-    color: #0f172a;
+    color: var(--color-slate-950);
   }
 
   .health-card p {
     margin: 0;
     font-size: 13px;
-    color: #475569;
+    color: var(--color-slate-600);
   }
 
   .mini-card {
@@ -945,12 +945,12 @@
 
   .mini-card span {
     font-size: 12px;
-    color: #64748b;
+    color: var(--color-slate-500);
   }
 
   .mini-card strong {
     font-size: 20px;
-    color: #0f172a;
+    color: var(--color-slate-950);
   }
 
   .mini-card .trend {
@@ -962,7 +962,7 @@
   }
 
   .trend.down {
-    color: #b91c1c;
+    color: var(--color-danger-700);
   }
 
   .timeline-card,
@@ -970,10 +970,10 @@
   .insights-card,
   .signal-card-list {
     border-radius: 14px;
-    border: 1px solid rgba(15, 23, 42, 0.08);
-    background: #ffffff;
+    border: 1px solid rgba(var(--rgb-slate-950), 0.08);
+    background: var(--color-white);
     padding: 14px;
-    box-shadow: 0 10px 24px rgba(15, 23, 42, 0.06);
+    box-shadow: 0 10px 24px rgba(var(--rgb-slate-950), 0.06);
   }
 
   .timeline-header {
@@ -988,7 +988,7 @@
   .timeline-header h2 {
     margin: 0;
     font-size: 18px;
-    color: #0f172a;
+    color: var(--color-slate-950);
   }
 
   .timeline-header p {
@@ -1009,9 +1009,9 @@
     padding: 4px 8px;
     border-radius: 999px;
     font-size: 11px;
-    color: #334155;
-    background: #f8fafc;
-    border: 1px solid #e2e8f0;
+    color: var(--color-slate-700);
+    background: var(--color-slate-50);
+    border: 1px solid var(--color-slate-200);
   }
 
   .dot {
@@ -1023,9 +1023,9 @@
 
   .timeline-chart {
     position: relative;
-    border: 1px solid #e2e8f0;
+    border: 1px solid var(--color-slate-200);
     border-radius: 10px;
-    background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
+    background: linear-gradient(180deg, var(--color-white) 0%, var(--color-slate-50) 100%);
     padding: 10px 10px 6px;
   }
 
@@ -1037,12 +1037,12 @@
   }
 
   .timeline-chart .axis {
-    stroke: #94a3b8;
+    stroke: var(--color-slate-400);
     stroke-width: 1;
   }
 
   .timeline-chart .grid {
-    stroke: #e2e8f0;
+    stroke: var(--color-slate-200);
     stroke-width: 1;
     stroke-dasharray: 4 6;
   }
@@ -1062,13 +1062,13 @@
 
   .timeline-chart .unit-label,
   .timeline-chart .tick-label {
-    fill: #64748b;
+    fill: var(--color-slate-500);
     font-size: 11px;
     font-family: inherit;
   }
 
   .timeline-chart .cursor {
-    stroke: #475569;
+    stroke: var(--color-slate-600);
     stroke-width: 1;
     stroke-dasharray: 4 4;
     opacity: 0.7;
@@ -1076,7 +1076,7 @@
 
   .timeline-chart .cursor-dot {
     fill: var(--dot);
-    stroke: #ffffff;
+    stroke: var(--color-white);
     stroke-width: 2;
   }
 
@@ -1085,11 +1085,11 @@
     top: 18px;
     transform: translateX(-50%);
     min-width: 150px;
-    border: 1px solid #cbd5e1;
+    border: 1px solid var(--color-slate-300);
     border-radius: 10px;
     padding: 8px 10px;
     background: rgba(255, 255, 255, 0.96);
-    box-shadow: 0 10px 22px rgba(15, 23, 42, 0.14);
+    box-shadow: 0 10px 22px rgba(var(--rgb-slate-950), 0.14);
     backdrop-filter: blur(2px);
     pointer-events: none;
   }
@@ -1097,7 +1097,7 @@
   .tooltip-time {
     font-size: 11px;
     font-weight: 700;
-    color: #334155;
+    color: var(--color-slate-700);
     margin-bottom: 6px;
   }
 
@@ -1107,12 +1107,12 @@
     gap: 6px;
     align-items: center;
     font-size: 12px;
-    color: #334155;
+    color: var(--color-slate-700);
   }
 
   .tooltip-row strong {
     font-variant-numeric: tabular-nums;
-    color: #0f172a;
+    color: var(--color-slate-950);
   }
 
   .tooltip-dot {
@@ -1127,7 +1127,7 @@
     display: grid;
     grid-template-columns: repeat(7, minmax(0, 1fr));
     font-size: 11px;
-    color: #64748b;
+    color: var(--color-slate-500);
   }
 
   .heatmap-card header h3,
@@ -1135,7 +1135,7 @@
   .signal-card-list header h3 {
     margin: 0;
     font-size: 15px;
-    color: #0f172a;
+    color: var(--color-slate-950);
   }
 
   .heatmap-card header p,
@@ -1161,7 +1161,7 @@
 
   .row-label {
     font-size: 12px;
-    color: #0f172a;
+    color: var(--color-slate-950);
     font-weight: 600;
   }
 
@@ -1174,13 +1174,13 @@
   .cell {
     height: 18px;
     border-radius: 4px;
-    background: color-mix(in srgb, var(--cell) calc(var(--a) * 100%), #f1f5f9);
+    background: color-mix(in srgb, var(--cell) calc(var(--a) * 100%), var(--color-slate-100));
     border: 1px solid rgba(148, 163, 184, 0.35);
   }
 
   .row-meta {
     font-size: 11px;
-    color: #64748b;
+    color: var(--color-slate-500);
     white-space: nowrap;
   }
 
@@ -1194,8 +1194,8 @@
   .insight {
     padding: 10px;
     border-radius: 10px;
-    border: 1px solid #e2e8f0;
-    background: #f8fafc;
+    border: 1px solid var(--color-slate-200);
+    background: var(--color-slate-50);
     display: flex;
     flex-direction: column;
     gap: 3px;
@@ -1203,17 +1203,17 @@
 
   .insight strong {
     font-size: 12px;
-    color: #0f172a;
+    color: var(--color-slate-950);
   }
 
   .insight span {
     font-size: 12px;
-    color: #475569;
+    color: var(--color-slate-600);
   }
 
   .insight.ok {
     border-color: #86efac;
-    background: #f0fdf4;
+    background: var(--color-success-50);
   }
 
   .insight.warn {
@@ -1222,8 +1222,8 @@
   }
 
   .insight.error {
-    border-color: #fecaca;
-    background: #fef2f2;
+    border-color: var(--color-danger-75);
+    background: var(--color-danger-50);
   }
 
   .signal-list {
@@ -1235,8 +1235,8 @@
 
   .signal-row {
     border-radius: 10px;
-    border: 1px solid #e2e8f0;
-    background: #f8fafc;
+    border: 1px solid var(--color-slate-200);
+    background: var(--color-slate-50);
     padding: 10px;
     display: flex;
     justify-content: space-between;
@@ -1253,12 +1253,12 @@
   .signal-name {
     font-size: 13px;
     font-weight: 700;
-    color: #0f172a;
+    color: var(--color-slate-950);
   }
 
   .signal-total {
     font-size: 12px;
-    color: #64748b;
+    color: var(--color-slate-500);
   }
 
   .signal-kpis {
@@ -1267,22 +1267,22 @@
     gap: 10px;
     flex-wrap: wrap;
     font-size: 12px;
-    color: #334155;
+    color: var(--color-slate-700);
     font-variant-numeric: tabular-nums;
   }
 
   .status-error {
     font-size: 13px;
-    color: #b91c1c;
-    background: #fef2f2;
-    border: 1px solid #fecaca;
+    color: var(--color-danger-700);
+    background: var(--color-danger-50);
+    border: 1px solid var(--color-danger-75);
     border-radius: 8px;
     padding: 10px 12px;
   }
 
   .status-empty {
     font-size: 13px;
-    color: #64748b;
+    color: var(--color-slate-500);
   }
 
   .infra-section {
@@ -1303,7 +1303,7 @@
   .infra-header h2 {
     margin: 0;
     font-size: 18px;
-    color: #0f172a;
+    color: var(--color-slate-950);
   }
 
   .infra-header p {
@@ -1318,7 +1318,7 @@
     letter-spacing: 0.05em;
     padding: 6px 10px;
     border-radius: 999px;
-    border: 1px solid #cbd5e1;
+    border: 1px solid var(--color-slate-300);
   }
 
   .infra-badge.ok {
@@ -1329,8 +1329,8 @@
 
   .infra-badge.error {
     color: #991b1b;
-    background: #fee2e2;
-    border-color: #fecaca;
+    background: var(--color-danger-100);
+    border-color: var(--color-danger-75);
   }
 
   .infra-grid {
@@ -1341,16 +1341,16 @@
 
   .infra-card {
     border-radius: 14px;
-    border: 1px solid rgba(15, 23, 42, 0.08);
-    background: #ffffff;
+    border: 1px solid rgba(var(--rgb-slate-950), 0.08);
+    background: var(--color-white);
     padding: 14px;
-    box-shadow: 0 10px 24px rgba(15, 23, 42, 0.06);
+    box-shadow: 0 10px 24px rgba(var(--rgb-slate-950), 0.06);
   }
 
   .infra-card h3 {
     margin: 0 0 10px;
     font-size: 15px;
-    color: #0f172a;
+    color: var(--color-slate-950);
   }
 
   .components-list {
@@ -1361,8 +1361,8 @@
 
   .component-row {
     border-radius: 10px;
-    border: 1px solid #e2e8f0;
-    background: #f8fafc;
+    border: 1px solid var(--color-slate-200);
+    background: var(--color-slate-50);
     padding: 10px;
     display: flex;
     justify-content: space-between;
@@ -1373,13 +1373,13 @@
   .component-row strong {
     text-transform: capitalize;
     font-size: 13px;
-    color: #0f172a;
+    color: var(--color-slate-950);
   }
 
   .component-row p {
     margin: 3px 0 0;
     font-size: 12px;
-    color: #64748b;
+    color: var(--color-slate-500);
   }
 
   .chip {
@@ -1404,7 +1404,7 @@
 
   .chip.error {
     color: #991b1b;
-    background: #fee2e2;
+    background: var(--color-danger-100);
   }
 
   .query-kpis,
@@ -1417,8 +1417,8 @@
   .query-kpis > div,
   .resource-kpis > div {
     border-radius: 10px;
-    border: 1px solid #e2e8f0;
-    background: #f8fafc;
+    border: 1px solid var(--color-slate-200);
+    background: var(--color-slate-50);
     padding: 10px;
     display: flex;
     flex-direction: column;
@@ -1428,13 +1428,13 @@
   .query-kpis span,
   .resource-kpis span {
     font-size: 11px;
-    color: #64748b;
+    color: var(--color-slate-500);
   }
 
   .query-kpis strong,
   .resource-kpis strong {
     font-size: 14px;
-    color: #0f172a;
+    color: var(--color-slate-950);
     font-variant-numeric: tabular-nums;
   }
 

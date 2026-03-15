@@ -6,11 +6,11 @@
   export let data: ApdexScore | null = null;
 
   function getColor(score: number): string {
-    if (score >= 0.94) return '#22c55e'; // Excellent - green
+    if (score >= 0.94) return 'var(--color-success-500)'; // Excellent - green
     if (score >= 0.85) return '#84cc16'; // Good - lime
     if (score >= 0.70) return '#eab308'; // Fair - yellow
     if (score >= 0.50) return '#f97316'; // Poor - orange
-    return '#ef4444'; // Unacceptable - red
+    return 'var(--color-danger-500)'; // Unacceptable - red
   }
 
   function getLabel(score: number): string {
@@ -45,7 +45,7 @@
         cy="50"
         r="45"
         fill="none"
-        stroke="#e2e8f0"
+        stroke="var(--color-slate-200)"
         stroke-width="8"
       />
       <circle
@@ -93,7 +93,7 @@
     border-radius: 16px;
     padding: 20px;
     box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05), 0 4px 12px rgba(0, 0, 0, 0.03);
-    border: 1px solid rgba(15, 23, 42, 0.06);
+    border: 1px solid rgba(var(--rgb-slate-950), 0.06);
     display: flex;
     flex-direction: column;
     gap: 16px;
@@ -112,12 +112,12 @@
     font-weight: 700;
     text-transform: uppercase;
     letter-spacing: 0.08em;
-    color: #64748b;
+    color: var(--color-slate-500);
   }
 
   .gauge-subtitle {
     font-size: 11px;
-    color: #94a3b8;
+    color: var(--color-slate-400);
   }
 
   .gauge-container {
@@ -164,7 +164,7 @@
     flex-direction: column;
     gap: 8px;
     padding-top: 12px;
-    border-top: 1px solid #f1f5f9;
+    border-top: 1px solid var(--color-slate-100);
   }
 
   .breakdown-row {
@@ -182,7 +182,7 @@
   }
 
   .dot.satisfied {
-    background: #22c55e;
+    background: var(--color-success-500);
   }
 
   .dot.tolerating {
@@ -190,16 +190,16 @@
   }
 
   .dot.frustrated {
-    background: #ef4444;
+    background: var(--color-danger-500);
   }
 
   .breakdown-label {
-    color: #64748b;
+    color: var(--color-slate-500);
     flex: 1;
   }
 
   .breakdown-value {
-    color: #0f172a;
+    color: var(--color-slate-950);
     font-weight: 600;
     font-variant-numeric: tabular-nums;
   }

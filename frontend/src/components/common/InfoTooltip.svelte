@@ -28,12 +28,12 @@
   .info-icon {
     width: 14px;
     height: 14px;
-    color: #94a3b8;
+    color: var(--color-slate-400);
     transition: color 0.15s ease;
   }
 
   .info-tooltip:hover .info-icon {
-    color: #64748b;
+    color: var(--color-slate-500);
   }
 
   .tooltip-text {
@@ -44,7 +44,7 @@
     bottom: calc(100% + 8px);
     left: 50%;
     transform: translateX(-50%);
-    background: #0f172a;
+    background: var(--color-slate-950);
     color: white;
     padding: 10px 14px;
     border-radius: 8px;
@@ -84,14 +84,14 @@
     left: 50%;
     transform: translateX(-50%);
     border: 6px solid transparent;
-    border-top-color: #0f172a;
+    border-top-color: var(--color-slate-950);
   }
 
   .tooltip-text.bottom::after {
     top: auto;
     bottom: 100%;
     border-top-color: transparent;
-    border-bottom-color: #0f172a;
+    border-bottom-color: var(--color-slate-950);
   }
 
   .tooltip-text.align-left::after {

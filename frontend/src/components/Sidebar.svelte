@@ -148,7 +148,7 @@
     flex-direction: column;
     gap: 32px;
     padding: 24px 16px;
-    background: linear-gradient(180deg, #0f172a 0%, #1e293b 100%);
+    background: linear-gradient(180deg, var(--color-slate-950) 0%, var(--color-slate-900) 100%);
     width: 240px;
     box-sizing: border-box;
     height: 100vh;
@@ -188,9 +188,9 @@
     width: 42px;
     height: 42px;
     border-radius: 12px;
-    background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+    background: linear-gradient(135deg, var(--color-primary-600) 0%, var(--color-primary-500) 100%);
     color: white;
-    box-shadow: 0 4px 12px rgba(99, 102, 241, 0.4);
+    box-shadow: 0 4px 12px rgba(var(--rgb-primary-600), 0.4);
   }
 
   .brand-text {
@@ -201,13 +201,13 @@
   .name {
     font-weight: 700;
     font-size: 15px;
-    color: #f8fafc;
+    color: var(--color-slate-50);
     letter-spacing: -0.02em;
   }
 
   .tagline {
     font-size: 11px;
-    color: #64748b;
+    color: var(--color-slate-500);
     text-transform: uppercase;
     letter-spacing: 0.08em;
   }
@@ -223,7 +223,7 @@
   .nav-label {
     font-size: 11px;
     font-weight: 600;
-    color: #64748b;
+    color: var(--color-slate-500);
     text-transform: uppercase;
     letter-spacing: 0.08em;
     padding: 0 12px;
@@ -246,7 +246,7 @@
     background: transparent;
     font-size: 14px;
     font-weight: 500;
-    color: #94a3b8;
+    color: var(--color-slate-400);
     cursor: pointer;
     transition: all 0.2s ease;
     text-align: left;
@@ -254,17 +254,17 @@
 
   .nav-section button:hover {
     background: rgba(255, 255, 255, 0.05);
-    color: #e2e8f0;
+    color: var(--color-slate-200);
   }
 
   .nav-section button.selected {
     background: linear-gradient(
       135deg,
-      rgba(99, 102, 241, 0.2) 0%,
+      rgba(var(--rgb-primary-600), 0.2) 0%,
       rgba(139, 92, 246, 0.2) 100%
     );
     color: #a5b4fc;
-    box-shadow: inset 0 0 0 1px rgba(99, 102, 241, 0.3);
+    box-shadow: inset 0 0 0 1px rgba(var(--rgb-primary-600), 0.3);
   }
 
   .nav-section button.selected svg {
@@ -303,7 +303,7 @@
     width: 36px;
     height: 36px;
     border-radius: 10px;
-    background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+    background: linear-gradient(135deg, var(--color-primary-600) 0%, var(--color-primary-500) 100%);
     color: white;
     display: flex;
     align-items: center;
@@ -322,7 +322,7 @@
   .username {
     font-size: 13px;
     font-weight: 600;
-    color: #f1f5f9;
+    color: var(--color-slate-100);
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -330,7 +330,7 @@
 
   .role {
     font-size: 11px;
-    color: #64748b;
+    color: var(--color-slate-500);
     text-transform: capitalize;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -344,7 +344,7 @@
     width: 30px;
     height: 30px;
     border-radius: 8px;
-    color: #64748b;
+    color: var(--color-slate-500);
     background: rgba(148, 163, 184, 0.12);
     border: 1px solid rgba(148, 163, 184, 0.2);
     transition: all 0.2s ease;
@@ -375,7 +375,7 @@
   }
 
   .settings-icon-btn {
-    color: #94a3b8;
+    color: var(--color-slate-400);
     text-decoration: none;
   }
 
@@ -386,9 +386,9 @@
   }
 
   .settings-icon-btn:hover {
-    background: rgba(99, 102, 241, 0.24);
+    background: rgba(var(--rgb-primary-600), 0.24);
     border-color: rgba(129, 140, 248, 0.45);
-    color: #c7d2fe;
+    color: var(--color-primary-200);
   }
 
 </style>

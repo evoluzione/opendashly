@@ -106,12 +106,12 @@
   const availableLogLevels = ["TRACE", "DEBUG", "INFO", "WARN", "ERROR", "FATAL"];
 
   const logLevelPalette: Record<string, { color: string; bg: string }> = {
-    TRACE: { color: "#64748b", bg: "#f1f5f9" },
-    DEBUG: { color: "#a855f7", bg: "#f3e8ff" },
-    INFO: { color: "#3b82f6", bg: "#dbeafe" },
-    WARN: { color: "#f59e0b", bg: "#fef3c7" },
-    ERROR: { color: "#ef4444", bg: "#fee2e2" },
-    FATAL: { color: "#dc2626", bg: "#fef2f2" },
+    TRACE: { color: "var(--color-slate-500)", bg: "var(--color-slate-100)" },
+    DEBUG: { color: "var(--color-primary-400)", bg: "var(--color-primary-25)" },
+    INFO: { color: "var(--color-info-500)", bg: "var(--color-info-100)" },
+    WARN: { color: "var(--color-warning-500)", bg: "var(--color-warning-100)" },
+    ERROR: { color: "var(--color-danger-500)", bg: "var(--color-danger-100)" },
+    FATAL: { color: "var(--color-danger-600)", bg: "var(--color-danger-50)" },
   };
 
   const presetMinutes: Record<Exclude<TimeRangePreset, "custom">, number | null> = {
@@ -258,7 +258,7 @@
   }
 
   function getLogLevelStyle(level: string) {
-    const palette = logLevelPalette[level] || { color: "#0f172a", bg: "#f8fafc" };
+    const palette = logLevelPalette[level] || { color: "var(--color-slate-950)", bg: "var(--color-slate-50)" };
     return `background: ${palette.bg}; color: ${palette.color}`;
   }
 
@@ -870,7 +870,7 @@
     margin-top: -8px;
     margin-bottom: 4px;
     padding-bottom: 14px;
-    border-bottom: 1px solid rgba(15, 23, 42, 0.08);
+    border-bottom: 1px solid rgba(var(--rgb-slate-950), 0.08);
   }
 
   .log-level-filter {
@@ -888,10 +888,10 @@
     width: 100%;
     min-height: 42px;
     padding: 0 12px;
-    border: 1px solid #e2e8f0;
+    border: 1px solid var(--color-slate-200);
     border-radius: 10px;
-    background: #f8fafc;
-    color: #0f172a;
+    background: var(--color-slate-50);
+    color: var(--color-slate-950);
     font-size: 13px;
     font-weight: 500;
     display: flex;
@@ -909,7 +909,7 @@
   }
 
   .trigger-placeholder {
-    color: #64748b;
+    color: var(--color-slate-500);
     font-weight: 500;
     font-size: 13px;
   }
@@ -917,8 +917,8 @@
   .log-level-trigger.open,
   .log-level-trigger:focus {
     outline: none;
-    border-color: #6366f1;
-    box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
+    border-color: var(--color-primary-600);
+    box-shadow: 0 0 0 3px rgba(var(--rgb-primary-600), 0.1);
     background: white;
   }
 
@@ -929,9 +929,9 @@
     right: 0;
     z-index: 20;
     background: white;
-    border: 1px solid #e2e8f0;
+    border: 1px solid var(--color-slate-200);
     border-radius: 10px;
-    box-shadow: 0 8px 20px rgba(15, 23, 42, 0.12);
+    box-shadow: 0 8px 20px rgba(var(--rgb-slate-950), 0.12);
     padding: 10px;
     display: flex;
     flex-direction: column;
@@ -945,7 +945,7 @@
     margin: 0;
     font-size: 12px;
     font-weight: 600;
-    color: #334155;
+    color: var(--color-slate-700);
     text-transform: none;
     letter-spacing: 0;
     cursor: pointer;
@@ -979,9 +979,9 @@
     flex-direction: column;
     gap: 8px;
     padding: 12px;
-    border: 1px solid #e2e8f0;
+    border: 1px solid var(--color-slate-200);
     border-radius: 12px;
-    background: #f8fafc;
+    background: var(--color-slate-50);
   }
 
   .time-range-controls {
@@ -994,7 +994,7 @@
   .time-range-summary {
     margin: 0;
     font-size: 12px;
-    color: #64748b;
+    color: var(--color-slate-500);
     text-align: center;
   }
 
@@ -1017,7 +1017,7 @@
     font-weight: 600;
     text-transform: uppercase;
     letter-spacing: 0.05em;
-    color: #64748b;
+    color: var(--color-slate-500);
   }
 
   label {
@@ -1026,7 +1026,7 @@
     font-weight: 600;
     text-transform: uppercase;
     letter-spacing: 0.05em;
-    color: #64748b;
+    color: var(--color-slate-500);
     margin-bottom: 4px;
   }
 
@@ -1035,17 +1035,17 @@
     width: 100%;
     padding: 12px 14px;
     font-size: 13px;
-    border: 1px solid #e2e8f0;
+    border: 1px solid var(--color-slate-200);
     border-radius: 10px;
-    background: #f8fafc;
-    color: #0f172a;
+    background: var(--color-slate-50);
+    color: var(--color-slate-950);
   }
 
   input:focus,
   select:focus {
     outline: none;
-    border-color: #6366f1;
-    box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
+    border-color: var(--color-primary-600);
+    box-shadow: 0 0 0 3px rgba(var(--rgb-primary-600), 0.1);
     background: white;
   }
 
@@ -1059,8 +1059,8 @@
   .trace-error-scope {
     display: grid;
     grid-template-columns: repeat(3, minmax(0, 1fr));
-    background: #f1f5f9;
-    border: 1px solid #e2e8f0;
+    background: var(--color-slate-100);
+    border: 1px solid var(--color-slate-200);
     border-radius: 10px;
     padding: 4px;
     gap: 4px;
@@ -1069,7 +1069,7 @@
   .trace-error-scope button {
     border: none;
     background: transparent;
-    color: #475569;
+    color: var(--color-slate-600);
     border-radius: 8px;
     font-size: 12px;
     font-weight: 600;
@@ -1079,8 +1079,8 @@
 
   .trace-error-scope button.active {
     background: white;
-    color: #0f172a;
-    box-shadow: 0 2px 8px rgba(15, 23, 42, 0.12);
+    color: var(--color-slate-950);
+    box-shadow: 0 2px 8px rgba(var(--rgb-slate-950), 0.12);
   }
 
   .advanced-filters-trigger {
@@ -1100,7 +1100,7 @@
     gap: 8px;
     font-size: 12px;
     font-weight: 700;
-    color: #1d4ed8;
+    color: var(--color-info-700);
     background: #eff6ff;
     border: 1px solid #bfdbfe;
     border-radius: 999px;
@@ -1112,12 +1112,12 @@
     width: 8px;
     height: 8px;
     border-radius: 999px;
-    background: #2563eb;
+    background: var(--color-info-600);
     box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.16);
   }
 
   .advanced-filters-btn.active {
-    border-color: #2563eb;
+    border-color: var(--color-info-600);
     background: #eff6ff;
     color: #1e40af;
     box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
@@ -1130,9 +1130,9 @@
     gap: 8px;
     padding: 10px 14px;
     background: white;
-    border: 1px solid #cbd5e1;
+    border: 1px solid var(--color-slate-300);
     border-radius: 8px;
-    color: #334155;
+    color: var(--color-slate-700);
     font-weight: 500;
     font-size: 13px;
     cursor: pointer;
@@ -1140,8 +1140,8 @@
   }
 
   .btn-secondary:hover {
-    background: #f8fafc;
-    border-color: #94a3b8;
+    background: var(--color-slate-50);
+    border-color: var(--color-slate-400);
   }
 
   .btn-primary {
@@ -1150,7 +1150,7 @@
     justify-content: center;
     gap: 8px;
     padding: 12px 24px;
-    background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+    background: linear-gradient(135deg, var(--color-primary-600) 0%, var(--color-primary-500) 100%);
     color: white;
     border: none;
     border-radius: 10px;
@@ -1158,16 +1158,16 @@
     font-weight: 600;
     cursor: pointer;
     transition: all 0.2s ease;
-    box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3);
+    box-shadow: 0 4px 12px rgba(var(--rgb-primary-600), 0.3);
   }
 
   .btn-primary:hover {
     transform: translateY(-1px);
-    box-shadow: 0 6px 16px rgba(99, 102, 241, 0.35);
+    box-shadow: 0 6px 16px rgba(var(--rgb-primary-600), 0.35);
   }
 
   .badge {
-    background: #6366f1;
+    background: var(--color-primary-600);
     color: white;
     font-size: 11px;
     padding: 2px 6px;
@@ -1177,7 +1177,7 @@
 
   .error {
     margin: 0;
-    color: #b91c1c;
+    color: var(--color-danger-700);
     font-size: 12px;
     font-weight: 600;
   }
@@ -1188,7 +1188,7 @@
     gap: 12px;
     margin-top: 24px;
     padding-top: 20px;
-    border-top: 1px solid #e2e8f0;
+    border-top: 1px solid var(--color-slate-200);
   }
 
   .custom-range-grid {

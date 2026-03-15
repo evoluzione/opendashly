@@ -160,7 +160,7 @@
   }
   
   .login-left {
-    background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+    background: linear-gradient(135deg, var(--color-slate-950) 0%, var(--color-slate-900) 100%);
     padding: 60px;
     display: flex;
     flex-direction: column;
@@ -184,7 +184,7 @@
     right: -50%;
     width: 100%;
     height: 100%;
-    background: radial-gradient(circle, rgba(99, 102, 241, 0.15) 0%, transparent 70%);
+    background: radial-gradient(circle, rgba(var(--rgb-primary-600), 0.15) 0%, transparent 70%);
     pointer-events: none;
   }
   
@@ -214,22 +214,22 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+    background: linear-gradient(135deg, var(--color-primary-600) 0%, var(--color-primary-500) 100%);
     border-radius: 16px;
     color: white;
-    box-shadow: 0 8px 24px rgba(99, 102, 241, 0.4);
+    box-shadow: 0 8px 24px rgba(var(--rgb-primary-600), 0.4);
   }
   
   .brand-text h1 {
     margin: 0;
     font-size: 24px;
     font-weight: 700;
-    color: #f8fafc;
+    color: var(--color-slate-50);
   }
   
   .brand-text span {
     font-size: 13px;
-    color: #64748b;
+    color: var(--color-slate-500);
     text-transform: uppercase;
     letter-spacing: 0.1em;
   }
@@ -263,20 +263,20 @@
   
   .feature strong {
     display: block;
-    color: #f1f5f9;
+    color: var(--color-slate-100);
     font-size: 15px;
     margin-bottom: 4px;
   }
   
   .feature p {
     margin: 0;
-    color: #64748b;
+    color: var(--color-slate-500);
     font-size: 13px;
     line-height: 1.5;
   }
   
   .login-right {
-    background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+    background: linear-gradient(135deg, var(--color-slate-50) 0%, var(--color-slate-100) 100%);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -290,7 +290,7 @@
     width: 100%;
     max-width: 420px;
     box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.1);
-    border: 1px solid rgba(15, 23, 42, 0.06);
+    border: 1px solid rgba(var(--rgb-slate-950), 0.06);
   }
 
   .card-header {
@@ -302,12 +302,12 @@
     margin: 0 0 8px 0;
     font-size: 28px;
     font-weight: 700;
-    color: #0f172a;
+    color: var(--color-slate-950);
   }
   
   .card-header p {
     margin: 0;
-    color: #64748b;
+    color: var(--color-slate-500);
     font-size: 15px;
   }
   
@@ -341,9 +341,9 @@
   }
   
   .input-wrapper:focus-within {
-    border-color: #6366f1;
+    border-color: var(--color-primary-600);
     background: white;
-    box-shadow: 0 0 0 4px rgba(99, 102, 241, 0.1);
+    box-shadow: 0 0 0 4px rgba(var(--rgb-primary-600), 0.1);
   }
   
   .input-wrapper svg {
@@ -352,7 +352,7 @@
   }
   
   .input-wrapper:focus-within svg {
-    color: #6366f1;
+    color: var(--color-primary-600);
   }
   
   input {
@@ -360,7 +360,7 @@
     border: none;
     background: transparent;
     font-size: 15px;
-    color: #0f172a;
+    color: var(--color-slate-950);
     outline: none;
   }
   
@@ -373,10 +373,10 @@
     align-items: center;
     gap: 8px;
     padding: 12px 16px;
-    background: #fef2f2;
-    border: 1px solid #fecaca;
+    background: var(--color-danger-50);
+    border: 1px solid var(--color-danger-75);
     border-radius: 10px;
-    color: #dc2626;
+    color: var(--color-danger-600);
     font-size: 14px;
   }
   
@@ -389,18 +389,18 @@
     padding: 16px 24px;
     border-radius: 12px;
     border: none;
-    background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+    background: linear-gradient(135deg, var(--color-primary-600) 0%, var(--color-primary-500) 100%);
     color: white;
     font-size: 15px;
     font-weight: 600;
     cursor: pointer;
     transition: all 0.2s ease;
-    box-shadow: 0 4px 14px rgba(99, 102, 241, 0.4);
+    box-shadow: 0 4px 14px rgba(var(--rgb-primary-600), 0.4);
   }
   
   .submit-btn:hover:not(:disabled) {
     transform: translateY(-2px);
-    box-shadow: 0 8px 20px rgba(99, 102, 241, 0.5);
+    box-shadow: 0 8px 20px rgba(var(--rgb-primary-600), 0.5);
   }
   
   .submit-btn:disabled {

@@ -143,17 +143,17 @@
     input {
         width: 100%;
         padding: 8px 12px;
-        border: 1px solid #e2e8f0;
+        border: 1px solid var(--color-slate-200);
         border-radius: 6px;
         font-size: 13px;
-        color: #0f172a;
-        background: #ffffff;
+        color: var(--color-slate-950);
+        background: var(--color-white);
         transition: all 0.2s;
     }
 
     input:focus {
         outline: none;
-        border-color: #3b82f6;
+        border-color: var(--color-info-500);
         box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.1);
     }
 
@@ -164,7 +164,7 @@
         right: 0;
         margin-top: 4px;
         background: white;
-        border: 1px solid #e2e8f0;
+        border: 1px solid var(--color-slate-200);
         border-radius: 6px;
         box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
         z-index: 50;
@@ -183,7 +183,7 @@
         text-align: left;
         padding: 8px 12px;
         font-size: 13px;
-        color: #334155;
+        color: var(--color-slate-700);
         background: transparent;
         border: none;
         cursor: pointer;
@@ -191,12 +191,12 @@
 
     .option-btn:hover,
     .option-btn.active {
-        background: #f1f5f9;
-        color: #0f172a;
+        background: var(--color-slate-100);
+        color: var(--color-slate-950);
     }
 
     .loading {
-        color: #94a3b8;
+        color: var(--color-slate-400);
         cursor: default;
     }
 </style>

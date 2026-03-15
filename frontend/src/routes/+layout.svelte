@@ -1,4 +1,5 @@
 <script lang="ts">
+  import '../app.css';
   import { onMount } from 'svelte';
   import { page } from '$app/stores';
   import { get } from 'svelte/store';
@@ -59,24 +60,12 @@
 {/if}
 
 <style>
-  :global(*) {
-    box-sizing: border-box;
-  }
-  
-  :global(html, body) {
-    margin: 0;
-    padding: 0;
-    width: 100%;
-    overflow-x: hidden;
-    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-  }
-  
   .loading-screen {
     min-height: 100vh;
     display: flex;
     align-items: center;
     justify-content: center;
-    background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+    background: var(--gradient-app-bg);
   }
   
   .loader {
@@ -84,7 +73,7 @@
     flex-direction: column;
     align-items: center;
     gap: 20px;
-    color: #94a3b8;
+    color: var(--color-slate-400);
     font-size: 14px;
   }
   
@@ -94,11 +83,11 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+    background: var(--gradient-primary);
     border-radius: 20px;
-    color: white;
+    color: var(--color-white);
     animation: pulse-scale 1.5s ease-in-out infinite;
-    box-shadow: 0 8px 32px rgba(99, 102, 241, 0.4);
+    box-shadow: var(--shadow-elevated-primary);
   }
   
   @keyframes pulse-scale {
@@ -118,6 +107,6 @@
   }
   
   main.unauth {
-    background: linear-gradient(135deg, #f0f4f8 0%, #e2e8f0 100%);
+    background: var(--gradient-surface-soft);
   }
 </style>

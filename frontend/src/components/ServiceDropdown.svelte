@@ -42,17 +42,17 @@
     font-weight: 600;
     text-transform: uppercase;
     letter-spacing: 0.05em;
-    color: #64748b;
+    color: var(--color-slate-500);
   }
   
   select {
     padding: 12px 16px;
     border-radius: 10px;
-    border: 1px solid #e2e8f0;
+    border: 1px solid var(--color-slate-200);
     background: white;
     font-size: 14px;
     font-weight: 500;
-    color: #0f172a;
+    color: var(--color-slate-950);
     cursor: pointer;
     transition: all 0.2s ease;
     appearance: none;
@@ -63,24 +63,24 @@
   }
   
   select:hover {
-    border-color: #cbd5e1;
+    border-color: var(--color-slate-300);
   }
   
   select:focus {
     outline: none;
-    border-color: #6366f1;
-    box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
+    border-color: var(--color-primary-600);
+    box-shadow: 0 0 0 3px rgba(var(--rgb-primary-600), 0.1);
   }
   
   .status {
     font-size: 12px;
-    color: #94a3b8;
+    color: var(--color-slate-400);
     display: flex;
     align-items: center;
     gap: 6px;
   }
   
   .status.error {
-    color: #ef4444;
+    color: var(--color-danger-500);
   }
 </style>

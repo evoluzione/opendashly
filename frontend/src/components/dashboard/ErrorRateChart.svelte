@@ -83,7 +83,7 @@
         title: 'Error rate nel tempo',
         width,
         height,
-        series: [{}, { label: 'Error rate %', stroke: '#ef4444', width: 2, fill: 'rgba(239, 68, 68, 0.1)' }],
+        series: [{}, { label: 'Error rate %', stroke: 'var(--color-danger-500)', width: 2, fill: 'rgba(239, 68, 68, 0.1)' }],
         scales: {
           x: { time: true },
           y: { min: 0 }
@@ -181,7 +181,7 @@
     border-radius: 16px;
     padding: 20px;
     box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05), 0 4px 12px rgba(0, 0, 0, 0.03);
-    border: 1px solid rgba(15, 23, 42, 0.06);
+    border: 1px solid rgba(var(--rgb-slate-950), 0.06);
     display: flex;
     flex-direction: column;
     min-height: 0;
@@ -195,19 +195,19 @@
     display: block;
     font-size: 14px;
     font-weight: 600;
-    color: #0f172a;
+    color: var(--color-slate-950);
   }
 
   .chart-subtitle {
     display: block;
     font-size: 12px;
-    color: #94a3b8;
+    color: var(--color-slate-400);
     margin-top: 2px;
   }
 
   .empty {
     text-align: center;
-    color: #94a3b8;
+    color: var(--color-slate-400);
     padding: 40px 0;
     font-size: 14px;
   }

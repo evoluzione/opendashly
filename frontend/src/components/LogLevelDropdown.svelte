@@ -15,36 +15,36 @@
     function getLevelColor(level: string): string {
         switch (level) {
             case "FATAL":
-                return "#ef4444"; // Red 500
+                return "var(--color-danger-500)"; // Red 500
             case "ERROR":
-                return "#ef4444"; // Red 500
+                return "var(--color-danger-500)"; // Red 500
             case "WARN":
-                return "#f59e0b"; // Amber 500
+                return "var(--color-warning-500)"; // Amber 500
             case "INFO":
-                return "#3b82f6"; // Blue 500
+                return "var(--color-info-500)"; // Blue 500
             case "DEBUG":
-                return "#a855f7"; // Purple 500
+                return "var(--color-primary-400)"; // Purple 500
             case "TRACE":
-                return "#64748b"; // Slate 500
+                return "var(--color-slate-500)"; // Slate 500
             default:
-                return "#0f172a"; // Slate 900
+                return "var(--color-slate-950)"; // Slate 900
         }
     }
 
     function getLevelBg(level: string): string {
         switch (level) {
             case "FATAL":
-                return "#fee2e2"; // Red 100
+                return "var(--color-danger-100)"; // Red 100
             case "ERROR":
-                return "#fee2e2"; // Red 100
+                return "var(--color-danger-100)"; // Red 100
             case "WARN":
-                return "#fef3c7"; // Amber 100
+                return "var(--color-warning-100)"; // Amber 100
             case "INFO":
-                return "#dbeafe"; // Blue 100
+                return "var(--color-info-100)"; // Blue 100
             case "DEBUG":
-                return "#f3e8ff"; // Purple 100
+                return "var(--color-primary-25)"; // Purple 100
             case "TRACE":
-                return "#f1f5f9"; // Slate 100
+                return "var(--color-slate-100)"; // Slate 100
             default:
                 return "white";
         }
@@ -103,7 +103,7 @@
         font-weight: 600;
         text-transform: uppercase;
         letter-spacing: 0.05em;
-        color: #64748b;
+        color: var(--color-slate-500);
     }
 
     .select-wrapper {
@@ -133,7 +133,7 @@
         align-items: center;
         padding: 0 16px;
         border-radius: 10px;
-        border: 1px solid #e2e8f0;
+        border: 1px solid var(--color-slate-200);
         font-size: 14px;
         font-weight: 600;
         pointer-events: none;
@@ -146,12 +146,12 @@
         right: 12px;
         top: 50%;
         transform: translateY(-50%);
-        color: #64748b;
+        color: var(--color-slate-500);
         pointer-events: none;
         z-index: 1;
     }
 
     .select-wrapper:hover .selected-value {
-        border-color: #cbd5e1;
+        border-color: var(--color-slate-300);
     }
 </style>

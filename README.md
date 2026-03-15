@@ -1,393 +1,218 @@
 <div align="center">
 
-# 📊 Opendashly
+<table>
+  <tr>
+    <td align="right" valign="middle">
+      <picture>
+        <source media="(prefers-color-scheme: dark)" srcset="assets/opendashly-mark-dark.svg" />
+        <source media="(prefers-color-scheme: light)" srcset="assets/opendashly-mark-light.svg" />
+        <img src="assets/opendashly-mark-light.svg" alt="OpenDashly logo" width="72" />
+      </picture>
+    </td>
+    <td align="left" valign="middle">
+      <p><strong><span style="font-size: 2.2em;">Opendashly</span></strong></p>
+    </td>
+  </tr>
+</table>
 
-### Complete Observability Platform with Logs, Traces, and Metrics
+**Complete observability for OpenTelemetry-instrumented services — logs, traces, and metrics in one self-hosted platform.**
 
-[![OpenTelemetry](https://img.shields.io/badge/OpenTelemetry-1.20-4F46E5?style=flat&logo=opentelemetry)](https://opentelemetry.io)
-[![ClickHouse](https://img.shields.io/badge/ClickHouse-24-FFCC01?style=flat&logo=clickhouse)](https://clickhouse.com)
-[![Go Version](https://img.shields.io/badge/Go-1.22+-00ADD8?style=flat&logo=go)](https://golang.org)
-[![SvelteKit](https://img.shields.io/badge/SvelteKit-4.2-FF3E00?style=flat&logo=svelte)](https://kit.svelte.dev)
-[![OpenAI](https://img.shields.io/badge/OpenAI-GPT--3.5/4-412991?style=flat&logo=openai)](https://openai.com)
+[![OpenTelemetry](https://img.shields.io/badge/OpenTelemetry-1.20-6c5ce7?style=flat-square&logo=opentelemetry&logoColor=white)](https://opentelemetry.io)
+[![ClickHouse](https://img.shields.io/badge/ClickHouse-24-FFCC01?style=flat-square&logo=clickhouse&logoColor=black)](https://clickhouse.com)
+[![Go](https://img.shields.io/badge/Go-1.22+-00ADD8?style=flat-square&logo=go&logoColor=white)](https://golang.org)
+[![SvelteKit](https://img.shields.io/badge/SvelteKit-4.2-FF3E00?style=flat-square&logo=svelte&logoColor=white)](https://kit.svelte.dev)
+[![Docker](https://img.shields.io/badge/Docker-ready-2496ED?style=flat-square&logo=docker&logoColor=white)](https://docker.com)
 
- [Quick Start](#-quick-start) • [AI Features](#ai) • [Architecture](#architecture) • [Production Deployment](#-docker-deployment) • [Monitoring](#-monitoring)
+[Quick Start](#-quick-start) · [AI Features](#-ai-powered-queries) · [Production Deploy](#-production-deployment) · [Tech Stack](#-tech-stack)
 
 </div>
 
 ---
 
-## 🎯 Overview
+## What is Opendashly?
 
-**Opendashly** is a production-ready observability platform that ingests, stores, and visualizes telemetry data from OpenTelemetry-instrumented applications. Built with performance and scalability in mind, it provides a unified interface for exploring logs, traces, and metrics.
+Opendashly sits between your services and your team. It receives telemetry over standard OTLP endpoints, stores it in ClickHouse, and serves it through a fast, interactive dashboard.
 
-### Why Opendashly?
+```mermaid
+flowchart LR
+    A(["Your services"]):::app -->|OTLP| B["Collector"]:::infra
+    B --> C[("ClickHouse")]:::db
+    C --> D["Go API"]:::api
+    D --> E(["Dashboard"]):::ui
 
-- **🚀 High Performance**: ClickHouse-powered storage handles millions of events per second
-- **🤖 AI Observability Agent**: Smart AI agent for automated insights and anomaly detection
-- **🔐 Enterprise Auth**: JWT-based authentication with role-based access control
-- **📈 Real-time Visualization**: Interactive charts and timelines with sub-second queries
-- **🎛️ Data Retention**: Configurable retention policies with automatic cleanup
-- **🔍 Trace Correlation**: Seamlessly navigate from logs to traces and spans
-- **🐳 Docker Ready**: Full stack deployable with a single command
+    classDef app  fill:#6c5ce7,stroke:#a29bfe,color:#fff
+    classDef infra fill:#00cec9,stroke:#55efc4,color:#fff
+    classDef db   fill:#fdcb6e,stroke:#e17055,color:#111
+    classDef api  fill:#fd79a8,stroke:#e84393,color:#fff
+    classDef ui   fill:#6c5ce7,stroke:#a29bfe,color:#fff
+```
+
+**Why Opendashly?**
+
+- **High-throughput ingestion** — ClickHouse columnar storage handles millions of events/second with sub-second queries
+- **Trace correlation** — navigate from a log line to its trace and spans in one click
+- **AI observability agent** — ask questions in plain language, the agent investigates your telemetry autonomously and surfaces problems, anomalies, and insights
+- **Single-command deploy** — the entire stack runs with `docker compose up`
+- **Data retention policies** — configurable automatic cleanup keeps storage costs predictable
+- **Enterprise auth** — JWT with role-based access control and bcrypt password hashing
 
 ---
 
-## 🚀 Quick Start
+## ⚡ Quick Start
 
-### Prerequisites
+**Prerequisites:** Docker 20.10+ and Docker Compose 2.0+. Nothing else.
 
-- **Docker** 20.10+ and **Docker Compose** 2.0+
-- (Optional) **Go** 1.22+ for local backend development
-- (Optional) **Node.js** 18+ for local frontend development
-
-### 1. Start All Services
-
-If you want custom secrets or a non-default ClickHouse password, copy `.env.example` to `.env` and edit it first.
+### 1. Start the stack
 
 ```bash
 docker compose up --build
 ```
 
-Telemetry schema is now managed by backend migrations (`backend/internal/storage/migrations/000_otel_schema_baseline.sql`).
-The collector is configured with `create_schema: false` and only writes data.
-
-For a **fresh bootstrap** after this change (or if you want to rebuild from zero), reset volumes once:
-
-```bash
-docker compose down -v
-docker compose up --build
-```
-
-This starts:
-- **Frontend** → [http://localhost:5173](http://localhost:5173)
-- **Backend API** → [http://localhost:8080](http://localhost:8080)
-- **ClickHouse** → [http://localhost:8123](http://localhost:8123) (HTTP), `tcp://localhost:9000`
-- **OTLP Collector** → `grpc://localhost:4317`, `http://localhost:4318`
+| Service | URL |
+|---|---|
+| Dashboard | http://localhost:5173 |
+| Backend API | http://localhost:8080 |
+| OTLP HTTP | http://localhost:4318 |
+| OTLP gRPC | grpc://localhost:4317 |
+| ClickHouse | http://localhost:8123 |
 
 ### 2. Login
-
-Navigate to [http://localhost:5173](http://localhost:5173) and login with:
 
 ```
 Username: admin
 Password: admin
 ```
 
-⚠️ **You will be prompted to change the password on first login.**
+> ⚠️ You will be prompted to change your password on first login.
 
-### 3. Send Test Data
-
-Send OpenTelemetry data to the collector:
+### 3. Send your first log
 
 ```bash
-# HTTP endpoint
 curl -X POST http://localhost:4318/v1/logs \
   -H "Content-Type: application/json" \
   -d '{
     "resourceLogs": [{
       "resource": {
-        "attributes": [{
-          "key": "service.name",
-          "value": {"stringValue": "test-service"}
-        }]
+        "attributes": [{ "key": "service.name", "value": { "stringValue": "my-service" }}]
       },
       "scopeLogs": [{
         "logRecords": [{
-          "timeUnixNano": "'$(date +%s)'000000000",
           "severityText": "INFO",
-          "body": {"stringValue": "Hello from OpenTelemetry!"}
+          "body": { "stringValue": "Hello from OpenTelemetry!" }
         }]
       }]
     }]
   }'
 ```
 
-Or configure your application to send telemetry to `http://localhost:4318` (HTTP) or `grpc://localhost:4317` (gRPC).
+Or point any OpenTelemetry-instrumented application at `http://localhost:4318` (HTTP) or `grpc://localhost:4317` (gRPC).
 
-### 4. Run Ecommerce OTLP Load Test (Node)
+### 4. Generate realistic traffic (optional)
 
-The repository includes a Node-based load generator that simulates ecommerce microservices and sends **traces, logs, and metrics** to the collector with cross-signal consistency.
-
-Install script dependencies once:
+The repository includes a Node.js load generator that simulates ecommerce microservices with consistent logs, traces, and metrics.
 
 ```bash
+# Install once
 npm --prefix scripts install
-```
 
-Run a medium profile:
-
-```bash
+# Run for 5 minutes at 100 req/s
 node scripts/loadtest_otel_node.mjs --duration 300 --rps 100
 ```
 
-Useful examples:
+Services simulated: `api-gateway`, `auth-service`, `catalog-service`, `cart-service`, `checkout-service`, `payment-service`, `inventory-service`, `shipping-service`, `notification-service`.
 
-```bash
-# high load, higher error pressure on checkout/payment hotspots
-node scripts/loadtest_otel_node.mjs --duration 600 --rps 250 --error-rate 0.06 --hot-rate 0.35
+<details>
+<summary>Load test options</summary>
 
-# fewer active services and traces+logs only
-node scripts/loadtest_otel_node.mjs --duration 180 --rps 80 --services 6 --no-metrics
-```
+| Flag | Description | Default |
+|---|---|---|
+| `--duration` | Test duration in seconds | — |
+| `--rps` | Target requests per second | — |
+| `--services` | Active microservices (2–9) | 9 |
+| `--error-rate` | Base error probability (0–1) | 0.02 |
+| `--hot-rate` | Extra traffic on checkout hotspot (0–1) | 0.2 |
+| `--no-metrics` | Disable metrics signal | — |
+| `--no-traces` | Disable traces signal | — |
+| `--collector` | OTLP HTTP base URL | `http://localhost:4318` |
 
-Main CLI options:
-
-- `--duration` / `--duration-sec`: test duration in seconds
-- `--rps`: target requests per second
-- `--services`: active microservices count (`2..9`)
-- `--error-rate`: base error probability (`0..1`)
-- `--hot-rate`: extra traffic on checkout hotspot (`0..1`)
-- `--max-in-flight`: in-flight request cap
-- `--collector`: OTLP HTTP base endpoint (default `http://localhost:4318`)
-- `--traces|--no-traces`, `--logs|--no-logs`, `--metrics|--no-metrics`: signal toggles
-
-The generator models journeys such as browse, product detail, add-to-cart, checkout, and order tracking across:
-`api-gateway`, `auth-service`, `catalog-service`, `cart-service`, `checkout-service`, `payment-service`, `inventory-service`, `shipping-service`, and `notification-service`.
-
-Span names follow `HTTP_METHOD /route` format for server spans to align with dashboard endpoint widgets.
+</details>
 
 ---
 
-<a id="ai"></a>
-## 🤖 AI-Powered Query Generation
+## 🤖 AI Observability Agent
 
-Opendashly integrates with **OpenAI** to enable natural language query generation for exploring your observability data.
+Opendashly ships a built-in AI agent powered by OpenAI. Ask a question in plain language — in Italian or English — and the agent takes it from there: it runs queries against your telemetry, identifies anomalies and error patterns, and returns results directly as log tables, trace lists, and actionable insights. No SQL required, no manual filtering.
 
-### Features
+**Setup:** Settings → AI Configuration → enable, paste your OpenAI API key, choose model.
 
-- **Natural Language to SQL**: Describe what you want in plain language (Italian or English), and the AI generates optimized ClickHouse SQL queries
-- **Schema-Aware**: The AI understands your telemetry schema (logs, metrics, traces) and generates appropriate queries
-- **Context Detection**: Automatically detects whether you're asking about logs, metrics, or traces
-- **Secure Storage**: API keys are encrypted and stored per-tenant
+| You ask | The agent does |
+|---|---|
+| `"why is checkout-service slow right now?"` | Finds slow traces, identifies bottleneck spans, surfaces the root cause |
+| `"any errors in the last hour?"` | Scans all services for errors, groups by service and type, shows log table |
+| `"what's wrong with payment-service?"` | Correlates error logs with traces, highlights anomalies and failure spikes |
+| `"show me the slowest endpoints today"` | Queries trace durations, ranks endpoints, returns a results table |
+| `"mostrami i log di auth-service degli ultimi 10 minuti"` | Fetches and displays the log table directly in the chat |
 
-### Configuration
-
-1. **Via Settings UI**: Navigate to Settings → AI Configuration in the dashboard
-2. **Enable AI**: Toggle the AI feature on
-3. **Enter API Key**: Provide your OpenAI API key
-4. **Select Model**: Choose between `gpt-3.5-turbo` (default, faster) or `gpt-4` (more accurate)
-
-### Usage Examples
-
-In the query form, type natural language prompts like:
-
-| Prompt | Generated Query |
-|--------|-----------------|
-| `"mostrami i log degli ultimi 5 minuti"` | Logs from last 5 minutes |
-| `"errori del servizio auth-service nell'ultima ora"` | Error logs for auth-service, last hour |
-| `"tracce più lente degli ultimi 15 minuti"` | Slowest traces from last 15 minutes |
-| `"metriche CPU per il servizio api"` | CPU metrics for api service |
+Available models: `gpt-3.5-turbo` (faster) · `gpt-4` (more accurate)
 
 ---
 
-<a id="architecture"></a>
-## 🏗️ Architecture
+## 🐳 Production Deployment
 
-### Data Flow
+The production stack uses prebuilt images from GHCR — no repository clone needed on the host. Just copy `docker-compose.prod.yml`.
 
-```
-┌─────────────┐      ┌──────────────────┐      ┌─────────────┐
-│   Services  │─────▶│ OTLP Collector   │─────▶│ ClickHouse  │
-│  (Your App) │      │  (4317/4318)     │      │   Storage   │
-└─────────────┘      └──────────────────┘      └─────────────┘
-                                                       │
-                                                       ▼
-                     ┌──────────────────┐      ┌─────────────┐
-                     │   SvelteKit UI   │◀─────│  Go API     │
-                     │  (Frontend)      │      │  (Backend)  │
-                     └──────────────────┘      └─────────────┘
-```
-
-### Tech Stack
-
-#### Backend
-- **Language**: Go 1.22+
-- **Framework**: Chi Router (lightweight, idiomatic HTTP framework)
-- **Database**: ClickHouse 24+ (columnar OLAP database)
-- **Auth**: JWT with bcrypt password hashing
-- **Driver**: `clickhouse-go/v2` (native protocol)
-
-#### Frontend
-- **Framework**: SvelteKit 4.2+ (SSR-capable framework)
-- **Charts**: uPlot 1.6+ (high-performance time-series charts)
-- **Build Tool**: Vite 5.0+
-- **Testing**: Vitest (unit), Playwright (E2E)
-
-#### Infrastructure
-- **Telemetry**: OpenTelemetry Collector Contrib 0.122.0
-- **Protocol**: OTLP (OpenTelemetry Protocol)
-- **Containerization**: Docker + Docker Compose
-
-### Directory Structure
-
-```
-.
-├── backend/                  # Go API server
-│   ├── cmd/api/             # Application entry point
-│   ├── internal/
-│   │   ├── api/             # HTTP handlers and routing
-│   │   ├── auth/            # Authentication & authorization
-│   │   ├── query/           # Query execution and builders
-│   │   ├── retention/       # Data retention & cleanup
-│   │   ├── storage/         # ClickHouse client & migrations
-│   │   └── config/          # Configuration management
-│   └── tests/               # Integration & contract tests
-├── frontend/                 # SvelteKit application
-│   ├── src/
-│   │   ├── routes/          # SvelteKit pages
-│   │   ├── components/      # Reusable Svelte components
-│   │   ├── lib/stores/      # State management
-│   │   └── services/        # API client functions
-│   └── tests/               # Unit & E2E tests
-├── docker-compose.yml        # Multi-container orchestration
-├── docker-compose.prod.yml   # Production compose (single app image)
-├── Dockerfile                # Combined backend+frontend image build
-├── docker/
-│   ├── clickhouse/
-│   │   └── config.d/
-│   ├── otel-collector/
-│   │   ├── Dockerfile
-│   │   └── collector-config.yaml
-│   └── entrypoint.sh         # Starts backend + frontend
-├── .env.example              # Environment variable template
-├── .github/workflows/        # CI pipelines
-│   └── ci-docker.yml         # Tests + image build/push
-└── README.md                 # You are here
-```
-
----
-
-## 🚀 Docker Deployment
-
-### Prerequisites
-
-- Docker 20.10+ and Docker Compose 2.0+
-- Host sizing (single node): 2 vCPU and 4 GB RAM minimum; 4 vCPU and 8 GB RAM recommended for moderate workloads
-- Storage: SSD recommended; allocate at least 20 GB free space for ClickHouse data
-- A strong `AUTH_SECRET` value (32+ random characters)
-- A secure `CLICKHOUSE_PASSWORD`
-
-### Setup Guide
-
-1) Copy only `docker-compose.prod.yml` to the target host.
-
-The production stack uses prebuilt GHCR images:
+**Images:**
 - `ghcr.io/evoluzione/opendashly:latest`
 - `ghcr.io/evoluzione/opendashly-clickhouse:latest`
 - `ghcr.io/evoluzione/opendashly-otel-collector:latest`
 
-No repository clone and no manual config file creation are required on the host.
+### Host requirements
 
-2) Create a `.env` file alongside `docker-compose.prod.yml`:
+| | Minimum | Recommended |
+|---|---|---|
+| CPU | 2 vCPU | 4 vCPU |
+| RAM | 4 GB | 8 GB |
+| Storage | 20 GB SSD | 50 GB+ SSD |
+
+### Deploy
+
+**1. Create a `.env` file** alongside `docker-compose.prod.yml`:
 
 ```bash
-AUTH_SECRET=replace-with-32+char-random
+AUTH_SECRET=replace-with-32+-char-random-string
 CLICKHOUSE_PASSWORD=replace-with-strong-password
-CORS_ALLOWED_ORIGINS=http://your-public-host:5173
+CORS_ALLOWED_ORIGINS=http://your-host:5173
 ```
 
-3) Start the stack:
+**2. Start:**
 
 ```bash
 docker compose -f docker-compose.prod.yml up -d
 ```
 
-4) Verify services:
+**3. Verify:**
 
 ```bash
-curl http://localhost:8080/healthz
-curl http://localhost:8123/ping
+curl http://localhost:8080/healthz   # → backend
+curl http://localhost:8123/ping      # → ClickHouse
+curl http://localhost:8888/metrics   # → OTel Collector
 ```
 
-5) Open the UI and log in:
+Then open `http://localhost:5173` and log in with `admin` / `admin`.
 
-- Frontend: http://localhost:5173
-- Default credentials: `admin` / `admin`
-- You will be prompted to change the password on first login.
-
-### Swap Safety Net (Recommended on 4 GB hosts)
-
-If the host has no swap configured, add a 2 GiB swapfile to reduce OOM risk during ClickHouse spikes.
-
-```bash
-sudo fallocate -l 2G /swapfile
-sudo chmod 600 /swapfile
-sudo mkswap /swapfile
-sudo swapon /swapfile
-echo '/swapfile none swap sw 0 0' | sudo tee -a /etc/fstab
-```
-
-Verify and monitor:
-
-```bash
-swapon --show
-free -h
-grep /swapfile /etc/fstab
-```
-
-Rollback if needed:
-
-```bash
-sudo swapoff /swapfile
-sudo sed -i '\|/swapfile|d' /etc/fstab
-sudo rm -f /swapfile
-```
-
-### Security Checklist
+### Security checklist
 
 - [ ] Change default admin password immediately
-- [ ] Set strong `AUTH_SECRET` (32+ random characters)
-- [ ] Use HTTPS/TLS for all services
-- [ ] Enable ClickHouse authentication
-- [ ] Configure firewall rules (block direct ClickHouse access)
-- [ ] Review and restrict CORS settings in `router.go`
-- [ ] Enable rate limiting for API endpoints
-- [ ] Set up log retention policies
-- [ ] Configure backup strategy for ClickHouse
+- [ ] Set a strong `AUTH_SECRET` (32+ random characters)
+- [ ] Enable HTTPS/TLS for all public-facing services
+- [ ] Block direct ClickHouse ports (8123, 9000) from the internet
+- [ ] Restrict `CORS_ALLOWED_ORIGINS` to your actual domains
+- [ ] Enable API rate limiting
+- [ ] Configure data retention policies
+- [ ] Set up ClickHouse backups
 
 ---
 
-## 📊 Monitoring
+## 🙏 Built on open source
 
-### Health Checks
-
-```bash
-# Backend health
-curl http://localhost:8080/healthz
-
-# ClickHouse health
-curl http://localhost:8123/ping
-
-# Collector health (metrics endpoint)
-curl http://localhost:8888/metrics
-```
-
-### Metrics
-
-The dashboard exposes Prometheus-compatible metrics at `/metrics` (if enabled):
-- Request latency histograms
-- Query execution duration
-- Active connections
-- Error rates
-
-
----
-
-## 🙏 Acknowledgments
-
-Built with these excellent open-source projects:
-
-- [OpenTelemetry](https://opentelemetry.io) - Observability framework
-- [ClickHouse](https://clickhouse.com) - High-performance columnar database
-- [Go](https://golang.org) - Backend language
-- [SvelteKit](https://kit.svelte.dev) - Frontend framework
-- [uPlot](https://github.com/leeoniya/uPlot) - High-performance charting
-- [Chi](https://github.com/go-chi/chi) - Lightweight Go router
-
----
-
-<div align="center">
-
-**[⬆ Back to Top](#-opendashly)**
-
-</div>
+[OpenTelemetry](https://opentelemetry.io) · [ClickHouse](https://clickhouse.com) · [Go](https://golang.org) · [SvelteKit](https://kit.svelte.dev) · [uPlot](https://github.com/leeoniya/uPlot) · [Chi](https://github.com/go-chi/chi)
