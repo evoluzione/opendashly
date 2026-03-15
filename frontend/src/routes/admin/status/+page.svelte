@@ -10,14 +10,39 @@
   let loading = false;
   let error = "";
   let lastUpdated: Date | null = null;
+  let statusRefreshSpinning = false;
+  let statusRefreshToken = 0;
 
   const numberFormat = new Intl.NumberFormat("it-IT");
   const compactFormat = new Intl.NumberFormat("it-IT", {
     notation: "compact",
     maximumFractionDigits: 1,
   });
+  const STATUS_REFRESH_MIN_SPIN_MS = 700;
 
   type SignalKey = "logs" | "traces" | "metrics";
+  type HealthTone = "ok" | "warn" | "error";
+
+  type SignalSeries = {
+    key: SignalKey;
+    label: string;
+    color: string;
+    tint: string;
+    data: TelemetryCounts;
+    points: number[];
+    max: number;
+    lastBucket: number;
+    recent15m: number;
+    previous15m: number;
+    trend15m: number | null;
+    freshnessMinutes: number;
+  };
+
+  type Insight = {
+    tone: HealthTone;
+    label: string;
+    detail: string;
+  };
 
   const signalConfig: Record<
     SignalKey,
@@ -28,8 +53,66 @@
     metrics: { label: "Metriche", color: "#f59e0b", tint: "#fef3c7" },
   };
 
-  let health = appHealthState(summary);
-  $: health = appHealthState(summary);
+  let rows: SignalSeries[] = [];
+  $: rows = buildSignalRows(summary);
+
+  let health = appHealthState(summary, rows);
+  $: health = appHealthState(summary, rows);
+
+  let globalSeriesMax = 1;
+  $: globalSeriesMax = Math.max(...rows.map((row) => row.max), 1);
+
+  let latestTotal = 0;
+  $: latestTotal = rows.reduce((sum, row) => sum + row.lastBucket, 0);
+
+  let recent15mTotal = 0;
+  $: recent15mTotal = rows.reduce((sum, row) => sum + row.recent15m, 0);
+
+  let previous15mTotal = 0;
+  $: previous15mTotal = rows.reduce((sum, row) => sum + row.previous15m, 0);
+
+  let overallTrend15m: number | null = null;
+  $: overallTrend15m = computeTrend(recent15mTotal, previous15mTotal);
+
+  let quietSignals = 0;
+  $: quietSignals = rows.filter((row) => row.freshnessMinutes >= 10).length;
+
+  let insights: Insight[] = [];
+  $: insights = buildInsights(rows, health);
+
+  const timelineWidth = 860;
+  const timelineHeight = 260;
+  const timelineSvgHeight = 320;
+
+  let hoverIndex: number | null = null;
+  let timelinePointCount = 0;
+  $: timelinePointCount = rows[0]?.points.length ?? 0;
+
+  let yTicks: Array<{ value: number; y: number }> = [];
+  $: yTicks = buildYAxisTicks(globalSeriesMax, timelineHeight);
+
+  let hoverX = 0;
+  $: hoverX =
+    hoverIndex === null
+      ? 0
+      : xForIndex(hoverIndex, timelinePointCount, timelineWidth);
+
+  let hoverLabel = "";
+  $: hoverLabel =
+    hoverIndex === null
+      ? ""
+      : bucketLabel(hoverIndex, timelinePointCount);
+
+  let hoverValues: Array<{ key: SignalKey; label: string; color: string; value: number }> = [];
+  $: hoverValues =
+    hoverIndex === null
+      ? []
+      : rows.map((row) => ({
+          key: row.key,
+          label: row.label,
+          color: row.color,
+          value: row.points[hoverIndex] ?? 0,
+        }));
 
   function formatCount(value: number | undefined) {
     if (value === undefined || value === null) return "-";
@@ -50,9 +133,18 @@
     });
   }
 
-  function appHealthState(value: StatusSummary | null): {
+  function sleep(ms: number): Promise<void> {
+    return new Promise((resolve) => {
+      setTimeout(resolve, ms);
+    });
+  }
+
+  function appHealthState(
+    value: StatusSummary | null,
+    seriesRows: SignalSeries[],
+  ): {
     label: string;
-    tone: "ok" | "warn" | "error";
+    tone: HealthTone;
     reason: string;
   } {
     if (!value) {
@@ -67,6 +159,23 @@
         label: "Critico",
         tone: "error",
         reason: value.error || "Problemi nel controllo database",
+      };
+    }
+    const inactiveSignals = seriesRows.filter(
+      (row) => row.freshnessMinutes >= 15,
+    ).length;
+    if (seriesRows.length > 0 && inactiveSignals === seriesRows.length) {
+      return {
+        label: "Inattivo",
+        tone: "warn",
+        reason: "Nessun segnale riceve dati recenti",
+      };
+    }
+    if (seriesRows.some((row) => row.trend15m !== null && row.trend15m <= -45)) {
+      return {
+        label: "Degradato",
+        tone: "warn",
+        reason: "Calo significativo nel volume negli ultimi 15 minuti",
       };
     }
     const recentTotal =
@@ -87,45 +196,195 @@
     };
   }
 
-  function signalRows(value: StatusSummary | null): Array<{
-    key: SignalKey;
-    data: TelemetryCounts;
-  }> {
-    if (!value) return [];
+  function formatTrend(value: number | null) {
+    if (value === null) return "n/d";
+    const rounded = Math.round(value);
+    if (rounded > 0) return `+${rounded}%`;
+    return `${rounded}%`;
+  }
+
+  function buildPoints(data: TelemetryCounts): number[] {
+    if (data.series && data.series.length > 0) {
+      return data.series.map((point) => point.count);
+    }
     return [
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      Math.max(data.last60m - data.last10m, 0),
+      Math.max(data.last10m - data.last5m, 0),
+      data.last5m,
+      data.last5m,
+    ];
+  }
+
+  function computeTrend(current: number, previous: number): number | null {
+    if (previous === 0) {
+      if (current === 0) return 0;
+      return null;
+    }
+    return ((current - previous) / previous) * 100;
+  }
+
+  function freshnessFromPoints(points: number[]): number {
+    for (let idx = points.length - 1; idx >= 0; idx--) {
+      if (points[idx] > 0) {
+        return (points.length - 1 - idx) * 5;
+      }
+    }
+    return points.length * 5;
+  }
+
+  function buildSignalRows(value: StatusSummary | null): SignalSeries[] {
+    if (!value) return [];
+    const base: Array<{ key: SignalKey; data: TelemetryCounts }> = [
       { key: "logs", data: value.counts.logs },
       { key: "traces", data: value.counts.traces },
       { key: "metrics", data: value.counts.metrics },
     ];
+    return base.map(({ key, data }) => {
+      const cfg = signalConfig[key];
+      const points = buildPoints(data);
+      const max = Math.max(...points, 1);
+      const lastBucket = points[points.length - 1] ?? 0;
+      const recent15m = points.slice(-3).reduce((sum, point) => sum + point, 0);
+      const previous15m = points
+        .slice(-6, -3)
+        .reduce((sum, point) => sum + point, 0);
+      const trend15m = computeTrend(recent15m, previous15m);
+      return {
+        key,
+        label: cfg.label,
+        color: cfg.color,
+        tint: cfg.tint,
+        data,
+        points,
+        max,
+        lastBucket,
+        recent15m,
+        previous15m,
+        trend15m,
+        freshnessMinutes: freshnessFromPoints(points),
+      };
+    });
   }
 
-  function maxWindowValue(data: TelemetryCounts): number {
-    return Math.max(data.last5m, data.last10m, data.last60m, 1);
-  }
-
-  function windowPercentage(value: number, max: number): number {
-    if (!max) return 0;
-    return Math.max(4, Math.round((value / max) * 100));
-  }
-
-  function sparklinePath(data: TelemetryCounts): string {
-    const points =
-      data.series && data.series.length > 0
-        ? data.series.map((point) => point.count)
-        : [data.last5m, data.last10m, data.last60m];
-    const max = Math.max(...points, 1);
-    const width = 160;
-    const height = 48;
-    const step = width / (points.length - 1);
+  function linePath(points: number[], width: number, height: number, max: number): string {
+    if (points.length === 0) return "";
+    const step = width / Math.max(points.length - 1, 1);
     const mapped = points.map((point, idx) => {
       const x = idx * step;
-      const y = height - (point / max) * (height - 6) - 3;
+      const y = height - (point / max) * (height - 10) - 5;
       return `${x.toFixed(1)},${y.toFixed(1)}`;
     });
     return `M${mapped.join(" L")}`;
   }
 
+  function areaPath(points: number[], width: number, height: number, max: number): string {
+    if (points.length === 0) return "";
+    const line = linePath(points, width, height, max);
+    const step = width / Math.max(points.length - 1, 1);
+    const endX = step * (points.length - 1);
+    return `${line} L${endX.toFixed(1)},${height} L0,${height} Z`;
+  }
+
+  function heatAlpha(value: number, max: number): number {
+    if (value <= 0 || max <= 0) return 0.08;
+    const ratio = value / max;
+    return Math.min(1, Math.max(0.15, ratio));
+  }
+
+  function clamp(value: number, min: number, max: number): number {
+    return Math.min(max, Math.max(min, value));
+  }
+
+  function xForIndex(index: number, count: number, width: number): number {
+    if (count <= 1) return 0;
+    const step = width / (count - 1);
+    return index * step;
+  }
+
+  function yForValue(value: number, max: number, height: number): number {
+    return height - (value / Math.max(max, 1)) * (height - 10) - 5;
+  }
+
+  function buildYAxisTicks(max: number, height: number): Array<{ value: number; y: number }> {
+    const safeMax = Math.max(max, 1);
+    const values = [safeMax, safeMax * 0.66, safeMax * 0.33, 0]
+      .map((value) => Math.round(value))
+      .filter((value, idx, source) => source.indexOf(value) === idx)
+      .sort((a, b) => b - a);
+    return values.map((value) => ({
+      value,
+      y: yForValue(value, safeMax, height),
+    }));
+  }
+
+  function bucketLabel(index: number, count: number): string {
+    const minutesAgo = Math.max(0, (count - 1 - index) * 5);
+    return minutesAgo === 0 ? "ora" : `-${minutesAgo}m`;
+  }
+
+  function handleTimelineMove(event: MouseEvent) {
+    if (!timelinePointCount) return;
+    const target = event.currentTarget as SVGSVGElement;
+    const rect = target.getBoundingClientRect();
+    const relativeX = clamp(event.clientX - rect.left, 0, rect.width);
+    const raw = rect.width === 0 ? 0 : (relativeX / rect.width) * (timelinePointCount - 1);
+    hoverIndex = Math.round(raw);
+  }
+
+  function clearTimelineHover() {
+    hoverIndex = null;
+  }
+
+  function buildInsights(seriesRows: SignalSeries[], currentHealth: { tone: HealthTone }): Insight[] {
+    if (seriesRows.length === 0) return [];
+    const list: Insight[] = [];
+
+    for (const row of seriesRows) {
+      if (row.freshnessMinutes >= 15) {
+        list.push({
+          tone: "error",
+          label: `${row.label} fermo`,
+          detail: `Nessun evento da ${row.freshnessMinutes} minuti`,
+        });
+      } else if (row.trend15m !== null && row.trend15m <= -40) {
+        list.push({
+          tone: "warn",
+          label: `${row.label} in calo`,
+          detail: `${formatTrend(row.trend15m)} negli ultimi 15 minuti`,
+        });
+      } else if (row.trend15m !== null && row.trend15m >= 35) {
+        list.push({
+          tone: "ok",
+          label: `${row.label} in crescita`,
+          detail: `${formatTrend(row.trend15m)} negli ultimi 15 minuti`,
+        });
+      }
+    }
+
+    if (list.length === 0) {
+      list.push({
+        tone: currentHealth.tone,
+        label: "Flusso stabile",
+        detail: "Nessun segnale di degrado rilevato nella finestra di 60 minuti",
+      });
+    }
+
+    return list.slice(0, 4);
+  }
+
   async function loadStatus() {
+    const spinToken = ++statusRefreshToken;
+    const spinStartedAt = Date.now();
+    statusRefreshSpinning = true;
+
     loading = true;
     error = "";
     try {
@@ -136,6 +395,14 @@
       summary = null;
       error = err instanceof Error ? err.message : "Errore sconosciuto";
     } finally {
+      const elapsed = Date.now() - spinStartedAt;
+      const remaining = STATUS_REFRESH_MIN_SPIN_MS - elapsed;
+      if (remaining > 0) {
+        await sleep(remaining);
+      }
+      if (spinToken === statusRefreshToken) {
+        statusRefreshSpinning = false;
+      }
       loading = false;
     }
   }
@@ -157,7 +424,8 @@
       {/if}
       <button type="button" class="refresh-btn" on:click={loadStatus} disabled={loading}>
         <svg
-          class={`refresh-icon ${loading ? "spinning" : ""}`}
+          class="refresh-icon"
+          class:spinning={statusRefreshSpinning}
           viewBox="0 0 24 24"
           fill="none"
           stroke="currentColor"
@@ -170,7 +438,7 @@
           <polyline points="1 20 1 14 7 14"></polyline>
           <path d="M3.51 9a9 9 0 0 1 14.14-3.36L23 10M1 14l5.35 4.36A9 9 0 0 0 20.49 15"></path>
         </svg>
-        {loading ? "Aggiornamento..." : "Aggiorna"}
+        Aggiorna
       </button>
     </div>
   </header>
@@ -187,93 +455,158 @@
     </article>
 
     <article class="mini-card">
-      <span>Database</span>
-      <strong>{summary ? (summary.checks.database ? "Connesso" : "Errore") : "-"}</strong>
+      <span>Ingestione attuale (5m)</span>
+      <strong>{summary ? formatCompact(latestTotal) : "-"}</strong>
     </article>
 
     <article class="mini-card">
-      <span>Eventi 60m</span>
-      <strong>
-        {summary
-          ? formatCompact(
-              summary.counts.logs.last60m +
-                summary.counts.traces.last60m +
-                summary.counts.metrics.last60m,
-            )
-          : "-"}
+      <span>Trend 15m</span>
+      <strong class={"trend " + ((overallTrend15m !== null && overallTrend15m < 0) ? "down" : "up")}>
+        {summary ? formatTrend(overallTrend15m) : "-"}
       </strong>
     </article>
 
     <article class="mini-card">
-      <span>Totale segnali</span>
-      <strong>
-        {summary
-          ? formatCompact(
-              summary.counts.logs.total +
-                summary.counts.traces.total +
-                summary.counts.metrics.total,
-            )
-          : "-"}
-      </strong>
+      <span>Segnali silenziosi</span>
+      <strong>{summary ? quietSignals : "-"}</strong>
     </article>
   </section>
 
   {#if summary}
+    <article class="timeline-card">
+      <header class="timeline-header">
+        <div>
+          <h2>Timeline ingestione (ultimi 60m)</h2>
+          <p>Confronto tra Log, Tracce e Metriche per bucket da 5 minuti.</p>
+        </div>
+        <div class="timeline-legend" role="list" aria-label="Legenda segnali">
+          {#each rows as row}
+            <span role="listitem" class="legend-item">
+              <span class="dot" style={`--dot:${row.color}`}></span>{row.label}
+            </span>
+          {/each}
+        </div>
+      </header>
+
+      <div class="timeline-chart" aria-label="Andamento ingestione ultimi 60 minuti">
+        <svg
+          viewBox={`0 0 ${timelineWidth} ${timelineSvgHeight}`}
+          preserveAspectRatio="xMidYMid meet"
+          role="img"
+          on:mousemove={handleTimelineMove}
+          on:mouseleave={clearTimelineHover}
+        >
+          <text x="8" y="14" class="unit-label">eventi / 5m</text>
+          {#each yTicks as tick}
+            <line x1="0" y1={tick.y} x2={timelineWidth} y2={tick.y} class={tick.value === 0 ? "axis" : "grid"}></line>
+            <text x="8" y={tick.y - 6} class="tick-label">{formatCompact(tick.value)}</text>
+          {/each}
+          {#each rows as row}
+            <path class="area" d={areaPath(row.points, timelineWidth, timelineHeight, globalSeriesMax)} style={`--stroke:${row.color};--fill:${row.tint}`}></path>
+            <path class="line" d={linePath(row.points, timelineWidth, timelineHeight, globalSeriesMax)} style={`--stroke:${row.color}`}></path>
+          {/each}
+          {#if hoverIndex !== null}
+            <line x1={hoverX} y1="0" x2={hoverX} y2={timelineHeight} class="cursor"></line>
+            {#each rows as row}
+              <circle
+                cx={hoverX}
+                cy={yForValue(row.points[hoverIndex] ?? 0, globalSeriesMax, timelineHeight)}
+                r="4"
+                class="cursor-dot"
+                style={`--dot:${row.color}`}
+              ></circle>
+            {/each}
+          {/if}
+        </svg>
+
+        {#if hoverIndex !== null}
+          <div class="timeline-tooltip" style={`left:${clamp((hoverX / timelineWidth) * 100, 8, 92)}%`}>
+            <div class="tooltip-time">{hoverLabel}</div>
+            {#each hoverValues as point}
+              <div class="tooltip-row">
+                <span class="tooltip-dot" style={`--dot:${point.color}`}></span>
+                <span>{point.label}</span>
+                <strong>{formatCount(point.value)}</strong>
+              </div>
+            {/each}
+          </div>
+        {/if}
+
+        <div class="timeline-labels" aria-hidden="true">
+          <span>-55m</span>
+          <span>-45m</span>
+          <span>-35m</span>
+          <span>-25m</span>
+          <span>-15m</span>
+          <span>-5m</span>
+          <span>ora</span>
+        </div>
+      </div>
+    </article>
+
     <div class="status-grid">
-      {#each signalRows(summary) as signal}
-        {@const cfg = signalConfig[signal.key]}
-        {@const maxWindow = maxWindowValue(signal.data)}
-        <article class="signal-card">
-          <header>
-            <div>
-              <h3>{cfg.label}</h3>
-              <p>Totale: {formatCount(signal.data.total)}</p>
+      <article class="heatmap-card">
+        <header>
+          <h3>Buchi di telemetria</h3>
+          <p>Intensita per bucket (5 minuti). Celle chiare = segnale debole o assente.</p>
+        </header>
+        <div class="heatmap">
+          {#each rows as row}
+            <div class="heatmap-row">
+              <span class="row-label">{row.label}</span>
+              <div class="cells" role="img" aria-label={`Heatmap ${row.label}`}>
+                {#each row.points as point}
+                  <span
+                    class="cell"
+                    style={`--cell:${row.color};--a:${heatAlpha(point, row.max)}`}
+                    title={`${row.label}: ${formatCount(point)} eventi`}
+                  ></span>
+                {/each}
+              </div>
+              <span class="row-meta">freshness {row.freshnessMinutes}m</span>
             </div>
-            <span class="signal-chip" style={`--chip-bg:${cfg.tint};--chip-color:${cfg.color}`}
-              >{formatCompact(signal.data.last60m)} ultimi 60m</span
-            >
-          </header>
+          {/each}
+        </div>
+      </article>
 
-          <div class="signal-chart" style={`--stroke:${cfg.color}`}>
-            <svg viewBox="0 0 160 48" preserveAspectRatio="none" aria-hidden="true">
-              <path d={sparklinePath(signal.data)}></path>
-            </svg>
-          </div>
+      <article class="insights-card">
+        <header>
+          <h3>Insight automatici</h3>
+          <p>Segnali rilevati da trend e freshness.</p>
+        </header>
+        <div class="insights-list">
+          {#each insights as item}
+            <div class={`insight ${item.tone}`}>
+              <strong>{item.label}</strong>
+              <span>{item.detail}</span>
+            </div>
+          {/each}
+        </div>
+      </article>
 
-          <div class="window-bars">
-            <div class="window-row">
-              <span>5m</span>
-              <div class="bar-track">
-                <div
-                  class="bar-fill"
-                  style={`--fill:${cfg.color};width:${windowPercentage(signal.data.last5m, maxWindow)}%`}
-                ></div>
+      <article class="signal-card-list">
+        <header>
+          <h3>Dettaglio per segnale</h3>
+          <p>Metriche operative sintetiche per confronto rapido.</p>
+        </header>
+        <div class="signal-list">
+          {#each rows as row}
+            <div class="signal-row">
+              <div class="signal-meta">
+                <span class="signal-name">{row.label}</span>
+                <span class="signal-total">totale {formatCompact(row.data.total)}</span>
               </div>
-              <strong>{formatCount(signal.data.last5m)}</strong>
-            </div>
-            <div class="window-row">
-              <span>10m</span>
-              <div class="bar-track">
-                <div
-                  class="bar-fill"
-                  style={`--fill:${cfg.color};width:${windowPercentage(signal.data.last10m, maxWindow)}%`}
-                ></div>
+              <div class="signal-kpis">
+                <span>{formatCompact(row.lastBucket)} /5m</span>
+                <span class={"trend " + ((row.trend15m !== null && row.trend15m < 0) ? "down" : "up")}>
+                  {formatTrend(row.trend15m)} 15m
+                </span>
+                <span>fresh {row.freshnessMinutes}m</span>
               </div>
-              <strong>{formatCount(signal.data.last10m)}</strong>
             </div>
-            <div class="window-row">
-              <span>60m</span>
-              <div class="bar-track">
-                <div
-                  class="bar-fill"
-                  style={`--fill:${cfg.color};width:${windowPercentage(signal.data.last60m, maxWindow)}%`}
-                ></div>
-              </div>
-              <strong>{formatCount(signal.data.last60m)}</strong>
-            </div>
-          </div>
-        </article>
-      {/each}
+          {/each}
+        </div>
+      </article>
     </div>
 
   {:else if !loading}
@@ -447,54 +780,106 @@
     color: #0f172a;
   }
 
-  .signal-card {
-    display: flex;
-    flex-direction: column;
-    gap: 12px;
+  .mini-card .trend {
+    font-variant-numeric: tabular-nums;
   }
 
-  .signal-card header {
+  .trend.up {
+    color: #047857;
+  }
+
+  .trend.down {
+    color: #b91c1c;
+  }
+
+  .timeline-card,
+  .heatmap-card,
+  .insights-card,
+  .signal-card-list {
+    border-radius: 14px;
+    border: 1px solid rgba(15, 23, 42, 0.08);
+    background: #ffffff;
+    padding: 14px;
+    box-shadow: 0 10px 24px rgba(15, 23, 42, 0.06);
+  }
+
+  .timeline-header {
     display: flex;
-    align-items: flex-start;
     justify-content: space-between;
-    gap: 10px;
+    gap: 12px;
+    align-items: flex-start;
+    margin-bottom: 12px;
+    flex-wrap: wrap;
   }
 
-  .signal-card h3 {
+  .timeline-header h2 {
     margin: 0;
-    font-size: 16px;
+    font-size: 18px;
     color: #0f172a;
   }
 
-  .signal-card p {
+  .timeline-header p {
     margin: 4px 0 0;
     font-size: 12px;
-    color: #64748b;
   }
 
-  .signal-chip {
-    font-size: 11px;
-    font-weight: 700;
-    color: var(--chip-color);
-    background: var(--chip-bg);
+  .timeline-legend {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+
+  .legend-item {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 8px;
     border-radius: 999px;
-    padding: 5px 10px;
-    white-space: nowrap;
-  }
-
-  .signal-chart {
+    font-size: 11px;
+    color: #334155;
     background: #f8fafc;
     border: 1px solid #e2e8f0;
+  }
+
+  .dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 999px;
+    background: var(--dot);
+  }
+
+  .timeline-chart {
+    position: relative;
+    border: 1px solid #e2e8f0;
     border-radius: 10px;
-    padding: 8px;
+    background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
+    padding: 10px 10px 6px;
   }
 
-  .signal-chart svg {
+  .timeline-chart svg {
     width: 100%;
-    height: 52px;
+    height: auto;
+    aspect-ratio: 860 / 320;
+    display: block;
   }
 
-  .signal-chart path {
+  .timeline-chart .axis {
+    stroke: #94a3b8;
+    stroke-width: 1;
+  }
+
+  .timeline-chart .grid {
+    stroke: #e2e8f0;
+    stroke-width: 1;
+    stroke-dasharray: 4 6;
+  }
+
+  .timeline-chart .area {
+    fill: color-mix(in srgb, var(--fill) 28%, transparent);
+    stroke: none;
+  }
+
+  .timeline-chart .line {
     fill: none;
     stroke: var(--stroke);
     stroke-width: 2.4;
@@ -502,42 +887,215 @@
     stroke-linejoin: round;
   }
 
-  .window-bars {
+  .timeline-chart .unit-label,
+  .timeline-chart .tick-label {
+    fill: #64748b;
+    font-size: 11px;
+    font-family: inherit;
+  }
+
+  .timeline-chart .cursor {
+    stroke: #475569;
+    stroke-width: 1;
+    stroke-dasharray: 4 4;
+    opacity: 0.7;
+  }
+
+  .timeline-chart .cursor-dot {
+    fill: var(--dot);
+    stroke: #ffffff;
+    stroke-width: 2;
+  }
+
+  .timeline-tooltip {
+    position: absolute;
+    top: 18px;
+    transform: translateX(-50%);
+    min-width: 150px;
+    border: 1px solid #cbd5e1;
+    border-radius: 10px;
+    padding: 8px 10px;
+    background: rgba(255, 255, 255, 0.96);
+    box-shadow: 0 10px 22px rgba(15, 23, 42, 0.14);
+    backdrop-filter: blur(2px);
+    pointer-events: none;
+  }
+
+  .tooltip-time {
+    font-size: 11px;
+    font-weight: 700;
+    color: #334155;
+    margin-bottom: 6px;
+  }
+
+  .tooltip-row {
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    gap: 6px;
+    align-items: center;
+    font-size: 12px;
+    color: #334155;
+  }
+
+  .tooltip-row strong {
+    font-variant-numeric: tabular-nums;
+    color: #0f172a;
+  }
+
+  .tooltip-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 999px;
+    background: var(--dot);
+  }
+
+  .timeline-labels {
+    margin-top: 4px;
+    display: grid;
+    grid-template-columns: repeat(7, minmax(0, 1fr));
+    font-size: 11px;
+    color: #64748b;
+  }
+
+  .heatmap-card header h3,
+  .insights-card header h3,
+  .signal-card-list header h3 {
+    margin: 0;
+    font-size: 15px;
+    color: #0f172a;
+  }
+
+  .heatmap-card header p,
+  .insights-card header p,
+  .signal-card-list header p {
+    margin: 4px 0 0;
+    font-size: 12px;
+  }
+
+  .heatmap {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin-top: 10px;
+  }
+
+  .heatmap-row {
+    display: grid;
+    grid-template-columns: 54px 1fr auto;
+    gap: 8px;
+    align-items: center;
+  }
+
+  .row-label {
+    font-size: 12px;
+    color: #0f172a;
+    font-weight: 600;
+  }
+
+  .cells {
+    display: grid;
+    grid-template-columns: repeat(12, minmax(0, 1fr));
+    gap: 4px;
+  }
+
+  .cell {
+    height: 18px;
+    border-radius: 4px;
+    background: color-mix(in srgb, var(--cell) calc(var(--a) * 100%), #f1f5f9);
+    border: 1px solid rgba(148, 163, 184, 0.35);
+  }
+
+  .row-meta {
+    font-size: 11px;
+    color: #64748b;
+    white-space: nowrap;
+  }
+
+  .insights-list {
+    margin-top: 10px;
     display: flex;
     flex-direction: column;
     gap: 8px;
   }
 
-  .window-row {
-    display: grid;
-    grid-template-columns: 32px 1fr auto;
-    align-items: center;
+  .insight {
+    padding: 10px;
+    border-radius: 10px;
+    border: 1px solid #e2e8f0;
+    background: #f8fafc;
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+  }
+
+  .insight strong {
+    font-size: 12px;
+    color: #0f172a;
+  }
+
+  .insight span {
+    font-size: 12px;
+    color: #475569;
+  }
+
+  .insight.ok {
+    border-color: #86efac;
+    background: #f0fdf4;
+  }
+
+  .insight.warn {
+    border-color: #fde68a;
+    background: #fefce8;
+  }
+
+  .insight.error {
+    border-color: #fecaca;
+    background: #fef2f2;
+  }
+
+  .signal-list {
+    margin-top: 10px;
+    display: flex;
+    flex-direction: column;
     gap: 8px;
   }
 
-  .window-row span {
-    font-size: 11px;
-    color: #64748b;
-    font-weight: 600;
+  .signal-row {
+    border-radius: 10px;
+    border: 1px solid #e2e8f0;
+    background: #f8fafc;
+    padding: 10px;
+    display: flex;
+    justify-content: space-between;
+    gap: 10px;
+    flex-wrap: wrap;
   }
 
-  .window-row strong {
-    font-size: 12px;
-    color: #0f172a;
+  .signal-meta {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  .signal-name {
+    font-size: 13px;
     font-weight: 700;
+    color: #0f172a;
   }
 
-  .bar-track {
-    height: 8px;
-    border-radius: 999px;
-    background: #e2e8f0;
-    overflow: hidden;
+  .signal-total {
+    font-size: 12px;
+    color: #64748b;
   }
 
-  .bar-fill {
-    height: 100%;
-    background: var(--fill);
-    border-radius: 999px;
+  .signal-kpis {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+    font-size: 12px;
+    color: #334155;
+    font-variant-numeric: tabular-nums;
   }
 
   .status-error {
@@ -560,13 +1118,37 @@
     }
 
     .status-grid {
-      grid-template-columns: 1fr;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .signal-card-list {
+      grid-column: span 2;
     }
   }
 
   @media (max-width: 760px) {
     .health-strip {
       grid-template-columns: 1fr;
+    }
+
+    .status-grid {
+      grid-template-columns: 1fr;
+    }
+
+    .signal-card-list {
+      grid-column: auto;
+    }
+
+    .timeline-chart svg {
+      aspect-ratio: 860 / 360;
+    }
+
+    .heatmap-row {
+      grid-template-columns: 50px 1fr;
+    }
+
+    .row-meta {
+      grid-column: 1 / -1;
     }
   }
 </style>
