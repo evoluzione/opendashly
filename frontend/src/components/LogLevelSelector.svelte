@@ -1,5 +1,6 @@
 <script lang="ts">
     import { servicesState, selectLogLevel } from "../lib/stores/query";
+    import { locale, t } from "../lib/i18n";
 
     let isOpen = false;
 
@@ -46,7 +47,7 @@
 <svelte:window on:click={handleClickOutside} on:keydown={handleKeydown} />
 
 <div class="level-selector">
-    <span class="label-text">Livello Log</span>
+    <span class="label-text">{t($locale, "logLevel.label")}</span>
     <button
         type="button"
         class="trigger"

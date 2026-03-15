@@ -1,6 +1,7 @@
 <script lang="ts">
   import type { EndpointThroughput } from '../../services/dashboard';
   import InfoTooltip from '../common/InfoTooltip.svelte';
+  import { locale, t, getLocaleTag } from '../../lib/i18n';
 
   export let data: EndpointThroughput[] = [];
 </script>
@@ -11,21 +12,21 @@
       Top Endpoint per Throughput
       <InfoTooltip text="Endpoint ordinati per richieste totali. Utile per capire dove si concentra il traffico." />
     </span>
-    <span class="table-subtitle">Top 10 per richieste</span>
+    <span class="table-subtitle">{t($locale, 'dashboard.topEndpoints.subtitle')}</span>
   </div>
 
   {#if data.length === 0}
-    <div class="empty">Nessun dato disponibile</div>
+    <div class="empty">{t($locale, 'dashboard.noData')}</div>
   {:else}
     <div class="table-wrapper">
       <table>
         <thead>
           <tr>
-            <th class="col-endpoint">Endpoint</th>
-            <th class="col-service">Servizio</th>
-            <th class="col-count">Richieste</th>
-            <th class="col-count">Errori</th>
-            <th class="col-rate">Error Rate</th>
+            <th class="col-endpoint">{t($locale, 'dashboard.table.endpoint')}</th>
+            <th class="col-service">{t($locale, 'dashboard.table.service')}</th>
+            <th class="col-count">{t($locale, 'dashboard.table.requests')}</th>
+            <th class="col-count">{t($locale, 'dashboard.table.errors')}</th>
+            <th class="col-rate">{t($locale, 'dashboard.table.errorRate')}</th>
           </tr>
         </thead>
         <tbody>
@@ -37,8 +38,8 @@
               <td class="col-service">
                 <span class="service-badge">{row.service}</span>
               </td>
-              <td class="col-count">{row.requestCount.toLocaleString()}</td>
-              <td class="col-count error-count">{row.errorCount.toLocaleString()}</td>
+              <td class="col-count">{row.requestCount.toLocaleString(getLocaleTag($locale))}</td>
+              <td class="col-count error-count">{row.errorCount.toLocaleString(getLocaleTag($locale))}</td>
               <td class="col-rate">{row.errorRate.toFixed(1)}%</td>
             </tr>
           {/each}

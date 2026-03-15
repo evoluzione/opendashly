@@ -4,11 +4,13 @@
   import { get } from 'svelte/store';
   import { goto } from '$app/navigation';
   import { authState, loadSession } from '../lib/stores/auth';
+  import { initializeLocale, locale, t } from '$lib/i18n';
   import AIAssistantWidget from '../components/AIAssistantWidget.svelte';
 
   const publicRoutes = ['/login'];
 
   onMount(() => {
+    initializeLocale();
     void loadSession();
   });
 
@@ -42,7 +44,7 @@
           <path d="M2 12l10 5 10-5"/>
         </svg>
       </div>
-      <span>Caricamento...</span>
+      <span>{t($locale, 'layout.loading')}</span>
     </div>
   </div>
 {:else if showContent || isPublicRoute}

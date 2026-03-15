@@ -1,6 +1,7 @@
 <script lang="ts">
   import { goto } from '$app/navigation';
   import { authState, changePasswordForFirstLogin } from '../../lib/stores/auth';
+  import { locale, t } from '$lib/i18n';
 
   let newPassword = '';
 
@@ -32,13 +33,13 @@
         </div>
         <div class="brand-text">
           <h1>Opendashly</h1>
-          <span>Dashboard</span>
+          <span>{t($locale, 'common.dashboard')}</span>
         </div>
       </div>
 
       <div class="notice">
-        <h2>Cambio password richiesto</h2>
-        <p>Per sicurezza devi impostare una nuova password prima di continuare.</p>
+        <h2>{t($locale, 'firstLogin.requiredTitle')}</h2>
+        <p>{t($locale, 'firstLogin.requiredText')}</p>
       </div>
     </div>
   </div>
@@ -46,13 +47,13 @@
   <div class="login-right">
     <div class="card">
       <div class="card-header">
-        <h2>Imposta una nuova password</h2>
-        <p>Questo passaggio sarà necessario solo la prima volta che accedi. Assicurati di scegliere una password sicura.</p>
+        <h2>{t($locale, 'firstLogin.setNewPassword')}</h2>
+        <p>{t($locale, 'firstLogin.oneTimeStep')}</p>
       </div>
 
       <div class="form">
         <div class="field">
-          <label for="new">Nuova password</label>
+          <label for="new">{t($locale, 'firstLogin.newPassword')}</label>
           <div class="input-wrapper">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
@@ -62,7 +63,7 @@
               id="new"
               type="password"
               bind:value={newPassword}
-              placeholder="Inserisci la nuova password"
+              placeholder={t($locale, 'firstLogin.newPasswordPlaceholder')}
               on:keydown={handleKeydown}
             />
           </div>
@@ -82,9 +83,9 @@
         <button class="submit-btn" on:click={submit} disabled={$authState.loading || !newPassword}>
           {#if $authState.loading}
             <span class="spinner"></span>
-            Aggiornamento in corso...
+            {t($locale, 'firstLogin.updating')}
           {:else}
-            Aggiorna password
+            {t($locale, 'firstLogin.updatePassword')}
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <line x1="5" y1="12" x2="19" y2="12"/>
               <polyline points="12 5 19 12 12 19"/>

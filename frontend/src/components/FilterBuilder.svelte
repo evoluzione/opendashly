@@ -3,6 +3,7 @@
     import Autocomplete from "./common/Autocomplete.svelte";
     import { getLogAttributes } from "../services/query";
     import type { FilterItem } from "../services/query";
+    import { locale, t } from "../lib/i18n";
 
     export let filters: FilterItem[] = [];
 
@@ -57,10 +58,10 @@
         attributeWarnings = [...attributeWarnings];
     }
 
-    const operators = [
-        { label: "Uguale", value: "=", icon: "=" },
-        { label: "Diverso", value: "!=", icon: "≠" },
-        { label: "Contiene", value: "contains", icon: "∋" },
+    $: operators = [
+        { label: t($locale, "filterBuilder.operatorEqual"), value: "=", icon: "=" },
+        { label: t($locale, "filterBuilder.operatorNotEqual"), value: "!=", icon: "≠" },
+        { label: t($locale, "filterBuilder.operatorContains"), value: "contains", icon: "∋" },
     ];
 </script>
 
@@ -84,10 +85,9 @@
                     ></polygon>
                 </svg>
             </div>
-            <h4>Nessun filtro attivo</h4>
+            <h4>{t($locale, "filterBuilder.emptyTitle")}</h4>
             <p>
-                Aggiungi filtri per affinare la tua ricerca sui dati di
-                telemetria
+                {t($locale, "filterBuilder.emptyDescription")}
             </p>
         </div>
     {:else}
@@ -109,17 +109,17 @@
                             </div>
                         {:else}
                             <div class="connector-placeholder">
-                                <span class="where-badge">WHERE</span>
+                                <span class="where-badge">{t($locale, "filterBuilder.where")}</span>
                             </div>
                         {/if}
 
                         <div class="filter-fields">
                             <div class="field-key">
-                                <span class="field-label">Attributo</span>
+                                <span class="field-label">{t($locale, "filterBuilder.attribute")}</span>
                                 <div class="attribute-input-wrap">
                                     <Autocomplete
                                         bind:value={filter.key}
-                                        placeholder="es. http.method, service.name"
+                                        placeholder={t($locale, "filterBuilder.attributePlaceholder")}
                                         fetchOptions={getLogAttributes}
                                         on:select={() => {
                                             clearAttributeWarning(i);
@@ -135,8 +135,8 @@
                                     {#if attributeWarnings[i]}
                                         <span
                                             class="attribute-warning"
-                                            title="Attributo non presente tra quelli rilevati nei log recenti. Verifica il nome: la query potrebbe restituire zero risultati."
-                                            aria-label="Attributo non presente tra quelli rilevati nei log recenti. Verifica il nome."
+                                            title={t($locale, "filterBuilder.attributeMissingTitle")}
+                                            aria-label={t($locale, "filterBuilder.attributeMissingAria")}
                                         >
                                             <svg
                                                 xmlns="http://www.w3.org/2000/svg"
@@ -161,7 +161,7 @@
                             </div>
 
                             <div class="operator">
-                                <label for="operator-{i}">Operatore</label>
+                                <label for="operator-{i}">{t($locale, "filterBuilder.operator")}</label>
                                 <select
                                     id="operator-{i}"
                                     bind:value={filter.operator}
@@ -176,12 +176,12 @@
                             </div>
 
                             <div class="field-value">
-                                <label for="value-{i}">Valore</label>
+                                <label for="value-{i}">{t($locale, "filterBuilder.value")}</label>
                                 <input
                                     id="value-{i}"
                                     type="text"
                                     bind:value={filter.value}
-                                    placeholder="Inserisci il valore"
+                                    placeholder={t($locale, "filterBuilder.valuePlaceholder")}
                                     on:input={handleChange}
                                 />
                             </div>
@@ -190,7 +190,8 @@
                         <button
                             class="remove-btn"
                             on:click={() => removeFilter(i)}
-                            title="Rimuovi filtro"
+                            title={t($locale, "filterBuilder.removeFilter")}
+                            aria-label={t($locale, "filterBuilder.removeFilter")}
                         >
                             <svg
                                 xmlns="http://www.w3.org/2000/svg"
@@ -232,7 +233,7 @@
                 <line x1="8" y1="12" x2="16" y2="12"></line>
             </svg>
         </span>
-        Aggiungi Filtro
+        {t($locale, "filterBuilder.addFilter")}
     </button>
 </div>
 

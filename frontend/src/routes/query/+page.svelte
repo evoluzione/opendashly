@@ -3,6 +3,7 @@
   import { get } from "svelte/store";
   import { page } from "$app/stores";
   import { goto } from "$app/navigation";
+  import { locale, t, getLocaleTag } from "../../lib/i18n";
   import QueryForm from "../../components/QueryForm.svelte";
   import LogResultsTable from "../../components/LogResultsTable.svelte";
   import TraceResultsList from "../../components/TraceResultsList.svelte";
@@ -94,7 +95,7 @@
 
   function formatLastRefresh(date: Date | null): string {
     if (!date) return "";
-    return date.toLocaleTimeString("it-IT", {
+    return date.toLocaleTimeString(getLocaleTag($locale), {
       hour: "2-digit",
       minute: "2-digit",
       second: "2-digit",
@@ -104,7 +105,7 @@
   async function handleSave() {
     if (!lastRequest) return;
     await saveQuery({
-      name: queryName || "Query salvata",
+      name: queryName || t($locale, "queryPage.defaultSavedQueryName"),
       description: "",
       request: lastRequest,
     });
@@ -142,18 +143,16 @@
 
 {#if !$queryState.result}
   {#if $queryState.loading}
-    <p>Caricamento...</p>
+    <p>{t($locale, "queryPage.loading")}</p>
   {:else}
-    <p class="empty">
-      Ancora nessun risultato. Esegui una query per vedere la telemetria.
-    </p>
+    <p class="empty">{t($locale, "queryPage.empty")}</p>
   {/if}
 {:else}
   {#if $queryState.loading}
-    <p class="loading">Aggiornamento in corso...</p>
+    <p class="loading">{t($locale, "queryPage.updating")}</p>
   {/if}
   <div class="page-size">
-    <label for="page-size">Risultati per pagina (log e tracce)</label>
+    <label for="page-size">{t($locale, "queryPage.resultsPerPage")}</label>
     <select
       id="page-size"
       bind:value={pageSize}
@@ -165,7 +164,7 @@
     </select>
   </div>
   <section>
-    <h2>Log</h2>
+    <h2>{t($locale, "queryPage.logs")}</h2>
     <LogResultsTable
       logs={$queryState.result.results.logs}
       pagination={$queryState.result.pagination?.logs ?? null}
@@ -174,7 +173,7 @@
     />
   </section>
   <section>
-    <h2>Tracce</h2>
+    <h2>{t($locale, "queryPage.traces")}</h2>
     <TraceResultsList
       traces={$queryState.result.results.traces}
       pagination={$queryState.result.pagination?.traces ?? null}
@@ -183,7 +182,7 @@
     />
   </section>
   <section>
-    <h2>Metriche</h2>
+    <h2>{t($locale, "queryPage.metrics")}</h2>
     <MetricChart
       series={$queryState.result.results.metrics}
       pagination={$queryState.result.pagination?.metrics ?? null}
@@ -191,8 +190,8 @@
     />
   </section>
   <div class="save">
-    <input bind:value={queryName} placeholder="Salva query come" />
-    <button on:click={handleSave}>Salva query</button>
+    <input bind:value={queryName} placeholder={t($locale, "queryPage.saveAsPlaceholder")} />
+    <button on:click={handleSave}>{t($locale, "queryPage.save")}</button>
   </div>
 {/if}
 

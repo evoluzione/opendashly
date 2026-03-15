@@ -2,6 +2,7 @@
   import { createEventDispatcher, onDestroy } from "svelte";
   import CorrelationPanel from "./CorrelationPanel.svelte";
   import TraceSpanTimeline from "./TraceSpanTimeline.svelte";
+  import { getLocaleTag, locale, t } from "../lib/i18n";
 
   export let traces: any[] = [];
   export let pagination: { page: number; hasNext: boolean } | null = null;
@@ -47,7 +48,7 @@
   function formatTimestamp(value: string | number | Date) {
     if (!value) return "-";
     const date = value instanceof Date ? value : new Date(value);
-    return new Intl.DateTimeFormat("it-IT", {
+    return new Intl.DateTimeFormat(getLocaleTag($locale), {
       dateStyle: "short",
       timeStyle: "medium",
     }).format(date);
@@ -122,7 +123,7 @@
 <div class="results-container">
   <div class="results-content">
     {#if traces.length === 0}
-      <div class="empty">Nessuna traccia trovata per i filtri selezionati.</div>
+      <div class="empty">{t($locale, "traces.empty")}</div>
     {:else}
       <ul class="trace-list">
         {#each traces as trace}
@@ -134,19 +135,19 @@
               class:new-item={highlightKeys.has(key)}
               on:click={() => (selectedTrace = trace)}
             >
-              <span class="name">{trace.name || "Traccia senza nome"}</span>
+              <span class="name">{trace.name || t($locale, "traces.unnamed")}</span>
               <span class="service"
-                >{trace.service || "Servizio non specificato"}</span
+                >{trace.service || t($locale, "traces.unknownService")}</span
               >
               <span class="last-seen">{formatTimestamp(trace.lastSeen)}</span>
-              <span class="count">Span {trace.spanCount ?? 0}</span>
+              <span class="count">{t($locale, "traces.span", { count: trace.spanCount ?? 0 })}</span>
 
               <div class="status-cell">
                 <span class="duration {getDurationClass(trace.durationMs)}">
                   {formatDuration(trace.durationMs)}
                 </span>
                 {#if trace.errorCount > 0}
-                  <div class="error-indicator" title="Contiene errori">
+                  <div class="error-indicator" title={t($locale, "traces.hasErrors")}>
                     <svg
                       xmlns="http://www.w3.org/2000/svg"
                       width="16"
@@ -179,7 +180,7 @@
           <span class="last-refresh">{lastUpdatedLabel}</span>
         {/if}
         <div class="page-size-selector">
-          <label for="traces-page-size">Risultati</label>
+          <label for="traces-page-size">{t($locale, "pagination.results")}</label>
           <select
             id="traces-page-size"
             value={pageSize}
@@ -197,7 +198,7 @@
           class="pager-btn"
           on:click={() => changePage(1)}
           disabled={pagination.page <= 1}
-          title="Prima pagina"
+          title={t($locale, "pagination.firstPage")}
         >
           <svg
             width="16"
@@ -218,7 +219,7 @@
           class="pager-btn"
           on:click={() => changePage(pagination.page - 1)}
           disabled={pagination.page <= 1}
-          title="Pagina precedente"
+          title={t($locale, "pagination.previousPage")}
         >
           <svg
             width="16"
@@ -233,13 +234,13 @@
             <polyline points="15 18 9 12 15 6"></polyline>
           </svg>
         </button>
-        <span>Pagina {pagination.page}</span>
+        <span>{t($locale, "pagination.page", { page: pagination.page })}</span>
         <button
           type="button"
           class="pager-btn"
           on:click={() => changePage(pagination.page + 1)}
           disabled={!pagination.hasNext}
-          title="Pagina successiva"
+          title={t($locale, "pagination.nextPage")}
         >
           <svg
             width="16"
@@ -264,7 +265,7 @@
     class="modal-backdrop"
     role="button"
     tabindex="0"
-    aria-label="Chiudi dettagli traccia"
+    aria-label={t($locale, "traces.closeDetails")}
     on:click|self={closeModal}
     on:keydown={handleBackdropKeydown}
   >
@@ -287,15 +288,15 @@
             </svg>
           </div>
           <div class="header-text">
-            <p class="kicker">Dettagli traccia</p>
-            <h3>{selectedTrace.name || "Traccia senza nome"}</h3>
+            <p class="kicker">{t($locale, "traces.detailsTitle")}</p>
+            <h3>{selectedTrace.name || t($locale, "traces.unnamed")}</h3>
           </div>
         </div>
         <button
           type="button"
           class="close-btn"
           on:click={closeModal}
-          aria-label="Chiudi"
+          aria-label={t($locale, "common.close")}
         >
           <svg
             xmlns="http://www.w3.org/2000/svg"
@@ -315,14 +316,14 @@
       </header>
       <div class="modal-body">
         <div class="meta">
-          <span class="pill">ID traccia {selectedTrace.traceId}</span>
-          <span class="pill">Servizio {selectedTrace.service || "-"}</span>
-          <span class="pill">Span {selectedTrace.spanCount ?? 0}</span>
+          <span class="pill">{t($locale, "traces.traceId", { id: selectedTrace.traceId })}</span>
+          <span class="pill">{t($locale, "traces.service", { name: selectedTrace.service || "-" })}</span>
+          <span class="pill">{t($locale, "traces.span", { count: selectedTrace.spanCount ?? 0 })}</span>
           {#if selectedTrace.errorCount > 0}
-            <span class="pill error">Errori {selectedTrace.errorCount}</span>
+            <span class="pill error">{t($locale, "traces.errors", { count: selectedTrace.errorCount })}</span>
           {/if}
           <span class="pill"
-            >Ultimo span {formatTimestamp(selectedTrace.lastSeen)}</span
+            >{t($locale, "traces.lastSpan", { time: formatTimestamp(selectedTrace.lastSeen) })}</span
           >
         </div>
         <div class="tabs">

@@ -9,17 +9,20 @@
     sendAssistantMessage,
     type AssistantMessage,
   } from "../services/assistant";
+  import { locale, t } from "../lib/i18n";
 
   type ChatMessage = AssistantMessage & {
     id: string;
     loading?: boolean;
   };
 
-  const thinkingStages = [
-    "Analizzo la richiesta e il contesto...",
-    "Eseguo query reali sui dati disponibili...",
-    "Sto preparando una risposta operativa...",
-  ];
+  function getThinkingStages() {
+    return [
+      t($locale, "assistant.stageAnalyzing"),
+      t($locale, "assistant.stageQuerying"),
+      t($locale, "assistant.stagePreparing"),
+    ];
+  }
 
   let open = false;
   let aiEnabled = false;
@@ -112,12 +115,13 @@
   }
 
   function startThinkingAnimation(placeholderId: string) {
+    const stages = getThinkingStages();
     stageIndex = 0;
     thinkingTimer = setInterval(() => {
-      stageIndex = (stageIndex + 1) % thinkingStages.length;
+      stageIndex = (stageIndex + 1) % stages.length;
       messages = messages.map((m) =>
         m.id === placeholderId
-          ? { ...m, content: thinkingStages[stageIndex] }
+          ? { ...m, content: stages[stageIndex] }
           : m,
       );
     }, 1800);
@@ -165,7 +169,7 @@
     const placeholder: ChatMessage = {
       id: `assistant-loading-${Date.now()}`,
       role: "assistant",
-      content: thinkingStages[0],
+      content: getThinkingStages()[0],
       loading: true,
     };
 
@@ -195,14 +199,13 @@
       await persistHistory();
     } catch (err) {
       stopThinkingAnimation();
-      error = err instanceof Error ? err.message : "Errore assistente AI";
+      error = err instanceof Error ? err.message : t($locale, "assistant.errorGeneric");
       messages = messages.map((m) =>
         m.id === placeholder.id
           ? {
               id: `assistant-error-${Date.now()}`,
               role: "assistant",
-              content:
-                "Non sono riuscito a completare la richiesta. Riprova tra poco.",
+              content: t($locale, "assistant.errorReply"),
             }
           : m,
       );
@@ -337,17 +340,17 @@
 {#if aiEnabled}
   <div class="assistant-widget" style={`--assistant-bottom: ${dockBottomPx}px;`}>
     {#if open}
-      <section class="panel" role="dialog" aria-label="Assistente AI">
+      <section class="panel" role="dialog" aria-label={t($locale, "assistant.dialogLabel")}>
         <header class="panel-header">
           <div>
-            <h3>Assistente AI</h3>
-            <p>Analisi operativa su telemetria</p>
+            <h3>{t($locale, "assistant.title")}</h3>
+            <p>{t($locale, "assistant.subtitle")}</p>
           </div>
           <div class="header-actions">
-            <button type="button" class="icon-btn" on:click={askResetConversation} title="Reset chat">
+            <button type="button" class="icon-btn" on:click={askResetConversation} title={t($locale, "assistant.resetChat")}>
               ⟲
             </button>
-            <button type="button" class="icon-btn" on:click={toggleOpen} title="Chiudi">
+            <button type="button" class="icon-btn" on:click={toggleOpen} title={t($locale, "assistant.close")}>
               ✕
             </button>
           </div>
@@ -355,9 +358,9 @@
 
         <div class="messages">
           {#if !historyLoaded}
-            <div class="status">Caricamento chat...</div>
+            <div class="status">{t($locale, "assistant.loadingChat")}</div>
           {:else if messages.length === 0}
-            <div class="empty">Fai una domanda su log, tracce o metriche.</div>
+            <div class="empty">{t($locale, "assistant.empty")}</div>
           {:else}
             {#each messages as message}
               <article class="message" class:user={message.role === "user"}>
@@ -380,7 +383,7 @@
           <textarea
             bind:value={prompt}
             rows="3"
-            placeholder="Scrivi una richiesta..."
+            placeholder={t($locale, "assistant.placeholder")}
             disabled={sending}
             on:keydown={handlePromptKeydown}
           ></textarea>
@@ -388,10 +391,10 @@
             {#if error}
               <span class="error">{error}</span>
             {:else}
-              <span class="hint">Invio per inviare</span>
+              <span class="hint">{t($locale, "assistant.hintEnter")}</span>
             {/if}
             <button type="button" class="send-btn" on:click={sendMessage} disabled={sending || !prompt.trim()}>
-              {#if sending}Invio...{:else}Invia{/if}
+              {#if sending}{t($locale, "assistant.sending")}{:else}{t($locale, "assistant.send")}{/if}
             </button>
           </div>
         </div>
@@ -402,8 +405,8 @@
       class="fab"
       type="button"
       on:click={toggleOpen}
-      aria-label={open ? "Chiudi Assistente AI" : "Apri Assistente AI"}
-      title={open ? "Chiudi Assistente AI" : "Apri Assistente AI"}
+      aria-label={open ? t($locale, "assistant.closeFab") : t($locale, "assistant.open")}
+      title={open ? t($locale, "assistant.closeFab") : t($locale, "assistant.open")}
     >
       <svg
         width="22"
@@ -424,10 +427,10 @@
 
 <ConfirmModal
   open={confirmResetOpen}
-  title="Reset conversazione"
-  message="Vuoi cancellare tutta la cronologia dell'Assistente AI per il tuo account?"
-  confirmLabel="Resetta"
-  cancelLabel="Annulla"
+  title={t($locale, "assistant.resetConversationTitle")}
+  message={t($locale, "assistant.resetConversationMessage")}
+  confirmLabel={t($locale, "assistant.reset")}
+  cancelLabel={t($locale, "common.cancel")}
   variant="warning"
   on:confirm={confirmResetConversation}
   on:cancel={cancelResetConversation}

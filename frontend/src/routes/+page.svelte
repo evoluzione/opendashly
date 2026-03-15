@@ -28,13 +28,14 @@
     createInitialRunRequest,
     createPageChangeRequest,
     createPageSizeRequest,
-    dashboardTimeRangeOptions,
+    getDashboardTimeRangeOptions,
     defaultCustomRangeInputs,
     formatLastRefresh,
     sleep,
     storeNextCursors,
     type DashboardRangePreset,
   } from "./home-page.logic";
+  import { locale, t } from "$lib/i18n";
 
   // Dashboard components
   import ApdexGauge from "../components/dashboard/ApdexGauge.svelte";
@@ -145,6 +146,7 @@
   const tracesCursorByPage = new Map<number, string>();
   let pageSize = "100";
   const pageSizeOptions = ["25", "50", "100", "200"];
+  $: dashboardTimeRangeOptions = getDashboardTimeRangeOptions($locale);
 
   async function handleRun(event: CustomEvent) {
     const { request } = event.detail;
@@ -232,6 +234,7 @@
       rangePreset: dashboardRangePreset,
       fromInput: dashboardFromInput,
       toInput: dashboardToInput,
+      locale: $locale,
     });
 
     if (built.error) {
@@ -282,7 +285,7 @@
 
   function handleDashboardServiceChange(event: Event) {
     const value = (event.target as HTMLSelectElement).value;
-    selectDashboardService(value === "Tutti" ? null : value, {
+    selectDashboardService(value ? value : null, {
       reload: false,
     });
   }
@@ -368,31 +371,33 @@
       <div>
         <h2>
           {activeTab === "logs"
-            ? "Log"
+            ? t($locale, "home.logs")
             : activeTab === "metriche"
-              ? "Metriche"
-              : "Tracce"}
+              ? t($locale, "home.metrics")
+              : t($locale, "home.traces")}
         </h2>
         <p>
           {activeTab === "metriche"
-            ? "Dashboard performance e metriche avanzate."
-            : "Esplora i dati con filtri espliciti e servizi selezionabili."}
+            ? t($locale, "home.metricsSubtitle")
+            : t($locale, "home.querySubtitle")}
         </p>
       </div>
       {#if activeTab === "metriche"}
         <div class="metrics-controls">
           <div class="refresh-controls">
             {#if lastRefresh}
-              <span class="last-refresh"
-                >Ultimo aggiornamento: {formatLastRefresh(lastRefresh)}</span
-              >
+              <span class="last-refresh">
+                {t($locale, "home.lastRefresh", {
+                  time: formatLastRefresh(lastRefresh, $locale),
+                })}
+              </span>
             {/if}
             <button
               class="refresh-btn"
               on:click={handleRefresh}
               disabled={$dashboardState.loading}
-              title="Aggiorna metriche"
-              aria-label="Aggiorna metriche"
+              title={t($locale, "home.refreshMetrics")}
+              aria-label={t($locale, "home.refreshMetrics")}
             >
               <svg
                 class="refresh-icon"
@@ -406,7 +411,7 @@
                   clip-rule="evenodd"
                 />
               </svg>
-              Aggiorna
+              {t($locale, "home.refresh")}
             </button>
           </div>
           <div class="dashboard-filters-dropdown" bind:this={dashboardFiltersRef}>
@@ -432,7 +437,7 @@
                   stroke-linecap="round"
                 />
               </svg>
-              Filtri
+              {t($locale, "home.filters")}
               {#if activeDashboardFilters > 0}
                 <span class="filters-badge">{activeDashboardFilters}</span>
               {/if}
@@ -441,15 +446,15 @@
               <div class="filters-menu">
                 <div class="filter-block">
                   <label class="filter-label" for="dashboard-service-dropdown"
-                    >Servizio</label
+                    >{t($locale, "home.service")}</label
                   >
                   <select
                     id="dashboard-service-dropdown"
                     class="filter-select"
                     on:change={handleDashboardServiceChange}
-                    value={$dashboardState.selectedService || "Tutti"}
+                    value={$dashboardState.selectedService || ""}
                   >
-                    <option value="Tutti">Tutti i servizi</option>
+                    <option value="">{t($locale, "home.allServices")}</option>
                     {#each $servicesState.services as service}
                       <option value={service}>{service}</option>
                     {/each}
@@ -457,7 +462,7 @@
                 </div>
 
                 <div class="filter-block">
-                  <span class="filter-label">Periodo (data + ora)</span>
+                  <span class="filter-label">{t($locale, "home.periodDateTime")}</span>
                   <select
                     class="filter-select"
                     on:change={handleDashboardRangePresetChange}
@@ -471,17 +476,17 @@
 
                 {#if dashboardRangePreset === "custom"}
                   <div class="filter-block">
-                    <span class="filter-label">Intervallo personalizzato</span>
+                    <span class="filter-label">{t($locale, "home.customRange")}</span>
                   <div class="range-inputs">
                     <input
                       type="datetime-local"
                       bind:value={dashboardFromInput}
-                      aria-label="Data ora inizio"
+                      aria-label={t($locale, "home.fromDateTime")}
                     />
                     <input
                       type="datetime-local"
                       bind:value={dashboardToInput}
-                      aria-label="Data ora fine"
+                      aria-label={t($locale, "home.toDateTime")}
                     />
                   </div>
                   </div>
@@ -496,7 +501,7 @@
                     on:click={resetDashboardFilters}
                     disabled={$dashboardState.loading}
                   >
-                    Reset filtri
+                    {t($locale, "home.resetFilters")}
                   </button>
                   <button
                     class="apply-filters-btn"
@@ -504,7 +509,7 @@
                     on:click={applyDashboardFilters}
                     disabled={$dashboardState.loading}
                   >
-                    Applica
+                    {t($locale, "common.apply")}
                   </button>
                 </div>
               </div>
@@ -514,15 +519,17 @@
       {:else}
         <div class="metrics-controls">
           <div class="refresh-controls">
-            <span class="last-refresh"
-              >Ultimo aggiornamento: {formatLastRefresh(lastQueryRefresh)}</span
-            >
+            <span class="last-refresh">
+              {t($locale, "home.lastRefresh", {
+                time: formatLastRefresh(lastQueryRefresh, $locale),
+              })}
+            </span>
             <button
               class="refresh-btn"
               on:click={handleRefreshQueryFilters}
               disabled={$queryState.loading}
-              title="Aggiorna risultati"
-              aria-label="Aggiorna risultati"
+              title={t($locale, "home.refreshResults")}
+              aria-label={t($locale, "home.refreshResults")}
             >
               <svg
                 class="refresh-icon"
@@ -537,7 +544,7 @@
                   clip-rule="evenodd"
                 />
               </svg>
-              Aggiorna
+              {t($locale, "home.refresh")}
             </button>
           </div>
         </div>
@@ -549,7 +556,7 @@
         {#if $dashboardState.error}
           <div class="status error">{$dashboardState.error}</div>
         {:else if $dashboardState.loading && !$dashboardState.data}
-          <div class="status">Caricamento dashboard...</div>
+          <div class="status">{t($locale, "home.loadingDashboard")}</div>
         {:else if $dashboardState.data}
           <div class="dashboard-grid">
             {#each getOrderedChartSettings() as chartSetting}
@@ -696,19 +703,19 @@
             {/each}
           </div>
         {:else}
-          <div class="status">Caricamento metriche...</div>
+          <div class="status">{t($locale, "home.loadingMetrics")}</div>
         {/if}
       {:else if $queryState.error}
         <div class="status error">{$queryState.error}</div>
       {:else if !$queryState.result}
         <div class="status">
           {$queryState.loading
-            ? "Caricamento risultati..."
-            : "Avvia una query per vedere i risultati."}
+            ? t($locale, "home.loadingResults")
+            : t($locale, "home.startQuery")}
         </div>
       {:else}
         {#if $queryState.loading}
-          <div class="status">Aggiornamento in corso...</div>
+          <div class="status">{t($locale, "home.updating")}</div>
         {/if}
         {#if activeTab === "logs"}
           <LogResultsTable
@@ -741,15 +748,15 @@
     <aside class="filters">
       <div class="panel">
         <div class="filters-panel-header">
-          <h3>Filtri query</h3>
+          <h3>{t($locale, "home.queryFilters")}</h3>
           <div class="query-header-actions">
             <button
               type="button"
               class="query-reset-btn"
               on:click={handleResetQueryFilters}
-              title="Resetta tutti i filtri ai valori di default"
+              title={t($locale, "home.resetAllFilters")}
             >
-              Reset filtri
+              {t($locale, "home.resetFilters")}
             </button>
           </div>
         </div>

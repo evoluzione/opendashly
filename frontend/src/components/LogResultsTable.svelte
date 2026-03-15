@@ -1,6 +1,7 @@
 <script lang="ts">
   import { createEventDispatcher, onDestroy } from "svelte";
   import { goto } from "$app/navigation";
+  import { getLocaleTag, locale, t } from "../lib/i18n";
 
   export let logs: any[] = [];
   export let pagination: { page: number; hasNext: boolean } | null = null;
@@ -49,7 +50,7 @@
   function formatTimestamp(value: string | number | Date) {
     if (!value) return "-";
     const date = value instanceof Date ? value : new Date(value);
-    return new Intl.DateTimeFormat("it-IT", {
+    return new Intl.DateTimeFormat(getLocaleTag($locale), {
       dateStyle: "short",
       timeStyle: "medium",
     }).format(date);
@@ -256,7 +257,7 @@
 <div class="results-container">
   <div class="results-content">
     {#if logs.length === 0}
-      <div class="empty">Nessun log disponibile per questo intervallo.</div>
+      <div class="empty">{t($locale, "logs.empty")}</div>
     {:else}
       <ul class="log-list">
         {#each logs as log}
@@ -278,7 +279,7 @@
                 >{@html formatLogMessageHtml(log, structuredBody)}</span
               >
               {#if log.traceId}
-                <span class="trace">Traccia {shortId(log.traceId)}</span>
+                <span class="trace">{t($locale, "logs.trace", { id: shortId(log.traceId) })}</span>
               {/if}
             </button>
           </li>
@@ -294,7 +295,7 @@
           <span class="last-refresh">{lastUpdatedLabel}</span>
         {/if}
         <div class="page-size-selector">
-          <label for="logs-page-size">Risultati</label>
+          <label for="logs-page-size">{t($locale, "pagination.results")}</label>
           <select
             id="logs-page-size"
             value={pageSize}
@@ -312,7 +313,7 @@
           class="pager-btn"
           on:click={() => changePage(1)}
           disabled={pagination.page <= 1}
-          title="Prima pagina"
+          title={t($locale, "pagination.firstPage")}
         >
           <svg
             width="16"
@@ -333,7 +334,7 @@
           class="pager-btn"
           on:click={() => changePage(pagination.page - 1)}
           disabled={pagination.page <= 1}
-          title="Pagina precedente"
+          title={t($locale, "pagination.previousPage")}
         >
           <svg
             width="16"
@@ -348,13 +349,13 @@
             <polyline points="15 18 9 12 15 6"></polyline>
           </svg>
         </button>
-        <span>Pagina {pagination.page}</span>
+        <span>{t($locale, "pagination.page", { page: pagination.page })}</span>
         <button
           type="button"
           class="pager-btn"
           on:click={() => changePage(pagination.page + 1)}
           disabled={!pagination.hasNext}
-          title="Pagina successiva"
+          title={t($locale, "pagination.nextPage")}
         >
           <svg
             width="16"
@@ -382,7 +383,7 @@
     class="modal-backdrop"
     role="button"
     tabindex="0"
-    aria-label="Chiudi dettagli log"
+    aria-label={t($locale, "logs.closeDetails")}
     on:click|self={closeLogModal}
     on:keydown={(event) => handleBackdropKeydown(event, closeLogModal)}
   >
@@ -406,13 +407,13 @@
             <line x1="16" y1="13" x2="8" y2="13"></line>
             <line x1="16" y1="17" x2="8" y2="17"></line>
           </svg>
-          <span>Dettagli Log</span>
+          <span>{t($locale, "logs.detailsTitle")}</span>
         </div>
         <button
           type="button"
           class="close-btn"
           on:click={closeLogModal}
-          aria-label="Chiudi"
+          aria-label={t($locale, "common.close")}
         >
           <svg
             xmlns="http://www.w3.org/2000/svg"
@@ -448,7 +449,7 @@
 
         <!-- Messaggio -->
         <section class="log-section message-section">
-          <h4 class="section-title">Messaggio</h4>
+          <h4 class="section-title">{t($locale, "logs.message")}</h4>
           {#if true}
             {@const baseMessage = extractMessage(selectedLog.body, structuredBody)}
             {@const isLongMessage = baseMessage && baseMessage.length > LOG_MESSAGE_PREVIEW}
@@ -464,7 +465,7 @@
                 class="message-toggle"
                 on:click={() => (isMessageExpanded = !isMessageExpanded)}
               >
-                {isMessageExpanded ? "Mostra meno" : "Mostra tutto"}
+                  {isMessageExpanded ? t($locale, "logs.showLess") : t($locale, "logs.showMore")}
               </button>
             {/if}
           {/if}
@@ -473,7 +474,7 @@
         <!-- Attributi Log (prioritari) -->
         {#if selectedLog.logAttributes && Object.keys(selectedLog.logAttributes).length > 0}
           <section class="log-section">
-            <h4 class="section-title">Attributi Log</h4>
+            <h4 class="section-title">{t($locale, "logs.logAttributes")}</h4>
             <div class="attributes-list">
               {#each Object.entries(selectedLog.logAttributes) as [key, value]}
                 <div class="attr-row">
@@ -490,11 +491,11 @@
           <!-- Trace/Span Info -->
           {#if selectedLog.traceId || selectedLog.spanId || tags.length > 0}
             <section class="log-section compact">
-              <h4 class="section-title">Contesto</h4>
+              <h4 class="section-title">{t($locale, "logs.context")}</h4>
               <div class="context-grid">
                 {#if selectedLog.traceId}
                   <div class="context-item">
-                    <span class="context-label">Trace ID</span>
+                    <span class="context-label">{t($locale, "logs.traceId")}</span>
                     <button
                       type="button"
                       class="context-value link"
@@ -506,7 +507,7 @@
                 {/if}
                 {#if selectedLog.spanId}
                   <div class="context-item">
-                    <span class="context-label">Span ID</span>
+                    <span class="context-label">{t($locale, "logs.spanId")}</span>
                     <span class="context-value mono">{selectedLog.spanId}</span>
                   </div>
                 {/if}
@@ -523,7 +524,7 @@
           <!-- Corpo strutturato -->
           {#if structuredBody}
             <section class="log-section compact">
-              <h4 class="section-title">Corpo strutturato</h4>
+              <h4 class="section-title">{t($locale, "logs.structuredBody")}</h4>
               <pre class="code-block">{JSON.stringify(
                   structuredBody,
                   null,
@@ -535,7 +536,7 @@
           <!-- Attributi Risorsa -->
           {#if selectedLog.resourceAttributes && Object.keys(selectedLog.resourceAttributes).length > 0}
             <section class="log-section compact">
-              <h4 class="section-title">Attributi Risorsa</h4>
+              <h4 class="section-title">{t($locale, "logs.resourceAttributes")}</h4>
               <div class="attributes-list compact">
                 {#each Object.entries(selectedLog.resourceAttributes) as [key, value]}
                   <div class="attr-row">

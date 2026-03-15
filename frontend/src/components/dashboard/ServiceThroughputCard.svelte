@@ -1,6 +1,7 @@
 <script lang="ts">
   import type { EndpointThroughput } from '../../services/dashboard';
   import InfoTooltip from '../common/InfoTooltip.svelte';
+  import { locale, t, getLocaleTag } from '../../lib/i18n';
 
   export let data: EndpointThroughput[] = [];
 
@@ -29,14 +30,14 @@
 <div class="table-card">
   <div class="table-header">
     <span class="table-title">
-      Throughput per Servizio
-      <InfoTooltip text="Volume richieste per servizio con evidenza errori. Evidenzia i servizi che reggono il carico." />
+      {t($locale, 'dashboard.serviceThroughput.title')}
+      <InfoTooltip text={t($locale, 'dashboard.serviceThroughput.tooltip')} />
     </span>
-    <span class="table-subtitle">Top servizi per richieste</span>
+    <span class="table-subtitle">{t($locale, 'dashboard.serviceThroughput.subtitle')}</span>
   </div>
 
   {#if ranked.length === 0}
-    <div class="empty">Nessun dato disponibile</div>
+    <div class="empty">{t($locale, 'dashboard.noData')}</div>
   {:else}
     <div class="rows">
       {#each ranked as row}
@@ -46,8 +47,8 @@
             <span class="bar" style={`width:${(row.requests / maxReq) * 100}%`}></span>
           </div>
           <div class="value">
-            <span>{row.requests.toLocaleString()}</span>
-            <small>{row.errors.toLocaleString()} err</small>
+            <span>{row.requests.toLocaleString(getLocaleTag($locale))}</span>
+            <small>{t($locale, 'dashboard.serviceThroughput.errorsShort', { count: row.errors.toLocaleString(getLocaleTag($locale)) })}</small>
           </div>
         </div>
       {/each}

@@ -4,6 +4,7 @@
   import 'uplot/dist/uPlot.min.css';
   import type { ErrorRatePoint } from '../../services/dashboard';
   import InfoTooltip from '../common/InfoTooltip.svelte';
+  import { locale, t } from '../../lib/i18n';
 
   export let data: ErrorRatePoint[] = [];
 
@@ -90,7 +91,7 @@
         axes: [{}, { label: '%', labelSize: 12, size: 50 }],
         legend: { show: true }
       },
-      chartData,
+      chartData as uPlot.AlignedData,
       chartEl
     );
 
@@ -101,7 +102,7 @@
         canvas.style.width = '100%';
         canvas.style.height = '100%';
       });
-      chart?.setData(chartData);
+      chart?.setData(chartData as uPlot.AlignedData);
     });
   }
 
@@ -162,14 +163,14 @@
 <div class="chart-card" bind:this={containerEl}>
   <div class="chart-header">
     <span class="chart-title">
-      Error Rate nel Tempo
-      <InfoTooltip text="Andamento della percentuale di richieste in errore. Utile per individuare regressioni di affidabilita." />
+      {t($locale, 'dashboard.errorRate.title')}
+      <InfoTooltip text={t($locale, 'dashboard.errorRate.tooltip')} />
     </span>
-    <span class="chart-subtitle">Percentuale errori nel tempo</span>
+    <span class="chart-subtitle">{t($locale, 'dashboard.errorRate.subtitle')}</span>
   </div>
 
   {#if data.length === 0}
-    <div class="empty">Nessun dato disponibile</div>
+    <div class="empty">{t($locale, 'dashboard.noData')}</div>
   {/if}
   <div class="chart-container" class:hidden={data.length === 0} bind:this={chartEl}></div>
 </div>

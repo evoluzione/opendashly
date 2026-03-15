@@ -1,6 +1,7 @@
 <script lang="ts">
   import type { StatusCodeBreakdown } from '../../services/dashboard';
   import InfoTooltip from '../common/InfoTooltip.svelte';
+  import { locale, t, getLocaleTag } from '../../lib/i18n';
 
   export let data: StatusCodeBreakdown[] = [];
 
@@ -29,13 +30,13 @@
   <div class="table-header">
     <span class="table-title">
       Status Code
-      <InfoTooltip text="Distribuzione degli esiti delle richieste (OK/Error/Unset/Other)." />
+      <InfoTooltip text={t($locale, 'dashboard.statusCode.tooltip')} />
     </span>
-    <span class="table-subtitle">Distribuzione complessiva</span>
+    <span class="table-subtitle">{t($locale, 'dashboard.statusCode.subtitle')}</span>
   </div>
 
   {#if data.length === 0}
-    <div class="empty">Nessun dato disponibile</div>
+    <div class="empty">{t($locale, 'dashboard.noData')}</div>
   {:else}
     <div class="breakdown">
       {#each data as row}
@@ -48,7 +49,7 @@
             <span class="bar" style="width: {Math.min(row.percentage, 100)}%; background: {colors[row.code] || '#94a3b8'}"></span>
           </div>
           <div class="breakdown-value">
-            <span>{row.count.toLocaleString()}</span>
+            <span>{row.count.toLocaleString(getLocaleTag($locale))}</span>
             <span class="pct">{row.percentage.toFixed(1)}%</span>
           </div>
         </div>

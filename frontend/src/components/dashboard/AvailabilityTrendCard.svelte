@@ -1,6 +1,7 @@
 <script lang="ts">
   import type { ErrorRatePoint } from '../../services/dashboard';
   import InfoTooltip from '../common/InfoTooltip.svelte';
+  import { locale, t } from '../../lib/i18n';
 
   export let data: ErrorRatePoint[] = [];
 
@@ -38,23 +39,23 @@
 <div class="table-card">
   <div class="table-header">
     <span class="table-title">
-      Disponibilita nel Tempo
-      <InfoTooltip text="Trend di availability calcolata come 100% - error rate." />
+      {t($locale, 'dashboard.availability.title')}
+      <InfoTooltip text={t($locale, 'dashboard.availability.tooltip')} />
     </span>
-    <span class="table-subtitle">Ultime finestre temporali</span>
+    <span class="table-subtitle">{t($locale, 'dashboard.availability.subtitle')}</span>
   </div>
 
   {#if points.length === 0}
-    <div class="empty">Nessun dato disponibile</div>
+    <div class="empty">{t($locale, 'dashboard.noData')}</div>
   {:else}
     <div class="kpis">
-      <div><strong>{current.toFixed(2)}%</strong><span>attuale</span></div>
-      <div><strong>{avgVal.toFixed(2)}%</strong><span>media</span></div>
-      <div><strong>{minVal.toFixed(2)}%</strong><span>min</span></div>
+      <div><strong>{current.toFixed(2)}%</strong><span>{t($locale, 'dashboard.availability.current')}</span></div>
+      <div><strong>{avgVal.toFixed(2)}%</strong><span>{t($locale, 'dashboard.availability.average')}</span></div>
+      <div><strong>{minVal.toFixed(2)}%</strong><span>{t($locale, 'dashboard.availability.min')}</span></div>
     </div>
 
     <div class="trend">
-      <svg viewBox="0 0 100 36" preserveAspectRatio="none" aria-label="Availability trend">
+      <svg viewBox="0 0 100 36" preserveAspectRatio="none" aria-label={t($locale, 'dashboard.availability.ariaTrend')}>
         <polyline points={path} fill="none" stroke="#22c55e" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"></polyline>
       </svg>
     </div>

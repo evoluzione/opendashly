@@ -1,6 +1,7 @@
 <script lang="ts">
   import type { EndpointLatency } from '../../services/dashboard';
   import InfoTooltip from '../common/InfoTooltip.svelte';
+  import { locale, t } from '../../lib/i18n';
 
   export let data: EndpointLatency[] = [];
 
@@ -40,11 +41,11 @@
       Top Servizi per Latenza P95
       <InfoTooltip text="Classifica servizi con latenza P95 peggiore. Utile per prioritizzare ottimizzazioni." />
     </span>
-    <span class="table-subtitle">Ranking servizi</span>
+    <span class="table-subtitle">{t($locale, 'dashboard.serviceLatency.subtitle')}</span>
   </div>
 
   {#if ranked.length === 0}
-    <div class="empty">Nessun dato disponibile</div>
+    <div class="empty">{t($locale, 'dashboard.noData')}</div>
   {:else}
     <div class="rows">
       {#each ranked as row}

@@ -9,11 +9,12 @@
     mergeWithDefaultDashboardSettings,
     saveDashboardSettings
   } from '../lib/stores/dashboard_settings';
+  import { locale, t } from '../lib/i18n';
 
   type ChartDefinition = {
     key: string;
-    label: string;
-    description: string;
+    labelKey: string;
+    descriptionKey: string;
   };
 
   type PreviewKind = 'gauge' | 'timeseries' | 'distribution' | 'table' | 'kpi';
@@ -43,78 +44,78 @@
   const chartCatalog: ChartDefinition[] = [
     {
       key: 'apdex_gauge',
-      label: 'Gauge APDEX',
-      description: 'Indicatore sintetico di soddisfazione basato sui tempi risposta.'
+      labelKey: 'dashboardSettings.chart.apdex_gauge.label',
+      descriptionKey: 'dashboardSettings.chart.apdex_gauge.description'
     },
     {
       key: 'error_rate_gauge',
-      label: 'Gauge Error Rate',
-      description: 'Percentuale complessiva di richieste in errore.'
+      labelKey: 'dashboardSettings.chart.error_rate_gauge.label',
+      descriptionKey: 'dashboardSettings.chart.error_rate_gauge.description'
     },
     {
       key: 'throughput_gauge',
-      label: 'Gauge Throughput',
-      description: 'Riepilogo richieste totali e velocita media.'
+      labelKey: 'dashboardSettings.chart.throughput_gauge.label',
+      descriptionKey: 'dashboardSettings.chart.throughput_gauge.description'
     },
     {
       key: 'latency_distribution',
-      label: 'Distribuzione Latenza',
-      description: 'Istogramma dei bucket di latenza.'
+      labelKey: 'dashboardSettings.chart.latency_distribution.label',
+      descriptionKey: 'dashboardSettings.chart.latency_distribution.description'
     },
     {
       key: 'latency_percentiles',
-      label: 'Percentili Latenza',
-      description: 'Serie temporali P50/P95/P99.'
+      labelKey: 'dashboardSettings.chart.latency_percentiles.label',
+      descriptionKey: 'dashboardSettings.chart.latency_percentiles.description'
     },
     {
       key: 'throughput_timeseries',
-      label: 'Throughput nel Tempo',
-      description: 'Serie temporale richieste ed errori.'
+      labelKey: 'dashboardSettings.chart.throughput_timeseries.label',
+      descriptionKey: 'dashboardSettings.chart.throughput_timeseries.description'
     },
     {
       key: 'error_rate_timeseries',
-      label: 'Error Rate nel Tempo',
-      description: 'Serie temporale percentuale errori.'
+      labelKey: 'dashboardSettings.chart.error_rate_timeseries.label',
+      descriptionKey: 'dashboardSettings.chart.error_rate_timeseries.description'
     },
     {
       key: 'slo_compliance',
-      label: 'SLO Compliance',
-      description: 'Percentuale finestre conformi a target P95.'
+      labelKey: 'dashboardSettings.chart.slo_compliance.label',
+      descriptionKey: 'dashboardSettings.chart.slo_compliance.description'
     },
     {
       key: 'error_budget_burn',
-      label: 'Error Budget Burn',
-      description: 'Consumo budget errori su finestre 1h/6h.'
+      labelKey: 'dashboardSettings.chart.error_budget_burn.label',
+      descriptionKey: 'dashboardSettings.chart.error_budget_burn.description'
     },
     {
       key: 'service_latency_rank',
-      label: 'Latenza per Servizio',
-      description: 'Ranking servizi con P95 peggiore.'
+      labelKey: 'dashboardSettings.chart.service_latency_rank.label',
+      descriptionKey: 'dashboardSettings.chart.service_latency_rank.description'
     },
     {
       key: 'service_throughput',
-      label: 'Throughput per Servizio',
-      description: 'Volume richieste aggregato per servizio.'
+      labelKey: 'dashboardSettings.chart.service_throughput.label',
+      descriptionKey: 'dashboardSettings.chart.service_throughput.description'
     },
     {
       key: 'availability_trend',
-      label: 'Disponibilita nel Tempo',
-      description: 'Trend availability = 100% - error rate.'
+      labelKey: 'dashboardSettings.chart.availability_trend.label',
+      descriptionKey: 'dashboardSettings.chart.availability_trend.description'
     },
     {
       key: 'slowest_endpoints',
-      label: 'Endpoint Piu Lenti',
-      description: 'Top endpoint per P95.'
+      labelKey: 'dashboardSettings.chart.slowest_endpoints.label',
+      descriptionKey: 'dashboardSettings.chart.slowest_endpoints.description'
     },
     {
       key: 'top_endpoints_throughput',
-      label: 'Top Endpoint per Throughput',
-      description: 'Endpoint ordinati per numero di richieste.'
+      labelKey: 'dashboardSettings.chart.top_endpoints_throughput.label',
+      descriptionKey: 'dashboardSettings.chart.top_endpoints_throughput.description'
     },
     {
       key: 'error_hotspots',
-      label: 'Hotspot Errori',
-      description: 'Endpoint con piu errori o error rate elevato.'
+      labelKey: 'dashboardSettings.chart.error_hotspots.label',
+      descriptionKey: 'dashboardSettings.chart.error_hotspots.description'
     }
   ];
 
@@ -151,7 +152,7 @@
   let canEdit = true;
 
   let editorEl: HTMLDivElement | null = null;
-  let controlsEl: HTMLDivElement | null = null;
+  let controlsEl: HTMLElement | null = null;
 
   let dragState: DragState | null = null;
   let hasLoadedInitialSettings = false;
@@ -394,6 +395,18 @@
     return previewKindByKey[key] ?? 'timeseries';
   }
 
+  function getChartLabel(key: string): string {
+    const chart = chartByKey.get(key);
+    if (!chart) return key;
+    return t($locale, chart.labelKey);
+  }
+
+  function getChartDescription(key: string): string {
+    const chart = chartByKey.get(key);
+    if (!chart) return '';
+    return t($locale, chart.descriptionKey);
+  }
+
   function pointInsideRect(x: number, y: number, rect: DOMRect): boolean {
     return x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom;
   }
@@ -578,7 +591,7 @@
 
   $: disabledSettings = [...localSettings]
     .filter((setting) => !setting.enabled && chartByKey.has(setting.key))
-    .sort((a, b) => (chartByKey.get(a.key)?.label ?? a.key).localeCompare(chartByKey.get(b.key)?.label ?? b.key));
+    .sort((a, b) => getChartLabel(a.key).localeCompare(getChartLabel(b.key)));
 
   $: editorGridRows =
     enabledSettings.reduce((max, setting) => Math.max(max, (setting.y ?? 0) + FIXED_H), 0) + 1;
@@ -588,10 +601,9 @@
 
 <section class="dashboard-settings">
   <header>
-    <h2>Designer dashboard</h2>
+    <h2>{t($locale, 'dashboardSettings.title')}</h2>
     <p>
-      Griglia fissa a 6 colonne e altezza card fissa. La larghezza e modificabile, la disposizione si compatta in
-      automatico.
+      {t($locale, 'dashboardSettings.description')}
     </p>
   </header>
 
@@ -600,15 +612,15 @@
   {/if}
 
   <div class="toolbar">
-    <button class="btn ghost" type="button" on:click={resetLayout} disabled={saving}>Reset layout</button>
-    <button class="btn ghost" type="button" on:click={cancelChanges} disabled={!isDirty || saving}>Annulla</button>
+    <button class="btn ghost" type="button" on:click={resetLayout} disabled={saving}>{t($locale, 'dashboardSettings.resetLayout')}</button>
+    <button class="btn ghost" type="button" on:click={cancelChanges} disabled={!isDirty || saving}>{t($locale, 'dashboardSettings.cancel')}</button>
     <button class="btn primary" type="button" on:click={handleSave} disabled={!isDirty || saving}>
-      {saving ? 'Salvataggio...' : 'Salva'}
+      {saving ? t($locale, 'dashboardSettings.saving') : t($locale, 'dashboardSettings.save')}
     </button>
   </div>
 
   {#if !canEdit}
-    <div class="status">Editor disabilitato su mobile: usa desktop/tablet per modificare il layout.</div>
+    <div class="status">{t($locale, 'dashboardSettings.mobileDisabled')}</div>
   {/if}
 
   <div class="designer-layout">
@@ -627,25 +639,25 @@
             style={getCanvasStyle(setting)}
           >
             <header class="widget-header" on:pointerdown={(event) => beginDrag(event, setting.key, 'grid')}>
-              <span class="drag-handle" title="Trascina">⋮⋮</span>
+              <span class="drag-handle" title={t($locale, 'dashboardSettings.drag')}>⋮⋮</span>
               <div class="widget-title-wrap">
-                <h3>{chartByKey.get(setting.key)?.label}</h3>
+                <h3>{getChartLabel(setting.key)}</h3>
                 <div class="info-tooltip">
                   <button
                     type="button"
                     class="info-trigger"
-                    aria-label={`Info su ${chartByKey.get(setting.key)?.label}`}
+                    aria-label={t($locale, 'dashboardSettings.infoOn', { label: getChartLabel(setting.key) })}
                     on:pointerdown|stopPropagation
                     on:click|stopPropagation
                   >
                     i
                   </button>
                   <span class="info-bubble" role="tooltip">
-                    {chartByKey.get(setting.key)?.description}
+                    {getChartDescription(setting.key)}
                   </span>
                 </div>
               </div>
-              <span class="chip-size" aria-label={`Larghezza ${setting.w}/6`}>
+              <span class="chip-size" aria-label={t($locale, 'dashboardSettings.width', { value: String(setting.w) })}>
                 {setting.w}/6
               </span>
             </header>
@@ -725,7 +737,7 @@
               <button
                 type="button"
                 class="resize-width-handle"
-                aria-label={`Ridimensiona larghezza ${chartByKey.get(setting.key)?.label}`}
+                aria-label={t($locale, 'dashboardSettings.resizeWidth', { label: getChartLabel(setting.key) })}
                 on:pointerdown={(event) => beginDrag(event, setting.key, 'grid', 'resizeWidth')}
               ></button>
             {/if}
@@ -739,11 +751,11 @@
       bind:this={controlsEl}
       class:drop-active={dragState?.source === 'grid' && dragState?.overDisabledSidebar}
     >
-      <h3>Widget disattivati</h3>
-      <p class="controls-subtitle">Trascina nella griglia per attivare, trascina qui per disattivare.</p>
+      <h3>{t($locale, 'dashboardSettings.disabledWidgets')}</h3>
+      <p class="controls-subtitle">{t($locale, 'dashboardSettings.disabledWidgetsSubtitle')}</p>
 
       {#if disabledSettings.length === 0}
-        <div class="empty-state">Nessun widget disattivato.</div>
+        <div class="empty-state">{t($locale, 'dashboardSettings.noDisabledWidgets')}</div>
       {:else}
         {#each disabledSettings as setting (setting.key)}
           <button
@@ -753,7 +765,7 @@
             on:pointerdown={(event) => beginDrag(event, setting.key, 'disabled')}
           >
             <span class="disabled-drag">⋮⋮</span>
-            <span>{chartByKey.get(setting.key)?.label}</span>
+            <span>{getChartLabel(setting.key)}</span>
           </button>
         {/each}
       {/if}

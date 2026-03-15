@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { servicesState, loadServices, selectService } from '../lib/stores/query';
+  import { locale, t } from '../lib/i18n';
 
   onMount(() => {
     void loadServices();
@@ -13,19 +14,19 @@
 </script>
 
 <div class="service-dropdown">
-  <label for="service-select">Servizio</label>
+  <label for="service-select">{t($locale, 'serviceDropdown.label')}</label>
   <select id="service-select" on:change={handleChange}>
-    <option value="Tutti">Tutti</option>
+    <option value="Tutti">{t($locale, 'serviceDropdown.all')}</option>
     {#each $servicesState.services as service}
       <option value={service} selected={service === $servicesState.selectedService}>{service}</option>
     {/each}
   </select>
   {#if $servicesState.loading}
-    <span class="status">Caricamento...</span>
+    <span class="status">{t($locale, 'common.loading')}</span>
   {:else if $servicesState.error}
     <span class="status error">{$servicesState.error}</span>
   {:else if $servicesState.services.length === 0}
-    <span class="status">Nessun servizio disponibile.</span>
+    <span class="status">{t($locale, 'serviceDropdown.none')}</span>
   {/if}
 </div>
 

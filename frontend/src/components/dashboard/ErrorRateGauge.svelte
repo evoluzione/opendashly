@@ -1,5 +1,6 @@
 <script lang="ts">
   import InfoTooltip from '../common/InfoTooltip.svelte';
+  import { locale, t } from '../../lib/i18n';
 
   export let errorRate: number = 0;
   export let totalErrors: number = 0;
@@ -27,10 +28,10 @@
   }
 
   function getLabel(rate: number): string {
-    if (rate <= 1) return 'Ottimo';
-    if (rate <= 5) return 'Attenzione';
-    if (rate <= 10) return 'Problema';
-    return 'Critico';
+    if (rate <= 1) return t($locale, 'dashboard.errorRate.excellent');
+    if (rate <= 5) return t($locale, 'dashboard.errorRate.warning');
+    if (rate <= 10) return t($locale, 'dashboard.errorRate.problem');
+    return t($locale, 'dashboard.errorRate.critical');
   }
 
   $: effectiveRate = computeErrorRate(errorRate, totalErrors, totalRequests);
@@ -81,11 +82,11 @@
 
   <div class="breakdown">
     <div class="breakdown-row">
-      <span class="breakdown-label">Errori</span>
+      <span class="breakdown-label">{t($locale, 'dashboard.errorRate.errors')}</span>
       <span class="breakdown-value error">{totalErrors.toLocaleString()}</span>
     </div>
     <div class="breakdown-row">
-      <span class="breakdown-label">Totale richieste</span>
+      <span class="breakdown-label">{t($locale, 'dashboard.errorRate.totalRequests')}</span>
       <span class="breakdown-value">{totalRequests.toLocaleString()}</span>
     </div>
   </div>

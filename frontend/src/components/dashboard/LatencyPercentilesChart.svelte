@@ -4,6 +4,7 @@
   import 'uplot/dist/uPlot.min.css';
   import type { LatencyPercentilePoint } from '../../services/dashboard';
   import InfoTooltip from '../common/InfoTooltip.svelte';
+  import { locale, t } from '../../lib/i18n';
 
   export let data: LatencyPercentilePoint[] = [];
 
@@ -101,7 +102,7 @@
         axes: [{}, { label: 'ms', labelSize: 12, size: 50 }],
         legend: { show: true }
       },
-      chartData,
+      chartData as uPlot.AlignedData,
       chartEl
     );
 
@@ -112,7 +113,7 @@
         canvas.style.width = '100%';
         canvas.style.height = '100%';
       });
-      chart?.setData(chartData);
+      chart?.setData(chartData as uPlot.AlignedData);
     });
   }
 
@@ -176,11 +177,11 @@
       Latenza Percentili
       <InfoTooltip text="Andamento dei percentili P50/P95/P99 nel tempo. Aiuta a individuare regressioni di performance." />
     </span>
-    <span class="chart-subtitle">P50, P95 e P99 nel tempo</span>
+    <span class="chart-subtitle">{t($locale, 'dashboard.latencyPercentiles.subtitle')}</span>
   </div>
 
   {#if data.length === 0}
-    <div class="empty">Nessun dato disponibile</div>
+    <div class="empty">{t($locale, 'dashboard.noData')}</div>
   {/if}
   <div class="chart-container" class:hidden={data.length === 0} bind:this={chartEl}></div>
 </div>

@@ -2,6 +2,7 @@
   import { onMount } from "svelte";
   import { createUser, listUsers } from "../services/users";
   import type { User } from "../services/auth";
+  import { locale, t } from "../lib/i18n";
 
   let users: User[] = [];
   let loading = false;
@@ -18,7 +19,7 @@
       users = await listUsers();
     } catch (err) {
       error =
-        err instanceof Error ? err.message : "Impossibile caricare gli utenti";
+        err instanceof Error ? err.message : t($locale, "users.loadError");
     } finally {
       loading = false;
     }
@@ -26,7 +27,7 @@
 
   async function submit() {
     if (!username || !password) {
-      error = "Username e password sono obbligatori";
+      error = t($locale, "users.required");
       return;
     }
     loading = true;
@@ -41,7 +42,7 @@
       role = "user";
     } catch (err) {
       error =
-        err instanceof Error ? err.message : "Impossibile creare l'utente";
+        err instanceof Error ? err.message : t($locale, "users.createError");
     } finally {
       loading = false;
     }
@@ -54,53 +55,53 @@
 
 <section class="user-management">
   <header>
-    <h2>Gestione utenti</h2>
-    <p>Crea e gestisci gli accessi alla dashboard.</p>
+    <h2>{t($locale, "users.title")}</h2>
+    <p>{t($locale, "users.subtitle")}</p>
   </header>
 
   <div class="panel">
-    <h3>Nuovo utente</h3>
+    <h3>{t($locale, "users.newUser")}</h3>
     <div class="form">
       <div>
-        <label for="username">Nome utente</label>
-        <input id="username" bind:value={username} placeholder="nome utente" />
+        <label for="username">{t($locale, "users.username")}</label>
+        <input id="username" bind:value={username} placeholder={t($locale, "users.username")} />
       </div>
       <div>
-        <label for="password">Password</label>
+        <label for="password">{t($locale, "users.password")}</label>
         <input
           id="password"
           type="password"
           bind:value={password}
-          placeholder="password"
+          placeholder={t($locale, "users.password")}
         />
       </div>
       <div>
-        <label for="role">Ruolo</label>
+        <label for="role">{t($locale, "users.role")}</label>
         <select id="role" bind:value={role}>
-          <option value="user">Utente</option>
-          <option value="admin">Amministratore</option>
+          <option value="user">{t($locale, "users.roleUser")}</option>
+          <option value="admin">{t($locale, "users.roleAdmin")}</option>
         </select>
       </div>
-      <button on:click={submit} disabled={loading}>Crea utente</button>
+      <button on:click={submit} disabled={loading}>{t($locale, "users.create")}</button>
     </div>
   </div>
 
   <div class="panel">
-    <h3>Utenti</h3>
+    <h3>{t($locale, "users.listTitle")}</h3>
     {#if error}
       <div class="error">{error}</div>
     {/if}
     {#if loading}
-      <div class="status">Caricamento...</div>
+      <div class="status">{t($locale, "common.loading")}</div>
     {:else if users.length === 0}
-      <div class="status">Nessun utente disponibile.</div>
+      <div class="status">{t($locale, "users.noUsers")}</div>
     {:else}
       <table>
         <thead>
           <tr>
-            <th>Nome utente</th>
-            <th>Ruolo</th>
-            <th>Stato</th>
+            <th>{t($locale, "users.username")}</th>
+            <th>{t($locale, "users.role")}</th>
+            <th>{t($locale, "users.status")}</th>
           </tr>
         </thead>
         <tbody>
@@ -108,7 +109,7 @@
             <tr>
               <td>{user.username}</td>
               <td>{user.role}</td>
-              <td>{user.isDisabled ? "Disabilitato" : "Attivo"}</td>
+              <td>{user.isDisabled ? t($locale, "users.disabled") : t($locale, "users.active")}</td>
             </tr>
           {/each}
         </tbody>

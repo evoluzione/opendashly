@@ -5,6 +5,7 @@
         dashboardState,
         selectDashboardService,
     } from "../lib/stores/dashboard";
+    import { locale, t } from "../lib/i18n";
 
     onMount(() => {
         void loadServices();
@@ -12,19 +13,19 @@
 
     function handleChange(event: Event) {
         const value = (event.target as HTMLSelectElement).value;
-        const serviceName = value === "Tutti" ? null : value;
+        const serviceName = value === "" ? null : value;
         selectDashboardService(serviceName);
     }
 </script>
 
 <div class="dashboard-service-filter">
-    <label for="dashboard-service-select">Servizio</label>
+    <label for="dashboard-service-select">{t($locale, "home.service")}</label>
     <select
         id="dashboard-service-select"
         on:change={handleChange}
-        value={$dashboardState.selectedService || "Tutti"}
+        value={$dashboardState.selectedService || ""}
     >
-        <option value="Tutti">Tutti i servizi</option>
+        <option value="">{t($locale, "home.allServices")}</option>
         {#each $servicesState.services as service}
             <option value={service}>{service}</option>
         {/each}

@@ -11,6 +11,7 @@
     type CleanupJob,
   } from "../services/retention";
   import { fetchServices } from "../services/services";
+  import { getLocaleTag, locale, t } from "../lib/i18n";
 
   let settings: RetentionSetting[] = [];
   let jobs: CleanupJob[] = [];
@@ -31,19 +32,23 @@
   let totalJobs = 0;
   const signalLabels: Record<SignalType, string> = {
     logs: "Log",
-    traces: "Tracce",
-    metrics: "Metriche",
+    traces: "Trace",
+    metrics: "Metrics",
   };
   const statusLabels: Record<string, string> = {
-    completed: "Completato",
-    running: "In corso",
-    failed: "Fallito",
+    completed: "retention.statusCompleted",
+    running: "retention.statusRunning",
+    failed: "retention.statusFailed",
   };
   const MAX_RETENTION_DAYS = 365;
   const MAX_TRACES_RETENTION_DAYS = 15;
 
   function labelForSignal(signal: SignalType) {
-    return signalLabels[signal] ?? signal;
+    const base = signalLabels[signal] ?? signal;
+    if (base === "Log") return t($locale, "sidebar.logs");
+    if (base === "Trace") return t($locale, "sidebar.traces");
+    if (base === "Metrics") return t($locale, "sidebar.metrics");
+    return base;
   }
 
   function labelList(signals: SignalType[]) {
@@ -51,7 +56,8 @@
   }
 
   function labelForStatus(status: string) {
-    return statusLabels[status] ?? status;
+    const key = statusLabels[status];
+    return key ? t($locale, key) : status;
   }
 
   function maxRetentionForSignal(signal: SignalType) {
@@ -68,7 +74,7 @@
       error =
         err instanceof Error
           ? err.message
-          : "Impossibile caricare le impostazioni";
+          : t($locale, "retention.loadError");
     } finally {
       loading = false;
     }
@@ -105,7 +111,10 @@
 
     const maxRetentionDays = maxRetentionForSignal(editingSignal);
     if (editRetentionDays < 1 || editRetentionDays > maxRetentionDays) {
-      error = `La conservazione per ${labelForSignal(editingSignal)} deve essere tra 1 e ${maxRetentionDays} giorni`;
+      error = t($locale, "retention.rangeError", {
+        signal: labelForSignal(editingSignal),
+        max: maxRetentionDays,
+      });
       return;
     }
 
@@ -115,14 +124,17 @@
 
     try {
       await updateRetentionSetting(editingSignal, editRetentionDays);
-      successMessage = `Conservazione per ${labelForSignal(editingSignal)} aggiornata a ${editRetentionDays} giorni`;
+      successMessage = t($locale, "retention.updated", {
+        signal: labelForSignal(editingSignal),
+        days: editRetentionDays,
+      });
       editingSignal = null;
       await loadSettings();
     } catch (err) {
       error =
         err instanceof Error
           ? err.message
-          : "Impossibile aggiornare la conservazione";
+          : t($locale, "retention.updateError");
     } finally {
       loading = false;
     }
@@ -130,13 +142,18 @@
 
   async function runCleanup() {
     if (selectedSignals.length === 0) {
-      error = "Seleziona almeno un tipo di segnale";
+      error = t($locale, "retention.signalRequired");
       return;
     }
 
     confirmMessage = selectedService
-      ? `Eliminare tutti i dati ${labelList(selectedSignals)} per il servizio "${selectedService}"?`
-      : `Eliminare TUTTI i dati ${labelList(selectedSignals)}? Questa azione non può essere annullata!`;
+      ? t($locale, "retention.confirmService", {
+          signals: labelList(selectedSignals),
+          service: selectedService,
+        })
+      : t($locale, "retention.confirmAll", {
+          signals: labelList(selectedSignals),
+        });
 
     confirmOpen = true;
   }
@@ -158,14 +175,17 @@
         (sum, r) => sum + r.recordsDeleted,
         0,
       );
-      successMessage = `Pulizia completata! ${totalDeleted} record eliminati (ID operazione: ${result.jobId})`;
+      successMessage = t($locale, "retention.cleanupDone", {
+        total: totalDeleted,
+        jobId: result.jobId,
+      });
 
       selectedSignals = [];
       selectedService = "";
       await loadJobs(showAllJobs);
     } catch (err) {
       error =
-        err instanceof Error ? err.message : "Impossibile eseguire la pulizia";
+        err instanceof Error ? err.message : t($locale, "retention.cleanupError");
     } finally {
       cleanupLoading = false;
     }
@@ -197,8 +217,8 @@
 
 <section class="retention-management">
   <header>
-    <h2>Gestione conservazione e pulizia</h2>
-    <p>Configura la conservazione dei dati ed esegui pulizie manuali.</p>
+    <h2>{t($locale, "retention.title")}</h2>
+    <p>{t($locale, "retention.subtitle")}</p>
   </header>
 
   {#if error}
@@ -210,22 +230,20 @@
 
   <div class="panels">
     <div class="panel">
-      <h3>Impostazioni conservazione</h3>
+      <h3>{t($locale, "retention.settingsTitle")}</h3>
       <p class="help-text">
-        I dati piu vecchi del periodo di conservazione verranno eliminati
-        automaticamente ogni 24 ore.
-        Le tracce hanno un massimo di 15 giorni.
+        {t($locale, "retention.settingsHelp")}
       </p>
 
       {#if loading && settings.length === 0}
-        <div class="status">Caricamento...</div>
+        <div class="status">{t($locale, "common.loading")}</div>
       {:else}
         <table>
           <thead>
             <tr>
-              <th>Tipo Segnale</th>
-              <th>Conservazione (giorni)</th>
-              <th>Azioni</th>
+              <th>{t($locale, "retention.signalType")}</th>
+              <th>{t($locale, "retention.retentionDays")}</th>
+              <th>{t($locale, "retention.actions")}</th>
             </tr>
           </thead>
           <tbody>
@@ -243,23 +261,23 @@
                       class="edit-input"
                     />
                   {:else}
-                    {setting.retentionDays} giorni
+                    {t($locale, "retention.daysSuffix", { days: setting.retentionDays })}
                   {/if}
                 </td>
                 <td>
                   {#if editingSignal === setting.signalType}
                     <div class="action-buttons">
                       <button class="btn-small btn-primary" on:click={saveEdit}
-                        >Salva</button
+                        >{t($locale, "retention.save")}</button
                       >
                       <button class="btn-small" on:click={cancelEdit}
-                        >Annulla</button
+                        >{t($locale, "common.cancel")}</button
                       >
                     </div>
                   {:else}
                     <button
                       class="btn-small"
-                      on:click={() => startEdit(setting)}>Modifica</button
+                      on:click={() => startEdit(setting)}>{t($locale, "retention.edit")}</button
                     >
                   {/if}
                 </td>
@@ -271,14 +289,14 @@
     </div>
 
     <div class="panel">
-      <h3>Pulizia manuale</h3>
+      <h3>{t($locale, "retention.manualTitle")}</h3>
       <p class="help-text">
-        Elimina manualmente tutti i dati o filtra per servizio specifico.
+        {t($locale, "retention.manualHelp")}
       </p>
 
       <div class="cleanup-form">
         <fieldset class="form-group">
-          <legend>Tipi di segnale</legend>
+          <legend>{t($locale, "retention.signalTypes")}</legend>
           <div class="checkbox-group">
             <label>
               <input
@@ -308,14 +326,14 @@
         </fieldset>
 
         <div class="form-group">
-          <label for="service-select">Servizio (opzionale)</label>
+          <label for="service-select">{t($locale, "retention.serviceOptional")}</label>
           <select id="service-select" bind:value={selectedService}>
-            <option value="">Tutti i servizi</option>
+            <option value="">{t($locale, "retention.allServices")}</option>
             {#each services as service}
               <option value={service}>{service}</option>
             {/each}
           </select>
-          <p class="hint">Lascia vuoto per eliminare dati di tutti i servizi</p>
+          <p class="hint">{t($locale, "retention.serviceHint")}</p>
         </div>
 
         <button
@@ -323,27 +341,27 @@
           on:click={runCleanup}
           disabled={cleanupLoading || selectedSignals.length === 0}
         >
-          {cleanupLoading ? "Pulizia in corso..." : "Esegui pulizia"}
+          {cleanupLoading ? t($locale, "retention.cleanupRunning") : t($locale, "retention.runCleanup")}
         </button>
       </div>
     </div>
   </div>
 
   <div class="panel">
-    <h3>Storico pulizia</h3>
+    <h3>{t($locale, "retention.historyTitle")}</h3>
     {#if jobs.length === 0}
-      <div class="status">Nessuna operazione di pulizia eseguita.</div>
+      <div class="status">{t($locale, "retention.noHistory")}</div>
     {:else}
       <table>
         <thead>
           <tr>
-            <th>ID operazione</th>
-            <th>Tipo</th>
-            <th>Segnale</th>
-            <th>Servizio</th>
-            <th>Stato</th>
-            <th>Record Eliminati</th>
-            <th>Completato</th>
+            <th>{t($locale, "retention.jobId")}</th>
+            <th>{t($locale, "retention.type")}</th>
+            <th>{t($locale, "retention.signal")}</th>
+            <th>{t($locale, "retention.service")}</th>
+            <th>{t($locale, "retention.state")}</th>
+            <th>{t($locale, "retention.deletedRecords")}</th>
+            <th>{t($locale, "retention.completedAt")}</th>
           </tr>
         </thead>
         <tbody>
@@ -352,16 +370,16 @@
               <td class="monospace">{job.jobId.slice(0, 8)}</td>
               <td>{job.jobType}</td>
               <td>{job.signalType}</td>
-              <td>{job.serviceName || "tutti"}</td>
+              <td>{job.serviceName || t($locale, "retention.all")}</td>
               <td>
                 <span class="status-badge {job.status}">
                   {labelForStatus(job.status)}
                 </span>
               </td>
-              <td>{job.recordsDeleted.toLocaleString()}</td>
+              <td>{job.recordsDeleted.toLocaleString(getLocaleTag($locale))}</td>
               <td
                 >{job.completedAt
-                  ? new Date(job.completedAt).toLocaleString("it-IT")
+                  ? new Date(job.completedAt).toLocaleString(getLocaleTag($locale))
                   : "-"}</td
               >
             </tr>
@@ -373,7 +391,7 @@
           class="btn-small btn-outline toggle-jobs"
           on:click={toggleJobsView}
         >
-          {showAllJobs ? "Mostra ultime 10" : "Mostra tutte"}
+          {showAllJobs ? t($locale, "retention.showLatest10") : t($locale, "retention.showAll")}
         </button>
       {/if}
     {/if}
@@ -381,10 +399,10 @@
 
   <ConfirmModal
     open={confirmOpen}
-    title="Conferma pulizia dati"
+    title={t($locale, "retention.confirmTitle")}
     message={confirmMessage}
-    confirmLabel="Conferma"
-    cancelLabel="Annulla"
+    confirmLabel={t($locale, "retention.confirm")}
+    cancelLabel={t($locale, "common.cancel")}
     variant="danger"
     on:confirm={confirmCleanup}
     on:cancel={cancelCleanup}
