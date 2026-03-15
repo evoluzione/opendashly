@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onMount } from "svelte";
+  import { onDestroy, onMount } from "svelte";
   import { get } from "svelte/store";
   import { page } from "$app/stores";
   import { goto } from "$app/navigation";
@@ -80,6 +80,9 @@
     all: null,
   };
 
+  const DASHBOARD_REFRESH_MIN_SPIN_MS = 700;
+  const QUERY_REFRESH_MIN_SPIN_MS = 700;
+
   let activeTab: "logs" | "metriche" | "tracce" = "metriche";
   let dashboardLoaded = false;
   let lastQueryRefresh: Date | null = null;
@@ -92,6 +95,12 @@
   let dashboardFromInput = "";
   let dashboardToInput = "";
   let dashboardRangeError = "";
+  let dashboardRefreshSpinning = false;
+  let dashboardRefreshToken = 0;
+  let queryRefreshSpinning = false;
+  let queryRefreshStartAt = 0;
+  let queryRefreshWasLoading = false;
+  let queryRefreshTimer: ReturnType<typeof setTimeout> | null = null;
   let showDashboardFilters = false;
   let activeDashboardFilters = 0;
   let dashboardFiltersRef: HTMLDivElement | null = null;
@@ -160,6 +169,10 @@
     const date = new Date(value);
     if (Number.isNaN(date.getTime())) return null;
     return date.toISOString();
+  }
+
+  function sleep(ms: number) {
+    return new Promise((resolve) => setTimeout(resolve, ms));
   }
 
   $: if (dashboardRangePreset !== "custom") {
@@ -245,6 +258,14 @@
     }
   }
 
+  async function handleResultsPageSizeChange(event: CustomEvent) {
+    const selected = String(event.detail?.size ?? pageSize);
+    if (selected !== pageSize) {
+      pageSize = selected;
+    }
+    await handlePageSizeChange();
+  }
+
   function storeNextCursors(page: number) {
     const pagination = get(queryState).result?.pagination;
     if (!pagination) return;
@@ -268,6 +289,10 @@
   }
 
   async function loadDashboardMetrics() {
+    const spinToken = ++dashboardRefreshToken;
+    const spinStartedAt = Date.now();
+    dashboardRefreshSpinning = true;
+
     const request: { from?: string; to?: string; serviceName?: string } = {};
     if ($dashboardState.selectedService) {
       request.serviceName = $dashboardState.selectedService;
@@ -302,20 +327,35 @@
       }
     }
 
-    await loadDashboard(request);
-    dashboardLoaded = true;
-    lastRefresh = new Date();
+    try {
+      await loadDashboard(request);
+      dashboardLoaded = true;
+      lastRefresh = new Date();
+    } finally {
+      const elapsed = Date.now() - spinStartedAt;
+      const remaining = DASHBOARD_REFRESH_MIN_SPIN_MS - elapsed;
+      if (remaining > 0) {
+        await sleep(remaining);
+      }
+      if (spinToken === dashboardRefreshToken) {
+        dashboardRefreshSpinning = false;
+      }
+    }
   }
 
   let lastRefresh: Date | null = null;
 
   function formatLastRefresh(date: Date | null): string {
-    if (!date) return "";
+    if (!date) return "--";
     return date.toLocaleTimeString("it-IT", {
       hour: "2-digit",
       minute: "2-digit",
       second: "2-digit",
     });
+  }
+
+  $: if ($queryState.result && !lastQueryRefresh) {
+    lastQueryRefresh = new Date();
   }
 
   async function handleRefresh() {
@@ -366,6 +406,37 @@
   function handleRefreshQueryFilters() {
     queryFormRef?.refreshCurrentQuery();
   }
+
+  $: {
+    if ($queryState.loading && !queryRefreshWasLoading) {
+      queryRefreshWasLoading = true;
+      queryRefreshStartAt = Date.now();
+      queryRefreshSpinning = true;
+      if (queryRefreshTimer) {
+        clearTimeout(queryRefreshTimer);
+        queryRefreshTimer = null;
+      }
+    } else if (!$queryState.loading && queryRefreshWasLoading) {
+      queryRefreshWasLoading = false;
+      const elapsed = Date.now() - queryRefreshStartAt;
+      const remaining = QUERY_REFRESH_MIN_SPIN_MS - elapsed;
+      if (remaining <= 0) {
+        queryRefreshSpinning = false;
+      } else {
+        queryRefreshTimer = setTimeout(() => {
+          queryRefreshSpinning = false;
+          queryRefreshTimer = null;
+        }, remaining);
+      }
+    }
+  }
+
+  onDestroy(() => {
+    if (queryRefreshTimer) {
+      clearTimeout(queryRefreshTimer);
+      queryRefreshTimer = null;
+    }
+  });
 
   $: activeDashboardFilters =
     (dashboardRangePreset === "all" ? 0 : 1) +
@@ -419,7 +490,7 @@
             >
               <svg
                 class="refresh-icon"
-                class:spinning={$dashboardState.loading}
+                class:spinning={dashboardRefreshSpinning}
                 viewBox="0 0 20 20"
                 fill="currentColor"
               >
@@ -535,18 +606,33 @@
           </div>
         </div>
       {:else}
-        <div class="header-filters">
-          <div class="page-size-selector">
-            <label for="page-size">Risultati</label>
-            <select
-              id="page-size"
-              bind:value={pageSize}
-              on:change={handlePageSizeChange}
+        <div class="metrics-controls">
+          <div class="refresh-controls">
+            <span class="last-refresh"
+              >Ultimo aggiornamento: {formatLastRefresh(lastQueryRefresh)}</span
             >
-              {#each pageSizeOptions as size}
-                <option value={size}>{size}</option>
-              {/each}
-            </select>
+            <button
+              class="refresh-btn"
+              on:click={handleRefreshQueryFilters}
+              disabled={$queryState.loading}
+              title="Aggiorna risultati"
+              aria-label="Aggiorna risultati"
+            >
+              <svg
+                class="refresh-icon"
+                class:spinning={queryRefreshSpinning}
+                viewBox="0 0 20 20"
+                fill="currentColor"
+                aria-hidden="true"
+              >
+                <path
+                  fill-rule="evenodd"
+                  d="M15.312 11.424a5.5 5.5 0 01-9.201 2.466l-.312-.311h2.433a.75.75 0 000-1.5H3.989a.75.75 0 00-.75.75v4.242a.75.75 0 001.5 0v-2.43l.31.31a7 7 0 0011.712-3.138.75.75 0 00-1.449-.389zm1.23-7.424a.75.75 0 00-.75.75v2.43l-.31-.31A7 7 0 003.77 9.89a.75.75 0 101.45.388 5.5 5.5 0 019.201-2.466l.312.311h-2.433a.75.75 0 000 1.5h4.243a.75.75 0 00.75-.75V4.75a.75.75 0 00-.75-.75z"
+                  clip-rule="evenodd"
+                />
+              </svg>
+              Aggiorna
+            </button>
           </div>
         </div>
       {/if}
@@ -723,16 +809,22 @@
             logs={$queryState.result.results.logs}
             pagination={$queryState.result.pagination?.logs ?? null}
             isLiveUpdate={$queryState.isLiveUpdate}
-            lastUpdatedLabel={formatLastRefresh(lastQueryRefresh)}
+            lastUpdatedLabel={""}
+            {pageSize}
+            {pageSizeOptions}
             on:pageChange={(e) => handlePageChange("logs", e.detail.page)}
+            on:pageSizeChange={handleResultsPageSizeChange}
           />
         {:else if activeTab === "tracce"}
           <TraceResultsList
             traces={$queryState.result.results.traces}
             pagination={$queryState.result.pagination?.traces ?? null}
             isLiveUpdate={$queryState.isLiveUpdate}
-            lastUpdatedLabel={formatLastRefresh(lastQueryRefresh)}
+            lastUpdatedLabel={""}
+            {pageSize}
+            {pageSizeOptions}
             on:pageChange={(e) => handlePageChange("traces", e.detail.page)}
+            on:pageSizeChange={handleResultsPageSizeChange}
           />
         {/if}
       {/if}
@@ -745,28 +837,6 @@
         <div class="filters-panel-header">
           <h3>Filtri query</h3>
           <div class="query-header-actions">
-            <button
-              type="button"
-              class="query-refresh-btn"
-              on:click={handleRefreshQueryFilters}
-              disabled={$queryState.loading}
-              title="Aggiorna risultati con i filtri correnti"
-              aria-label="Aggiorna risultati"
-            >
-              <svg
-                class="refresh-icon"
-                class:spinning={$queryState.loading}
-                viewBox="0 0 20 20"
-                fill="currentColor"
-                aria-hidden="true"
-              >
-                <path
-                  fill-rule="evenodd"
-                  d="M15.312 11.424a5.5 5.5 0 01-9.201 2.466l-.312-.311h2.433a.75.75 0 000-1.5H3.989a.75.75 0 00-.75.75v4.242a.75.75 0 001.5 0v-2.43l.31.31a7 7 0 0011.712-3.138.75.75 0 00-1.449-.389zm1.23-7.424a.75.75 0 00-.75.75v2.43l-.31-.31A7 7 0 003.77 9.89a.75.75 0 101.45.388 5.5 5.5 0 019.201-2.466l.312.311h-2.433a.75.75 0 000 1.5h4.243a.75.75 0 00.75-.75V4.75a.75.75 0 00-.75-.75z"
-                  clip-rule="evenodd"
-                />
-              </svg>
-            </button>
             <button
               type="button"
               class="query-reset-btn"
@@ -837,15 +907,6 @@
     margin: 0;
     color: #64748b;
     font-size: 14px;
-  }
-
-  .header-filters {
-    display: flex;
-    gap: 16px;
-  }
-
-  .header-filters :global(> div) {
-    min-width: 160px;
   }
 
   .results {
@@ -948,42 +1009,8 @@
 
   .query-header-actions {
     display: inline-flex;
-    align-items: center;
-    gap: 8px;
-  }
-
-  .query-refresh-btn {
-    width: 28px;
-    height: 28px;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    border: none;
-    border-radius: 8px;
-    background: #6366f1;
-    color: #ffffff;
-    cursor: pointer;
-    transition:
-      background 0.15s ease,
-      transform 0.15s ease;
-  }
-
-  .query-refresh-btn .refresh-icon {
-    width: 12px;
-    height: 12px;
-  }
-
-  .query-refresh-btn:hover:not(:disabled) {
-    background: #4f46e5;
-  }
-
-  .query-refresh-btn:active:not(:disabled) {
-    transform: scale(0.98);
-  }
-
-  .query-refresh-btn:disabled {
-    opacity: 0.7;
-    cursor: not-allowed;
+    align-items: flex-end;
+    gap: 10px;
   }
 
   .query-reset-btn {
@@ -1406,44 +1433,4 @@
     }
   }
 
-  .page-size-selector {
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
-  }
-
-  .page-size-selector label {
-    font-size: 11px;
-    font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-    color: #64748b;
-  }
-
-  .page-size-selector select {
-    padding: 12px 16px;
-    border-radius: 10px;
-    border: 1px solid #e2e8f0;
-    background: white;
-    font-size: 14px;
-    font-weight: 500;
-    color: #0f172a;
-    cursor: pointer;
-    transition: all 0.2s ease;
-    appearance: none;
-    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%2364748b' stroke-width='2'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
-    background-repeat: no-repeat;
-    background-position: right 12px center;
-    padding-right: 40px;
-  }
-
-  .page-size-selector select:hover {
-    border-color: #cbd5e1;
-  }
-
-  .page-size-selector select:focus {
-    outline: none;
-    border-color: #6366f1;
-    box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
-  }
 </style>
