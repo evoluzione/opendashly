@@ -1,6 +1,7 @@
 import { get, writable } from 'svelte/store';
 import type { DashboardResponse, DashboardRequest } from '../../services/dashboard';
 import { fetchDashboardMetrics } from '../../services/dashboard';
+import { buildRollingDashboardRequest } from './dashboard.domain';
 
 type DashboardState = {
   loading: boolean;
@@ -42,23 +43,7 @@ function scheduleAutoRefresh() {
     if (!latest.lastRequest) {
       return;
     }
-    if (!latest.lastRequest.from || !latest.lastRequest.to) {
-      void loadDashboard({ ...latest.lastRequest });
-      return;
-    }
-    // Refresh with rolling time range
-    const now = new Date();
-    const originalDuration = new Date(latest.lastRequest.to).getTime() - new Date(latest.lastRequest.from).getTime();
-    if (!Number.isFinite(originalDuration) || originalDuration <= 0) {
-      void loadDashboard({ ...latest.lastRequest });
-      return;
-    }
-    const from = new Date(now.getTime() - originalDuration);
-    void loadDashboard({
-      ...latest.lastRequest,
-      from: from.toISOString(),
-      to: now.toISOString()
-    });
+    void loadDashboard(buildRollingDashboardRequest(latest.lastRequest));
   }, currentState.autoRefreshSeconds * 1000);
 }
 
