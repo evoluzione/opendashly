@@ -628,8 +628,22 @@
           >
             <header class="widget-header" on:pointerdown={(event) => beginDrag(event, setting.key, 'grid')}>
               <span class="drag-handle" title="Trascina">⋮⋮</span>
-              <div>
+              <div class="widget-title-wrap">
                 <h3>{chartByKey.get(setting.key)?.label}</h3>
+                <div class="info-tooltip">
+                  <button
+                    type="button"
+                    class="info-trigger"
+                    aria-label={`Info su ${chartByKey.get(setting.key)?.label}`}
+                    on:pointerdown|stopPropagation
+                    on:click|stopPropagation
+                  >
+                    i
+                  </button>
+                  <span class="info-bubble" role="tooltip">
+                    {chartByKey.get(setting.key)?.description}
+                  </span>
+                </div>
               </div>
               <span class="chip-size" aria-label={`Larghezza ${setting.w}/6`}>
                 {setting.w}/6
@@ -938,6 +952,71 @@
     margin: 0;
     font-size: 12px;
     color: var(--text-strong);
+  }
+
+  .widget-title-wrap {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+  }
+
+  .info-tooltip {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    flex: 0 0 auto;
+  }
+
+  .info-trigger {
+    width: 18px;
+    height: 18px;
+    border-radius: 999px;
+    border: 1px solid #c7d2fe;
+    background: #eef2ff;
+    color: #4f46e5;
+    font-size: 11px;
+    font-weight: 700;
+    line-height: 1;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    cursor: help;
+  }
+
+  .info-trigger:focus-visible {
+    outline: 2px solid #6366f1;
+    outline-offset: 2px;
+  }
+
+  .info-bubble {
+    position: absolute;
+    left: 50%;
+    top: calc(100% + 8px);
+    transform: translateX(-50%) translateY(-2px);
+    min-width: 170px;
+    max-width: 240px;
+    padding: 6px 8px;
+    border-radius: 8px;
+    border: 1px solid #c7d2fe;
+    background: #ffffff;
+    color: #334155;
+    font-size: 11px;
+    line-height: 1.35;
+    box-shadow: 0 8px 22px rgba(15, 23, 42, 0.16);
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+    z-index: 20;
+    transition: opacity 0.14s ease, transform 0.14s ease, visibility 0.14s ease;
+  }
+
+  .info-tooltip:hover .info-bubble,
+  .info-tooltip:focus-within .info-bubble {
+    opacity: 1;
+    visibility: visible;
+    transform: translateX(-50%) translateY(0);
   }
 
   .chip-size {
