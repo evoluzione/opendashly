@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 
-	"opendashly/backend/internal/ai"
+	"opendashly/backend/internal/application/ai"
 )
 
 type AISettingsHandler struct {

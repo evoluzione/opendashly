@@ -5,7 +5,7 @@ import (
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
-	"opendashly/backend/internal/query"
+	"opendashly/backend/internal/application/query"
 )
 
 type SavedQueriesHandler struct {

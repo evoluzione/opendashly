@@ -3,7 +3,7 @@ package handlers
 import (
 	"net/http"
 
-	"opendashly/backend/internal/query"
+	"opendashly/backend/internal/application/query"
 )
 
 type ServicesHandler struct {

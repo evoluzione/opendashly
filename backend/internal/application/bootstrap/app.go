@@ -5,17 +5,17 @@ import (
 	"net/http"
 	"time"
 
-	"opendashly/backend/internal/ai"
+	"opendashly/backend/internal/application/ai"
+	"opendashly/backend/internal/application/auth"
 	"opendashly/backend/internal/application/dashboard"
 	"opendashly/backend/internal/application/metrics"
-	"opendashly/backend/internal/auth"
-	"opendashly/backend/internal/config"
+	"opendashly/backend/internal/application/query"
+	"opendashly/backend/internal/application/retention"
+	"opendashly/backend/internal/application/status"
+	"opendashly/backend/internal/infrastructure/config"
 	"opendashly/backend/internal/infrastructure/storage"
 	httpapi "opendashly/backend/internal/interfaces/http"
 	"opendashly/backend/internal/interfaces/http/handlers"
-	"opendashly/backend/internal/query"
-	"opendashly/backend/internal/retention"
-	"opendashly/backend/internal/status"
 )
 
 // App groups runtime dependencies needed by the API entrypoint.

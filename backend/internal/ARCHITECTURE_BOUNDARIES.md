@@ -1,84 +1,53 @@
-# Backend Architecture Boundaries (Phase A)
+# Backend Architecture Boundaries
 
 ## Goal
 
-Define and freeze package boundaries before moving directories.
-This phase is documentation-first: no behavior changes, only an explicit dependency map and import rules.
+Keep backend internals organized under 4 top-level layers:
+
+- `internal/interfaces`
+- `internal/application`
+- `internal/domain`
+- `internal/infrastructure`
 
 ## Current Package Inventory
 
-- opendashly/backend/internal/ai
-- opendashly/backend/internal/api
-- opendashly/backend/internal/api/handlers
-- opendashly/backend/internal/auth
-- opendashly/backend/internal/bootstrap
-- opendashly/backend/internal/config
-- opendashly/backend/internal/dashboard
-- opendashly/backend/internal/metrics
-- opendashly/backend/internal/query
-- opendashly/backend/internal/query/builders
-- opendashly/backend/internal/retention
-- opendashly/backend/internal/status
-- opendashly/backend/internal/storage
-- opendashly/backend/internal/telemetry
+- `opendashly/backend/internal/interfaces/api`
+- `opendashly/backend/internal/interfaces/http`
+- `opendashly/backend/internal/interfaces/http/handlers`
+- `opendashly/backend/internal/application/ai`
+- `opendashly/backend/internal/application/auth`
+- `opendashly/backend/internal/application/bootstrap`
+- `opendashly/backend/internal/application/dashboard`
+- `opendashly/backend/internal/application/metrics`
+- `opendashly/backend/internal/application/query`
+- `opendashly/backend/internal/application/retention`
+- `opendashly/backend/internal/application/status`
+- `opendashly/backend/internal/domain/telemetry`
+- `opendashly/backend/internal/infrastructure/config`
+- `opendashly/backend/internal/infrastructure/querysql`
+- `opendashly/backend/internal/infrastructure/querysql/builders`
+- `opendashly/backend/internal/infrastructure/storage`
 
-## Current Internal Dependency Map (Baseline)
+## Layer Responsibilities
 
-Source: `go list -f '{{.ImportPath}}|{{join .Imports ","}}' ./internal/...`
+- `interfaces`: transport adapters (HTTP router, handlers, DTO mapping).
+- `application`: use case orchestration and service composition.
+- `domain`: domain models and pure business concepts.
+- `infrastructure`: external systems (ClickHouse, migrations, SQL builders, runtime config).
 
-- `internal/ai` -> none
-- `internal/api` -> `internal/ai`, `internal/api/handlers`, `internal/config`, `internal/dashboard`, `internal/metrics`, `internal/query`, `internal/status`
-- `internal/api/handlers` -> `internal/ai`, `internal/auth`, `internal/dashboard`, `internal/metrics`, `internal/query`, `internal/retention`, `internal/status`
-- `internal/auth` -> none
-- `internal/bootstrap` -> `internal/ai`, `internal/api`, `internal/api/handlers`, `internal/auth`, `internal/config`, `internal/dashboard`, `internal/metrics`, `internal/query`, `internal/retention`, `internal/status`, `internal/storage`
-- `internal/config` -> none
-- `internal/dashboard` -> none
-- `internal/metrics` -> `internal/storage`
-- `internal/query` -> `internal/ai`, `internal/query/builders`, `internal/storage`
-- `internal/query/builders` -> none
-- `internal/retention` -> none
-- `internal/status` -> `internal/storage`
-- `internal/storage` -> none
-- `internal/telemetry` -> none
+## Import Rules
 
-## Target Layers (for directory reordering)
+1. `interfaces` can import `application` and `domain` DTO/value types when needed.
+2. `application` can import `domain` and `infrastructure` packages.
+3. `domain` must not import `interfaces` or concrete infrastructure packages.
+4. `infrastructure` must not import `interfaces`.
+5. Composition root lives in `application/bootstrap` and can wire all layers.
 
-- `interfaces/http`: transport layer (router, handlers, request/response DTOs)
-- `application`: use-case orchestration (query run, metrics/dashboard composition, auth flows)
-- `domain`: entities/value objects/pure rules
-- `infrastructure`: ClickHouse, SQL builders, repositories, migrations
-- `shared`: cross-cutting helpers and utilities
+## Conventions
 
-## Import Rules (to enforce in next phases)
-
-1. `interfaces/http` can import only `application` and `shared`.
-2. `application` can import `domain`, `infrastructure` abstractions, and `shared`.
-3. `domain` cannot import `interfaces/http` or concrete DB packages.
-4. `infrastructure` cannot import `interfaces/http`.
-5. `bootstrap` is the only composition root and can wire all layers.
-
-## Package Classification (Phase A proposal)
-
-- `internal/api`, `internal/api/handlers` -> future `interfaces/http`
-- `internal/query` -> split between `application/query` and `domain/query`
-- `internal/query/builders`, `internal/storage` -> future `infrastructure/*`
-- `internal/metrics`, `internal/dashboard`, `internal/status` -> mostly `application/*` (+ `infrastructure` query adapters)
-- `internal/auth`, `internal/retention`, `internal/ai` -> split by use-case/domain/infrastructure in later phases
-- `internal/bootstrap` -> keep as composition root
-
-## Hotspots To Address During Moves
-
-- `internal/bootstrap` currently imports many concrete modules.
-- `internal/api` depends directly on concrete services.
-- `internal/query` still mixes application orchestration and infra-facing concerns.
-- `internal/metrics` still contains orchestration and query concerns in the same package.
-
-## Acceptance Criteria For Phase A
-
-1. Architecture boundary document exists in repository.
-2. Baseline internal dependency map is captured.
-3. Import rules are explicit and reviewed.
-4. Target package classification is agreed before file moves.
+1. New backend packages must be created under one of the 4 top-level directories.
+2. Legacy paths under `internal/<old-package>` must not be reintroduced.
+3. If a package does not clearly fit, prefer `application` first and split to `domain` only when invariants become explicit.
 
 ## Regeneration Command
 

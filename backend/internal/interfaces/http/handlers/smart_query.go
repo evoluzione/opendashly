@@ -5,8 +5,8 @@ import (
 	"net/http"
 	"time"
 
-	"opendashly/backend/internal/ai"
-	"opendashly/backend/internal/query"
+	"opendashly/backend/internal/application/ai"
+	"opendashly/backend/internal/application/query"
 )
 
 type SmartQueryHandler struct {

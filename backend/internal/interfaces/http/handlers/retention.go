@@ -5,8 +5,8 @@ import (
 	"net/http"
 	"strconv"
 
-	"opendashly/backend/internal/auth"
-	"opendashly/backend/internal/retention"
+	"opendashly/backend/internal/application/auth"
+	"opendashly/backend/internal/application/retention"
 )
 
 type RetentionHandler struct {

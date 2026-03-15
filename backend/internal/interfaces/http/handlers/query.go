@@ -6,7 +6,7 @@ import (
 	"net/http"
 	"time"
 
-	"opendashly/backend/internal/query"
+	"opendashly/backend/internal/application/query"
 )
 
 // QueryHandler runs ad-hoc queries.

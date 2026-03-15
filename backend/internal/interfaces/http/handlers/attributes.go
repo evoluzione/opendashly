@@ -5,7 +5,7 @@ import (
 	"log"
 	"net/http"
 
-	"opendashly/backend/internal/query"
+	"opendashly/backend/internal/application/query"
 )
 
 type AttributesHandler struct {

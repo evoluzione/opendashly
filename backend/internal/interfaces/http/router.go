@@ -3,13 +3,13 @@ package http
 import (
 	"net/http"
 
-	"opendashly/backend/internal/ai"
+	"opendashly/backend/internal/application/ai"
 	"opendashly/backend/internal/application/dashboard"
 	"opendashly/backend/internal/application/metrics"
-	"opendashly/backend/internal/config"
+	"opendashly/backend/internal/application/query"
+	"opendashly/backend/internal/application/status"
+	"opendashly/backend/internal/infrastructure/config"
 	handlers "opendashly/backend/internal/interfaces/http/handlers"
-	"opendashly/backend/internal/query"
-	"opendashly/backend/internal/status"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"

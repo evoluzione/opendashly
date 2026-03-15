@@ -5,9 +5,9 @@ import (
 	"net/http"
 	"time"
 
-	"opendashly/backend/internal/ai"
-	"opendashly/backend/internal/auth"
-	"opendashly/backend/internal/query"
+	"opendashly/backend/internal/application/ai"
+	"opendashly/backend/internal/application/auth"
+	"opendashly/backend/internal/application/query"
 )
 
 type AIAvailabilityHandler struct {

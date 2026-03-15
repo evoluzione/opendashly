@@ -6,7 +6,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"opendashly/backend/internal/query"
+	"opendashly/backend/internal/application/query"
 )
 
 func TestAttributesHandler_ReturnsEmptyListWhenStorageMissing(t *testing.T) {

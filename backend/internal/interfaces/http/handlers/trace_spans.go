@@ -6,7 +6,7 @@ import (
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
-	"opendashly/backend/internal/query"
+	"opendashly/backend/internal/application/query"
 )
 
 // TraceSpansHandler returns spans for a trace.

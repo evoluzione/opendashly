@@ -7,7 +7,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"opendashly/backend/internal/query"
+	"opendashly/backend/internal/application/query"
 )
 
 func TestQueryHandler_BadJSONReturns400(t *testing.T) {

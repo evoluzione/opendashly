@@ -4,8 +4,8 @@ import (
 	"encoding/json"
 	"net/http"
 
+	"opendashly/backend/internal/application/auth"
 	"opendashly/backend/internal/application/dashboard"
-	"opendashly/backend/internal/auth"
 )
 
 type DashboardSettingsHandler struct {

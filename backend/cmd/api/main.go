@@ -5,7 +5,7 @@ import (
 	"log"
 	"net/http"
 
-	"opendashly/backend/internal/bootstrap"
+	"opendashly/backend/internal/application/bootstrap"
 )
 
 func main() {

@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	"opendashly/backend/internal/ai"
+	"opendashly/backend/internal/application/ai"
 	"opendashly/backend/internal/infrastructure/querysql"
 
 	openai "github.com/sashabaranov/go-openai"

@@ -6,7 +6,7 @@ import (
 	"net/http"
 	"time"
 
-	"opendashly/backend/internal/auth"
+	"opendashly/backend/internal/application/auth"
 )
 
 type AuthHandler struct {

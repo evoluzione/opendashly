@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 
-	"opendashly/backend/internal/status"
+	"opendashly/backend/internal/application/status"
 )
 
 type StatusHandler struct {

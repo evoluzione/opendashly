@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 
-	"opendashly/backend/internal/auth"
+	"opendashly/backend/internal/application/auth"
 )
 
 type UsersHandler struct {
