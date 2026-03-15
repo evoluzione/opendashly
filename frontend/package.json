@@ -9,6 +9,7 @@
     "preview": "vite preview",
     "test": "vitest run --config vitest.config.js --passWithNoTests",
     "test:unit": "vitest run --config vitest.config.js --passWithNoTests",
+    "test:smoke": "playwright test tests/integration/smoke_auth_shell.spec.ts --config playwright.config.ts",
     "test:ui": "playwright test --config playwright.config.ts",
     "sync": "svelte-kit sync",
     "postinstall": "svelte-kit sync"
