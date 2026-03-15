@@ -22,6 +22,19 @@
     loadDashboardSettings,
     getOrderedChartSettings
   } from "../lib/stores/dashboard_settings";
+  import {
+    buildDashboardRequest,
+    countActiveDashboardFilters,
+    createInitialRunRequest,
+    createPageChangeRequest,
+    createPageSizeRequest,
+    dashboardTimeRangeOptions,
+    defaultCustomRangeInputs,
+    formatLastRefresh,
+    sleep,
+    storeNextCursors,
+    type DashboardRangePreset,
+  } from "./home-page.logic";
 
   // Dashboard components
   import ApdexGauge from "../components/dashboard/ApdexGauge.svelte";
@@ -39,46 +52,6 @@
   import TopEndpointsThroughputTable from "../components/dashboard/TopEndpointsThroughputTable.svelte";
   import SlowestEndpointsTable from "../components/dashboard/SlowestEndpointsTable.svelte";
   import ErrorHotspotsTable from "../components/dashboard/ErrorHotspotsTable.svelte";
-
-  type DashboardRangePreset =
-    | "5m"
-    | "15m"
-    | "30m"
-    | "1h"
-    | "6h"
-    | "24h"
-    | "7d"
-    | "all"
-    | "custom";
-
-  const dashboardTimeRangeOptions: Array<{
-    value: DashboardRangePreset;
-    label: string;
-  }> = [
-    { value: "5m", label: "Ultimi 5 minuti" },
-    { value: "15m", label: "Ultimi 15 minuti" },
-    { value: "30m", label: "Ultimi 30 minuti" },
-    { value: "1h", label: "Ultima ora" },
-    { value: "6h", label: "Ultime 6 ore" },
-    { value: "24h", label: "Ultime 24 ore" },
-    { value: "7d", label: "Ultimi 7 giorni" },
-    { value: "all", label: "Tutto" },
-    { value: "custom", label: "Personalizzato" },
-  ];
-
-  const dashboardPresetMinutes: Record<
-    Exclude<DashboardRangePreset, "custom">,
-    number | null
-  > = {
-    "5m": 5,
-    "15m": 15,
-    "30m": 30,
-    "1h": 60,
-    "6h": 360,
-    "24h": 1440,
-    "7d": 10080,
-    all: null,
-  };
 
   const DASHBOARD_REFRESH_MIN_SPIN_MS = 700;
   const QUERY_REFRESH_MIN_SPIN_MS = 700;
@@ -154,27 +127,6 @@
     void loadServices();
   });
 
-  function formatDateTimeLocal(date: Date): string {
-    const pad = (n: number) => String(n).padStart(2, "0");
-    const y = date.getFullYear();
-    const m = pad(date.getMonth() + 1);
-    const d = pad(date.getDate());
-    const h = pad(date.getHours());
-    const min = pad(date.getMinutes());
-    return `${y}-${m}-${d}T${h}:${min}`;
-  }
-
-  function toIsoFromLocal(value: string): string | null {
-    if (!value) return null;
-    const date = new Date(value);
-    if (Number.isNaN(date.getTime())) return null;
-    return date.toISOString();
-  }
-
-  function sleep(ms: number) {
-    return new Promise((resolve) => setTimeout(resolve, ms));
-  }
-
   $: if (dashboardRangePreset !== "custom") {
     dashboardRangeError = "";
   }
@@ -183,13 +135,12 @@
     dashboardRangePreset === "custom" &&
     (!dashboardFromInput || !dashboardToInput)
   ) {
-    const now = new Date();
-    const from = new Date(now.getTime() - 6 * 60 * 60 * 1000);
-    if (!dashboardFromInput) dashboardFromInput = formatDateTimeLocal(from);
-    if (!dashboardToInput) dashboardToInput = formatDateTimeLocal(now);
+    const defaults = defaultCustomRangeInputs();
+    if (!dashboardFromInput) dashboardFromInput = defaults.fromInput;
+    if (!dashboardToInput) dashboardToInput = defaults.toInput;
   }
 
-  let lastRequest: any = null;
+  let lastRequest: import("../services/query").QueryRequest | null = null;
   const logsCursorByPage = new Map<number, string>();
   const tracesCursorByPage = new Map<number, string>();
   let pageSize = "100";
@@ -199,14 +150,14 @@
     const { request } = event.detail;
     logsCursorByPage.clear();
     tracesCursorByPage.clear();
-    lastRequest = {
-      ...request,
-      page: 1,
-      logsCursor: undefined,
-      tracesCursor: undefined,
-    };
+    lastRequest = createInitialRunRequest(request);
     await executeQuery(lastRequest);
-    storeNextCursors(1);
+    storeNextCursors({
+      pagination: get(queryState).result?.pagination,
+      page: 1,
+      logsCursorByPage,
+      tracesCursorByPage,
+    });
     if (!get(queryState).error && get(queryState).result) {
       lastQueryRefresh = new Date();
     }
@@ -217,21 +168,22 @@
     nextPage: number,
   ) {
     if (!lastRequest) return;
-    const page = nextPage < 1 ? 1 : nextPage;
-    const updated = {
-      ...lastRequest,
-      signals: [signal],
-      page,
-      logsCursor:
-        signal === "logs" && page > 1 ? logsCursorByPage.get(page) : undefined,
-      tracesCursor:
-        signal === "traces" && page > 1
-          ? tracesCursorByPage.get(page)
-          : undefined,
-    };
+    const updated = createPageChangeRequest({
+      lastRequest,
+      signal,
+      nextPage,
+      logsCursorByPage,
+      tracesCursorByPage,
+    });
+    const page = updated.page ?? 1;
     lastRequest = updated;
     await executeQuery(updated, { retainResult: true });
-    storeNextCursors(page);
+    storeNextCursors({
+      pagination: get(queryState).result?.pagination,
+      page,
+      logsCursorByPage,
+      tracesCursorByPage,
+    });
     if (!get(queryState).error && get(queryState).result) {
       lastQueryRefresh = new Date();
     }
@@ -239,20 +191,17 @@
 
   async function handlePageSizeChange() {
     if (!lastRequest) return;
-    const limit = Number(pageSize) || 100;
     logsCursorByPage.clear();
     tracesCursorByPage.clear();
-    const updated = {
-      ...lastRequest,
-      signals: ["logs", "traces", "metrics"],
-      limit,
-      page: 1,
-      logsCursor: undefined,
-      tracesCursor: undefined,
-    };
+    const updated = createPageSizeRequest(lastRequest, pageSize);
     lastRequest = updated;
     await executeQuery(updated, { retainResult: true });
-    storeNextCursors(1);
+    storeNextCursors({
+      pagination: get(queryState).result?.pagination,
+      page: 1,
+      logsCursorByPage,
+      tracesCursorByPage,
+    });
     if (!get(queryState).error && get(queryState).result) {
       lastQueryRefresh = new Date();
     }
@@ -264,21 +213,6 @@
       pageSize = selected;
     }
     await handlePageSizeChange();
-  }
-
-  function storeNextCursors(page: number) {
-    const pagination = get(queryState).result?.pagination;
-    if (!pagination) return;
-    if (pagination.logs?.hasNext && pagination.logs.nextCursor) {
-      logsCursorByPage.set(page + 1, pagination.logs.nextCursor);
-    } else {
-      logsCursorByPage.delete(page + 1);
-    }
-    if (pagination.traces?.hasNext && pagination.traces.nextCursor) {
-      tracesCursorByPage.set(page + 1, pagination.traces.nextCursor);
-    } else {
-      tracesCursorByPage.delete(page + 1);
-    }
   }
 
   function handleTabSelect(tab: "logs" | "metriche" | "tracce") {
@@ -293,42 +227,22 @@
     const spinStartedAt = Date.now();
     dashboardRefreshSpinning = true;
 
-    const request: { from?: string; to?: string; serviceName?: string } = {};
-    if ($dashboardState.selectedService) {
-      request.serviceName = $dashboardState.selectedService;
+    const built = buildDashboardRequest({
+      selectedService: $dashboardState.selectedService,
+      rangePreset: dashboardRangePreset,
+      fromInput: dashboardFromInput,
+      toInput: dashboardToInput,
+    });
+
+    if (built.error) {
+      dashboardRangeError = built.error;
+      return;
     }
 
-    if (dashboardRangePreset === "custom") {
-      const fromIso = toIsoFromLocal(dashboardFromInput);
-      const toIso = toIsoFromLocal(dashboardToInput);
-      if (!fromIso || !toIso) {
-        dashboardRangeError = "Inserisci una data/ora valida per inizio e fine.";
-        return;
-      }
-      if (new Date(toIso).getTime() <= new Date(fromIso).getTime()) {
-        dashboardRangeError = "La data/ora di fine deve essere successiva all'inizio.";
-        return;
-      }
-      dashboardRangeError = "";
-      request.from = fromIso;
-      request.to = toIso;
-    } else {
-      const minutes =
-        dashboardPresetMinutes[
-          dashboardRangePreset as Exclude<DashboardRangePreset, "custom">
-        ];
-      const now = new Date();
-      if (minutes === null) {
-        request.from = new Date(0).toISOString();
-        request.to = now.toISOString();
-      } else {
-        request.from = new Date(now.getTime() - minutes * 60 * 1000).toISOString();
-        request.to = now.toISOString();
-      }
-    }
+    dashboardRangeError = "";
 
     try {
-      await loadDashboard(request);
+      await loadDashboard(built.request);
       dashboardLoaded = true;
       lastRefresh = new Date();
     } finally {
@@ -344,15 +258,6 @@
   }
 
   let lastRefresh: Date | null = null;
-
-  function formatLastRefresh(date: Date | null): string {
-    if (!date) return "--";
-    return date.toLocaleTimeString("it-IT", {
-      hour: "2-digit",
-      minute: "2-digit",
-      second: "2-digit",
-    });
-  }
 
   $: if ($queryState.result && !lastQueryRefresh) {
     lastQueryRefresh = new Date();
@@ -438,9 +343,10 @@
     }
   });
 
-  $: activeDashboardFilters =
-    (dashboardRangePreset === "all" ? 0 : 1) +
-    ($dashboardState.selectedService ? 1 : 0);
+  $: activeDashboardFilters = countActiveDashboardFilters(
+    dashboardRangePreset,
+    $dashboardState.selectedService
+  );
 
   function handleGlobalClick(event: MouseEvent) {
     if (!showDashboardFilters || !dashboardFiltersRef) return;
@@ -1178,12 +1084,6 @@
     color: #0f172a;
   }
 
-  .range-inputs input[readonly] {
-    background: #f8fafc;
-    color: #64748b;
-    cursor: pointer;
-  }
-
   .range-inputs input:focus {
     outline: none;
     border-color: #2563eb;
@@ -1342,35 +1242,6 @@
     }
   }
 
-  .gauges-row {
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: 20px;
-  }
-
-
-  .charts-row {
-    display: grid;
-    grid-template-columns: repeat(2, 1fr);
-    gap: 20px;
-    min-width: 0;
-  }
-
-  .charts-row > :global(*) {
-    min-width: 0;
-  }
-
-  .tables-row {
-    display: grid;
-    grid-template-columns: repeat(2, 1fr);
-    gap: 20px;
-    min-width: 0;
-  }
-
-  .tables-row > :global(*) {
-    min-width: 0;
-  }
-
   @media (max-width: 1200px) {
     .dashboard {
       grid-template-columns: 1fr;
@@ -1385,13 +1256,6 @@
     .filters .panel {
       padding: 24px;
     }
-    .gauges-row {
-      grid-template-columns: repeat(3, 1fr);
-    }
-    .charts-row,
-    .tables-row {
-      grid-template-columns: 1fr;
-    }
   }
 
 
@@ -1403,9 +1267,6 @@
     .dashboard-item {
       grid-column: 1 / -1 !important;
       grid-row: auto !important;
-    }
-    .gauges-row {
-      grid-template-columns: 1fr;
     }
     .range-inputs {
       grid-template-columns: 1fr;

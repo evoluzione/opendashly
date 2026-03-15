@@ -290,6 +290,9 @@
   {#if pagination}
     <div class="pager">
       <div class="pager-meta">
+        {#if lastUpdatedLabel}
+          <span class="last-refresh">{lastUpdatedLabel}</span>
+        {/if}
         <div class="page-size-selector">
           <label for="logs-page-size">Risultati</label>
           <select

@@ -16,6 +16,7 @@
   let lastDataLength = 0;
   let lastWidth = 0;
   let lastHeight = 0;
+  let lastDataRef: ErrorRatePoint[] | null = null;
 
   function toEpochSeconds(value: unknown): number | null {
     if (value instanceof Date) {
@@ -138,10 +139,12 @@
       const nextHeight = getPlotHeight(containerHeight);
       const needsRender =
         !chart ||
+        lastDataRef !== data ||
         lastDataLength !== data.length ||
         lastWidth !== containerWidth ||
         lastHeight !== nextHeight;
       if (needsRender) {
+        lastDataRef = data;
         lastDataLength = data.length;
         lastWidth = containerWidth;
         lastHeight = nextHeight;

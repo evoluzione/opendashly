@@ -197,7 +197,6 @@
       color: #0f172a;
   }
 
-  input[type="text"],
   input[type="password"],
   select {
     padding: 10px 12px;
