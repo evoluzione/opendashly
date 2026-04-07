@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"context"
 	"encoding/json"
 	"log"
 	"net/http"
@@ -31,9 +32,16 @@ func (h *QueryHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		req.Limit,
 		req.OrderBy,
 	)
-	result, err := h.Service.Run(r.Context(), req)
+	ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
+	defer cancel()
+
+	result, err := h.Service.Run(ctx, req)
 	if err != nil {
 		log.Printf("query.run failed: %v", err)
+		if ctx.Err() == context.DeadlineExceeded {
+			w.WriteHeader(http.StatusGatewayTimeout)
+			return
+		}
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}

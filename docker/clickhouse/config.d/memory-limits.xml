@@ -1,0 +1,13 @@
+<clickhouse>
+  <max_server_memory_usage_to_ram_ratio>0.45</max_server_memory_usage_to_ram_ratio>
+  <mark_cache_size>134217728</mark_cache_size>
+  <uncompressed_cache_size>67108864</uncompressed_cache_size>
+  <background_pool_size>2</background_pool_size>
+
+  <profiles>
+    <default>
+      <max_memory_usage>209715200</max_memory_usage>
+      <max_execution_time>8</max_execution_time>
+    </default>
+  </profiles>
+</clickhouse>

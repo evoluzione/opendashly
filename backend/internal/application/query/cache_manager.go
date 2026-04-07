@@ -7,8 +7,8 @@ import (
 )
 
 const (
-	servicesCacheTTL   = 30 * time.Second
-	attributesCacheTTL = 60 * time.Second
+	servicesCacheTTL   = 5 * time.Minute
+	attributesCacheTTL = 5 * time.Minute
 )
 
 type cachedStringSlice struct {
