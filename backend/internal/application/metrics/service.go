@@ -4,14 +4,26 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"sync"
 	"time"
+
+	"golang.org/x/sync/errgroup"
 
 	"opendashly/backend/internal/infrastructure/storage"
 )
 
 // Service handles dashboard metrics calculations.
 type Service struct {
-	Storage *storage.Client
+	Storage   *storage.Client
+	cache     *dashboardCache
+	cacheOnce sync.Once
+}
+
+func (s *Service) getCache() *dashboardCache {
+	s.cacheOnce.Do(func() {
+		s.cache = newDashboardCache()
+	})
+	return s.cache
 }
 
 // toInt converts various numeric types to int for ClickHouse compatibility
@@ -47,83 +59,159 @@ func (s *Service) GetDashboard(ctx context.Context, req DashboardRequest) (*Dash
 		return emptyResponse(), nil
 	}
 
+	// Check cache first
+	if cached, ok := s.getCache().get(req); ok {
+		log.Printf("metrics.service.GetDashboard: cache hit")
+		return cached, nil
+	}
+
 	log.Printf("metrics.service.GetDashboard: from=%s to=%s service=%s",
 		req.From.Format(time.RFC3339), req.To.Format(time.RFC3339), req.ServiceName)
 
-	// Fetch all metrics
-	latencyDist, err := s.getLatencyDistribution(ctx, req)
-	if err != nil {
-		log.Printf("metrics.service: latency distribution error: %v", err)
-		return nil, fmt.Errorf("latency distribution: %w", err)
+	var (
+		latencyDist    []LatencyBucket
+		slowest        []EndpointLatency
+		errorHotspots  []ErrorHotspot
+		latencySeries  []LatencyPercentilePoint
+		errorRateSeries []ErrorRatePoint
+		statusCodes    []StatusCodeBreakdown
+		topEndpoints   []EndpointThroughput
+		apdex          ApdexScore
+		throughput     ThroughputSummary
+		timeSeries     []ThroughputPoint
+		logVolume      []LogVolumePoint
+		logLevels      []LogLevelCount
+		errorRate      float64
+	)
+
+	g, gctx := errgroup.WithContext(ctx)
+	g.SetLimit(4)
+
+	g.Go(func() error {
+		var err error
+		latencyDist, err = s.getLatencyDistribution(gctx, req)
+		if err != nil {
+			log.Printf("metrics.service: latency distribution error: %v", err)
+			return fmt.Errorf("latency distribution: %w", err)
+		}
+		return nil
+	})
+
+	g.Go(func() error {
+		var err error
+		slowest, err = s.getSlowestEndpoints(gctx, req)
+		if err != nil {
+			log.Printf("metrics.service: slowest endpoints error: %v", err)
+			return fmt.Errorf("slowest endpoints: %w", err)
+		}
+		return nil
+	})
+
+	g.Go(func() error {
+		var err error
+		errorHotspots, err = s.getErrorHotspots(gctx, req)
+		if err != nil {
+			log.Printf("metrics.service: error hotspots error: %v", err)
+			return fmt.Errorf("error hotspots: %w", err)
+		}
+		return nil
+	})
+
+	g.Go(func() error {
+		var err error
+		latencySeries, err = s.getLatencyPercentiles(gctx, req)
+		if err != nil {
+			log.Printf("metrics.service: latency percentiles error: %v", err)
+			return fmt.Errorf("latency percentiles: %w", err)
+		}
+		return nil
+	})
+
+	g.Go(func() error {
+		var err error
+		errorRateSeries, err = s.getErrorRateSeries(gctx, req)
+		if err != nil {
+			log.Printf("metrics.service: error rate series error: %v", err)
+			return fmt.Errorf("error rate series: %w", err)
+		}
+		return nil
+	})
+
+	g.Go(func() error {
+		var err error
+		statusCodes, err = s.getStatusCodeBreakdown(gctx, req)
+		if err != nil {
+			log.Printf("metrics.service: status code breakdown error: %v", err)
+			return fmt.Errorf("status code breakdown: %w", err)
+		}
+		return nil
+	})
+
+	g.Go(func() error {
+		var err error
+		topEndpoints, err = s.getTopEndpointsThroughput(gctx, req)
+		if err != nil {
+			log.Printf("metrics.service: top endpoints error: %v", err)
+			return fmt.Errorf("top endpoints: %w", err)
+		}
+		return nil
+	})
+
+	g.Go(func() error {
+		var err error
+		apdex, err = s.getApdexScore(gctx, req)
+		if err != nil {
+			log.Printf("metrics.service: apdex score error: %v", err)
+			return fmt.Errorf("apdex score: %w", err)
+		}
+		return nil
+	})
+
+	g.Go(func() error {
+		var err error
+		throughput, timeSeries, err = s.getThroughput(gctx, req)
+		if err != nil {
+			log.Printf("metrics.service: throughput error: %v", err)
+			return fmt.Errorf("throughput: %w", err)
+		}
+		return nil
+	})
+
+	g.Go(func() error {
+		var err error
+		logVolume, err = s.getLogVolume(gctx, req)
+		if err != nil {
+			log.Printf("metrics.service: log volume error: %v", err)
+			return fmt.Errorf("log volume: %w", err)
+		}
+		return nil
+	})
+
+	g.Go(func() error {
+		var err error
+		logLevels, err = s.getLogLevels(gctx, req)
+		if err != nil {
+			log.Printf("metrics.service: log levels error: %v", err)
+			return fmt.Errorf("log levels: %w", err)
+		}
+		return nil
+	})
+
+	g.Go(func() error {
+		var err error
+		errorRate, err = s.getErrorRate(gctx, req)
+		if err != nil {
+			log.Printf("metrics.service: error rate error: %v", err)
+			return fmt.Errorf("error rate: %w", err)
+		}
+		return nil
+	})
+
+	if err := g.Wait(); err != nil {
+		return nil, err
 	}
 
-	slowest, err := s.getSlowestEndpoints(ctx, req)
-	if err != nil {
-		log.Printf("metrics.service: slowest endpoints error: %v", err)
-		return nil, fmt.Errorf("slowest endpoints: %w", err)
-	}
-
-	errorHotspots, err := s.getErrorHotspots(ctx, req)
-	if err != nil {
-		log.Printf("metrics.service: error hotspots error: %v", err)
-		return nil, fmt.Errorf("error hotspots: %w", err)
-	}
-
-	latencySeries, err := s.getLatencyPercentiles(ctx, req)
-	if err != nil {
-		log.Printf("metrics.service: latency percentiles error: %v", err)
-		return nil, fmt.Errorf("latency percentiles: %w", err)
-	}
-
-	errorRateSeries, err := s.getErrorRateSeries(ctx, req)
-	if err != nil {
-		log.Printf("metrics.service: error rate series error: %v", err)
-		return nil, fmt.Errorf("error rate series: %w", err)
-	}
-
-	statusCodes, err := s.getStatusCodeBreakdown(ctx, req)
-	if err != nil {
-		log.Printf("metrics.service: status code breakdown error: %v", err)
-		return nil, fmt.Errorf("status code breakdown: %w", err)
-	}
-
-	topEndpoints, err := s.getTopEndpointsThroughput(ctx, req)
-	if err != nil {
-		log.Printf("metrics.service: top endpoints error: %v", err)
-		return nil, fmt.Errorf("top endpoints: %w", err)
-	}
-
-	apdex, err := s.getApdexScore(ctx, req)
-	if err != nil {
-		log.Printf("metrics.service: apdex score error: %v", err)
-		return nil, fmt.Errorf("apdex score: %w", err)
-	}
-
-	throughput, timeSeries, err := s.getThroughput(ctx, req)
-	if err != nil {
-		log.Printf("metrics.service: throughput error: %v", err)
-		return nil, fmt.Errorf("throughput: %w", err)
-	}
-
-	logVolume, err := s.getLogVolume(ctx, req)
-	if err != nil {
-		log.Printf("metrics.service: log volume error: %v", err)
-		return nil, fmt.Errorf("log volume: %w", err)
-	}
-
-	logLevels, err := s.getLogLevels(ctx, req)
-	if err != nil {
-		log.Printf("metrics.service: log levels error: %v", err)
-		return nil, fmt.Errorf("log levels: %w", err)
-	}
-
-	errorRate, err := s.getErrorRate(ctx, req)
-	if err != nil {
-		log.Printf("metrics.service: error rate error: %v", err)
-		return nil, fmt.Errorf("error rate: %w", err)
-	}
-
-	return &DashboardResponse{
+	result := &DashboardResponse{
 		Hotspots: HotspotsData{
 			LatencyDistribution: latencyDist,
 			SlowestEndpoints:    slowest,
@@ -143,7 +231,10 @@ func (s *Service) GetDashboard(ctx context.Context, req DashboardRequest) (*Dash
 			VolumeSeries: logVolume,
 			Levels:       logLevels,
 		},
-	}, nil
+	}
+
+	s.getCache().set(req, result)
+	return result, nil
 }
 
 func (s *Service) getLatencyDistribution(ctx context.Context, req DashboardRequest) ([]LatencyBucket, error) {

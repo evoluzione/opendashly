@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"context"
 	"encoding/json"
 	"log"
 	"net/http"
@@ -65,13 +66,20 @@ func (h *DashboardHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	log.Printf("dashboard.metrics request: from=%s to=%s service=%s",
 		from.Format(time.RFC3339), to.Format(time.RFC3339), req.ServiceName)
 
-	result, err := h.Service.GetDashboard(r.Context(), metrics.DashboardRequest{
+	ctx, cancel := context.WithTimeout(r.Context(), 15*time.Second)
+	defer cancel()
+
+	result, err := h.Service.GetDashboard(ctx, metrics.DashboardRequest{
 		From:        from,
 		To:          to,
 		ServiceName: req.ServiceName,
 	})
 	if err != nil {
 		log.Printf("dashboard.metrics failed: %v", err)
+		if ctx.Err() == context.DeadlineExceeded {
+			http.Error(w, "Gateway timeout", http.StatusGatewayTimeout)
+			return
+		}
 		http.Error(w, "Internal server error", http.StatusInternalServerError)
 		return
 	}

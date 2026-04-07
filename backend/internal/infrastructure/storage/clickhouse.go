@@ -22,9 +22,15 @@ func NewClient(ctx context.Context, dsn string, user string, password string) (*
 			Username: user,
 			Password: password,
 		},
-		MaxOpenConns:    20,
-		MaxIdleConns:    10,
+		MaxOpenConns:    5,
+		MaxIdleConns:    3,
 		ConnMaxLifetime: time.Hour,
+		DialTimeout:     5 * time.Second,
+		ReadTimeout:     10 * time.Second,
+		Settings: clickhouse.Settings{
+			"max_memory_usage":   200 * 1024 * 1024,
+			"max_execution_time": 8,
+		},
 	})
 	if err != nil {
 		return nil, fmt.Errorf("open clickhouse: %w", err)

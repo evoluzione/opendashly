@@ -1,13 +1,15 @@
 module opendashly/backend
 
-go 1.22
+go 1.25.0
 
 require (
 	github.com/ClickHouse/clickhouse-go/v2 v2.26.0
 	github.com/go-chi/chi/v5 v5.0.10
 	github.com/golang-jwt/jwt/v5 v5.2.1
 	github.com/google/uuid v1.6.0
+	github.com/sashabaranov/go-openai v1.41.2
 	golang.org/x/crypto v0.23.0
+	golang.org/x/sync v0.20.0
 )
 
 require (
@@ -19,7 +21,6 @@ require (
 	github.com/paulmach/orb v0.11.1 // indirect
 	github.com/pierrec/lz4/v4 v4.1.21 // indirect
 	github.com/pkg/errors v0.9.1 // indirect
-	github.com/sashabaranov/go-openai v1.41.2 // indirect
 	github.com/segmentio/asm v1.2.0 // indirect
 	github.com/shopspring/decimal v1.4.0 // indirect
 	go.opentelemetry.io/otel v1.26.0 // indirect

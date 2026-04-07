@@ -84,6 +84,15 @@ func extractLogsBodySearch(filterList []FilterItem) (string, []FilterItem) {
 	return bodySearch, filtered
 }
 
+func isSimpleToken(s string) bool {
+	for _, c := range s {
+		if !((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '_') {
+			return false
+		}
+	}
+	return len(s) > 0
+}
+
 func buildLogsBodySearchClause(raw string) string {
 	trimmed := strings.TrimSpace(raw)
 	if trimmed == "" {
@@ -98,8 +107,15 @@ func buildLogsBodySearchClause(raw string) string {
 	for _, token := range tokens {
 		escaped := EscapeLiteral(token)
 		like := fmt.Sprintf("%%%s%%", escaped)
+		var bodyClause string
+		if isSimpleToken(token) {
+			// Use hasTokenCaseInsensitive to leverage the tokenbf_v1 index on Body
+			bodyClause = fmt.Sprintf("hasTokenCaseInsensitive(Body, '%s')", escaped)
+		} else {
+			bodyClause = fmt.Sprintf("Body ILIKE '%s'", like)
+		}
 		tokenClauses = append(tokenClauses,
-			fmt.Sprintf("(Body ILIKE '%s' OR arrayExists(v -> v ILIKE '%s', mapValues(LogAttributes)) OR arrayExists(v -> v ILIKE '%s', mapValues(ResourceAttributes)))", like, like, like),
+			fmt.Sprintf("(%s OR arrayExists(v -> v ILIKE '%s', mapValues(LogAttributes)) OR arrayExists(v -> v ILIKE '%s', mapValues(ResourceAttributes)))", bodyClause, like, like),
 		)
 	}
 	return "(" + strings.Join(tokenClauses, " AND ") + ")"
