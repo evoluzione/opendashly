@@ -40,10 +40,11 @@ services:
     volumes:
       - clickhouse_data:/var/lib/clickhouse
     healthcheck:
-      test: ["CMD", "clickhouse-client", "--query", "SELECT 1"]
+      test: ["CMD", "clickhouse-client", "--user", "otel", "--password", "${CLICKHOUSE_PASSWORD}", "--query", "SELECT 1"]
       interval: 5s
       timeout: 3s
-      retries: 10
+      retries: 15
+      start_period: 60s
     mem_limit: 1024m
     memswap_limit: 1024m
     logging:
