@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"context"
+	"log"
 	"net/http"
 	"time"
 
@@ -10,6 +11,7 @@ import (
 
 type ServicesHandler struct {
 	Service *query.Service
+	Timeout time.Duration
 }
 
 type servicesResponse struct {
@@ -17,11 +19,16 @@ type servicesResponse struct {
 }
 
 func (h *ServicesHandler) List(w http.ResponseWriter, r *http.Request) {
-	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
+	timeout := h.Timeout
+	if timeout <= 0 {
+		timeout = 15 * time.Second
+	}
+	ctx, cancel := context.WithTimeout(r.Context(), timeout)
 	defer cancel()
 
 	services, err := h.Service.ListServices(ctx)
 	if err != nil {
+		log.Printf("services.list failed: %v", err)
 		if ctx.Err() == context.DeadlineExceeded {
 			w.WriteHeader(http.StatusGatewayTimeout)
 			return

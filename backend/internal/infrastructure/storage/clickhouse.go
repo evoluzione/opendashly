@@ -14,22 +14,72 @@ type Client struct {
 	Conn driver.Conn
 }
 
+type ClientOptions struct {
+	DSN                 string
+	User                string
+	Password            string
+	MaxOpenConns        int
+	MaxIdleConns        int
+	ConnMaxLifetime     time.Duration
+	DialTimeout         time.Duration
+	ReadTimeout         time.Duration
+	MaxMemoryUsageBytes int
+	MaxExecutionTimeSec int
+}
+
 // NewClient creates a ClickHouse client from DSN.
 func NewClient(ctx context.Context, dsn string, user string, password string) (*Client, error) {
+	return NewClientWithOptions(ctx, ClientOptions{
+		DSN:                 dsn,
+		User:                user,
+		Password:            password,
+		MaxOpenConns:        5,
+		MaxIdleConns:        3,
+		ConnMaxLifetime:     time.Hour,
+		DialTimeout:         5 * time.Second,
+		ReadTimeout:         10 * time.Second,
+		MaxMemoryUsageBytes: 200 * 1024 * 1024,
+		MaxExecutionTimeSec: 8,
+	})
+}
+
+func NewClientWithOptions(ctx context.Context, opts ClientOptions) (*Client, error) {
+	if opts.MaxOpenConns <= 0 {
+		opts.MaxOpenConns = 5
+	}
+	if opts.MaxIdleConns <= 0 {
+		opts.MaxIdleConns = 3
+	}
+	if opts.ConnMaxLifetime <= 0 {
+		opts.ConnMaxLifetime = time.Hour
+	}
+	if opts.DialTimeout <= 0 {
+		opts.DialTimeout = 5 * time.Second
+	}
+	if opts.ReadTimeout <= 0 {
+		opts.ReadTimeout = 10 * time.Second
+	}
+	if opts.MaxMemoryUsageBytes <= 0 {
+		opts.MaxMemoryUsageBytes = 200 * 1024 * 1024
+	}
+	if opts.MaxExecutionTimeSec <= 0 {
+		opts.MaxExecutionTimeSec = 8
+	}
+
 	conn, err := clickhouse.Open(&clickhouse.Options{
-		Addr: []string{dsn},
+		Addr: []string{opts.DSN},
 		Auth: clickhouse.Auth{
-			Username: user,
-			Password: password,
+			Username: opts.User,
+			Password: opts.Password,
 		},
-		MaxOpenConns:    5,
-		MaxIdleConns:    3,
-		ConnMaxLifetime: time.Hour,
-		DialTimeout:     5 * time.Second,
-		ReadTimeout:     10 * time.Second,
+		MaxOpenConns:    opts.MaxOpenConns,
+		MaxIdleConns:    opts.MaxIdleConns,
+		ConnMaxLifetime: opts.ConnMaxLifetime,
+		DialTimeout:     opts.DialTimeout,
+		ReadTimeout:     opts.ReadTimeout,
 		Settings: clickhouse.Settings{
-			"max_memory_usage":   200 * 1024 * 1024,
-			"max_execution_time": 8,
+			"max_memory_usage":   opts.MaxMemoryUsageBytes,
+			"max_execution_time": opts.MaxExecutionTimeSec,
 		},
 	})
 	if err != nil {

@@ -8,29 +8,29 @@ receivers:
 
 processors:
   memory_limiter:
-    check_interval: 1s
-    limit_mib: 350
-    spike_limit_mib: 50
+    check_interval: ${env:OTEL_MEMORY_LIMITER_CHECK_INTERVAL}
+    limit_mib: ${env:OTEL_MEMORY_LIMIT_MIB}
+    spike_limit_mib: ${env:OTEL_MEMORY_SPIKE_LIMIT_MIB}
   batch:
-    send_batch_size: 5000
-    timeout: 5s
+    send_batch_size: ${env:OTEL_BATCH_SEND_SIZE}
+    timeout: ${env:OTEL_BATCH_TIMEOUT}
 
 exporters:
   clickhouse:
     endpoint: tcp://clickhouse:9000
     database: telemetry
-    timeout: 5s
+    timeout: ${env:OTEL_EXPORTER_TIMEOUT}
     username: otel
     password: ${env:CLICKHOUSE_PASSWORD}
     sending_queue:
       enabled: true
-      queue_size: 100
-      num_consumers: 2
+      queue_size: ${env:OTEL_SENDING_QUEUE_SIZE}
+      num_consumers: ${env:OTEL_SENDING_QUEUE_CONSUMERS}
     retry_on_failure:
       enabled: true
-      initial_interval: 1s
-      max_interval: 30s
-      max_elapsed_time: 300s
+      initial_interval: ${env:OTEL_RETRY_INITIAL_INTERVAL}
+      max_interval: ${env:OTEL_RETRY_MAX_INTERVAL}
+      max_elapsed_time: ${env:OTEL_RETRY_MAX_ELAPSED_TIME}
 
 extensions:
   health_check:

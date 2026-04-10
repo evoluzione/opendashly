@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"strings"
 	"time"
 
 	"github.com/ClickHouse/clickhouse-go/v2/lib/driver"
@@ -11,8 +12,9 @@ import (
 )
 
 type CleanupService struct {
-	Repo Repository
-	Conn driver.Conn
+	Repo              Repository
+	Conn              driver.Conn
+	EnableCountBefore bool
 }
 
 func (s *CleanupService) CleanupByRetention(ctx context.Context) error {
@@ -20,6 +22,8 @@ func (s *CleanupService) CleanupByRetention(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("get retention settings: %w", err)
 	}
+
+	failures := make([]string, 0)
 
 	for _, setting := range settings {
 		cutoffTime := time.Now().UTC().AddDate(0, 0, -int(setting.RetentionDays))
@@ -44,6 +48,7 @@ func (s *CleanupService) CleanupByRetention(ctx context.Context) error {
 		deleted, err := s.deleteOldRecords(ctx, setting.SignalType, cutoffTime, "")
 		if err != nil {
 			log.Printf("retention cleanup: failed to delete %s records: %v", setting.SignalType, err)
+			failures = append(failures, fmt.Sprintf("%s: %v", setting.SignalType, err))
 			_ = s.Repo.UpdateCleanupJob(ctx, jobID, "failed", 0, err.Error())
 			continue
 		}
@@ -53,6 +58,10 @@ func (s *CleanupService) CleanupByRetention(ctx context.Context) error {
 		} else {
 			log.Printf("retention cleanup: completed %s (deleted %d records)", setting.SignalType, deleted)
 		}
+	}
+
+	if len(failures) > 0 {
+		return fmt.Errorf("retention cleanup completed with %d failure(s): %s", len(failures), strings.Join(failures, "; "))
 	}
 
 	return nil
@@ -180,20 +189,13 @@ func (s *CleanupService) deleteLogsRecords(ctx context.Context, cutoffTime *time
 		}
 	}
 
-	// Count records to be deleted
 	var count uint64
-	var args []interface{}
-	if cutoffTime != nil && serviceName != "" {
-		args = []interface{}{*cutoffTime, serviceName}
-	} else if cutoffTime != nil {
-		args = []interface{}{*cutoffTime}
-	} else if serviceName != "" {
-		args = []interface{}{serviceName}
-	}
-
-	row := s.Conn.QueryRow(ctx, countQuery, args...)
-	if err := row.Scan(&count); err != nil {
-		return 0, fmt.Errorf("count logs: %w", err)
+	args := buildDeleteArgs(cutoffTime, serviceName)
+	if s.EnableCountBefore {
+		row := s.Conn.QueryRow(ctx, countQuery, args...)
+		if err := row.Scan(&count); err != nil {
+			return 0, fmt.Errorf("count logs: %w", err)
+		}
 	}
 
 	// Execute delete
@@ -224,20 +226,13 @@ func (s *CleanupService) deleteTracesRecords(ctx context.Context, cutoffTime *ti
 		}
 	}
 
-	// Count records to be deleted
 	var count uint64
-	var args []interface{}
-	if cutoffTime != nil && serviceName != "" {
-		args = []interface{}{*cutoffTime, serviceName}
-	} else if cutoffTime != nil {
-		args = []interface{}{*cutoffTime}
-	} else if serviceName != "" {
-		args = []interface{}{serviceName}
-	}
-
-	row := s.Conn.QueryRow(ctx, countQuery, args...)
-	if err := row.Scan(&count); err != nil {
-		return 0, fmt.Errorf("count traces: %w", err)
+	args := buildDeleteArgs(cutoffTime, serviceName)
+	if s.EnableCountBefore {
+		row := s.Conn.QueryRow(ctx, countQuery, args...)
+		if err := row.Scan(&count); err != nil {
+			return 0, fmt.Errorf("count traces: %w", err)
+		}
 	}
 
 	// Execute delete
@@ -283,20 +278,13 @@ func (s *CleanupService) deleteMetricsTable(ctx context.Context, tableName strin
 		}
 	}
 
-	// Count records to be deleted
 	var count uint64
-	var args []interface{}
-	if cutoffTime != nil && serviceName != "" {
-		args = []interface{}{*cutoffTime, serviceName}
-	} else if cutoffTime != nil {
-		args = []interface{}{*cutoffTime}
-	} else if serviceName != "" {
-		args = []interface{}{serviceName}
-	}
-
-	row := s.Conn.QueryRow(ctx, countQuery, args...)
-	if err := row.Scan(&count); err != nil {
-		return 0, fmt.Errorf("count %s: %w", tableName, err)
+	args := buildDeleteArgs(cutoffTime, serviceName)
+	if s.EnableCountBefore {
+		row := s.Conn.QueryRow(ctx, countQuery, args...)
+		if err := row.Scan(&count); err != nil {
+			return 0, fmt.Errorf("count %s: %w", tableName, err)
+		}
 	}
 
 	// Execute delete
@@ -305,4 +293,17 @@ func (s *CleanupService) deleteMetricsTable(ctx context.Context, tableName strin
 	}
 
 	return count, nil
+}
+
+func buildDeleteArgs(cutoffTime *time.Time, serviceName string) []interface{} {
+	if cutoffTime != nil && serviceName != "" {
+		return []interface{}{*cutoffTime, serviceName}
+	}
+	if cutoffTime != nil {
+		return []interface{}{*cutoffTime}
+	}
+	if serviceName != "" {
+		return []interface{}{serviceName}
+	}
+	return nil
 }

@@ -170,13 +170,19 @@ The production stack uses prebuilt images from GHCR — no repository clone need
 
 | | Minimum | Recommended |
 |---|---|---|
-| CPU | 2 vCPU | 4 vCPU |
-| RAM | 4 GB | 8 GB |
+| CPU | 1 vCPU | 4 vCPU |
+| RAM | 2 GB | 8 GB |
 | Storage | 20 GB SSD | 50 GB+ SSD |
 
 ### Deploy
 
-**1. Create a `.env` file** alongside `docker-compose.prod.yml`:
+**1. Create `.env` from template** alongside `docker-compose.prod.yml`:
+
+```bash
+cp .env.example .env
+```
+
+Set at least:
 
 ```bash
 AUTH_SECRET=replace-with-32+-char-random-string
@@ -184,18 +190,106 @@ CLICKHOUSE_PASSWORD=replace-with-strong-password
 CORS_ALLOWED_ORIGINS=http://your-host:5173
 ```
 
-**2. Start:**
+**2. Choose a VM profile** and apply the related overrides in `.env`.
+
+| Profile | VM size | Use when |
+|---|---|---|
+| Small | 1 vCPU / 2 GB RAM | Very low traffic, test or small internal setup |
+| Standard | 2 vCPU / 4 GB RAM | Small production baseline |
+| Big | 4 vCPU / 8 GB RAM | Higher telemetry throughput |
+
+Small profile overrides (1 vCPU / 2 GB):
+
+```bash
+SERVICE_LIST_TIMEOUT_SECONDS=25
+CLICKHOUSE_MAX_MEMORY_MIB=96
+CLICKHOUSE_MAX_EXECUTION_TIME_SECONDS=25
+CLICKHOUSE_MAX_OPEN_CONNS=2
+CLICKHOUSE_MAX_IDLE_CONNS=1
+CLICKHOUSE_READ_TIMEOUT_SECONDS=40
+CLEANUP_INTERVAL_MINUTES=1440
+
+OTEL_MEMORY_LIMIT_MIB=96
+OTEL_MEMORY_SPIKE_LIMIT_MIB=20
+OTEL_BATCH_SEND_SIZE=500
+OTEL_BATCH_TIMEOUT=5s
+OTEL_SENDING_QUEUE_SIZE=200
+OTEL_SENDING_QUEUE_CONSUMERS=1
+
+APP_MEM_LIMIT=320m
+APP_MEMSWAP_LIMIT=320m
+OTEL_COLLECTOR_MEM_LIMIT=192m
+OTEL_COLLECTOR_MEMSWAP_LIMIT=192m
+CLICKHOUSE_MEM_LIMIT=896m
+CLICKHOUSE_MEMSWAP_LIMIT=896m
+```
+
+Standard profile overrides (2 vCPU / 4 GB):
+
+```bash
+SERVICE_LIST_TIMEOUT_SECONDS=20
+CLICKHOUSE_MAX_MEMORY_MIB=160
+CLICKHOUSE_MAX_EXECUTION_TIME_SECONDS=20
+CLICKHOUSE_MAX_OPEN_CONNS=4
+CLICKHOUSE_MAX_IDLE_CONNS=2
+CLICKHOUSE_READ_TIMEOUT_SECONDS=30
+CLEANUP_INTERVAL_MINUTES=720
+
+OTEL_MEMORY_LIMIT_MIB=170
+OTEL_MEMORY_SPIKE_LIMIT_MIB=35
+OTEL_BATCH_SEND_SIZE=1000
+OTEL_BATCH_TIMEOUT=3s
+OTEL_SENDING_QUEUE_SIZE=500
+OTEL_SENDING_QUEUE_CONSUMERS=2
+
+APP_MEM_LIMIT=512m
+APP_MEMSWAP_LIMIT=512m
+OTEL_COLLECTOR_MEM_LIMIT=320m
+OTEL_COLLECTOR_MEMSWAP_LIMIT=320m
+CLICKHOUSE_MEM_LIMIT=1024m
+CLICKHOUSE_MEMSWAP_LIMIT=1024m
+```
+
+Big profile overrides (4 vCPU / 8 GB):
+
+```bash
+SERVICE_LIST_TIMEOUT_SECONDS=15
+CLICKHOUSE_MAX_MEMORY_MIB=256
+CLICKHOUSE_MAX_EXECUTION_TIME_SECONDS=15
+CLICKHOUSE_MAX_OPEN_CONNS=8
+CLICKHOUSE_MAX_IDLE_CONNS=4
+CLICKHOUSE_READ_TIMEOUT_SECONDS=20
+CLEANUP_INTERVAL_MINUTES=360
+
+OTEL_MEMORY_LIMIT_MIB=300
+OTEL_MEMORY_SPIKE_LIMIT_MIB=60
+OTEL_BATCH_SEND_SIZE=2000
+OTEL_BATCH_TIMEOUT=2s
+OTEL_SENDING_QUEUE_SIZE=2000
+OTEL_SENDING_QUEUE_CONSUMERS=4
+
+APP_MEM_LIMIT=768m
+APP_MEMSWAP_LIMIT=768m
+OTEL_COLLECTOR_MEM_LIMIT=512m
+OTEL_COLLECTOR_MEMSWAP_LIMIT=512m
+CLICKHOUSE_MEM_LIMIT=1536m
+CLICKHOUSE_MEMSWAP_LIMIT=1536m
+```
+
+If you observe `sending queue is full` in collector logs, increase queue size and collector memory first. If you observe ClickHouse OOM or mutation backlog, increase ClickHouse memory and/or reduce cleanup frequency.
+
+**3. Start:**
 
 ```bash
 docker compose -f docker-compose.prod.yml up -d
 ```
 
-**3. Verify:**
+**4. Verify:**
 
 ```bash
 curl http://localhost:8080/healthz   # → backend
 curl http://localhost:8123/ping      # → ClickHouse
-curl http://localhost:8888/metrics   # → OTel Collector
+curl http://localhost:13133          # → OTel Collector health
 ```
 
 Then open `http://localhost:5173` and log in with `admin` / `admin`.
