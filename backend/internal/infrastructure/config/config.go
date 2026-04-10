@@ -12,12 +12,20 @@ type Config struct {
 	ClickHouseAddr         string
 	ClickHouseUser         string
 	ClickHousePassword     string
+	ClickHouseMaxMemoryMiB int
+	ClickHouseMaxExecSec   int
+	ClickHouseMaxOpenConns int
+	ClickHouseMaxIdleConns int
+	ClickHouseDialTimeout  int
+	ClickHouseReadTimeout  int
 	CollectorHealthURL     string
 	ListenAddr             string
 	AuthMode               string
 	AuthSecret             string
 	AuthCookieName         string
 	CleanupIntervalMinutes int
+	ServiceListTimeoutSec  int
+	RetentionPreCount      bool
 	CORSAllowedOrigins     []string
 	DebugQuery             bool
 }
@@ -28,12 +36,20 @@ func Load() (*Config, error) {
 		ClickHouseAddr:         os.Getenv("CLICKHOUSE_ADDR"),
 		ClickHouseUser:         os.Getenv("CLICKHOUSE_USER"),
 		ClickHousePassword:     os.Getenv("CLICKHOUSE_PASSWORD"),
+		ClickHouseMaxMemoryMiB: getEnvInt("CLICKHOUSE_MAX_MEMORY_MIB", 200),
+		ClickHouseMaxExecSec:   getEnvInt("CLICKHOUSE_MAX_EXECUTION_TIME_SECONDS", 8),
+		ClickHouseMaxOpenConns: getEnvInt("CLICKHOUSE_MAX_OPEN_CONNS", 5),
+		ClickHouseMaxIdleConns: getEnvInt("CLICKHOUSE_MAX_IDLE_CONNS", 3),
+		ClickHouseDialTimeout:  getEnvInt("CLICKHOUSE_DIAL_TIMEOUT_SECONDS", 5),
+		ClickHouseReadTimeout:  getEnvInt("CLICKHOUSE_READ_TIMEOUT_SECONDS", 10),
 		CollectorHealthURL:     os.Getenv("COLLECTOR_HEALTH_URL"),
 		ListenAddr:             os.Getenv("API_LISTEN_ADDR"),
 		AuthMode:               os.Getenv("AUTH_MODE"),
 		AuthSecret:             os.Getenv("AUTH_SECRET"),
 		AuthCookieName:         os.Getenv("AUTH_COOKIE_NAME"),
 		CleanupIntervalMinutes: getEnvInt("CLEANUP_INTERVAL_MINUTES", 1440),
+		ServiceListTimeoutSec:  getEnvInt("SERVICE_LIST_TIMEOUT_SECONDS", 15),
+		RetentionPreCount:      getEnvBool("RETENTION_COUNT_PRECHECK_ENABLED", false),
 		CORSAllowedOrigins:     getEnvCSV("CORS_ALLOWED_ORIGINS", []string{"http://localhost:5173"}),
 		DebugQuery:             os.Getenv("VITE_DEBUG_QUERY") == "true",
 	}
@@ -84,4 +100,13 @@ func getEnvCSV(key string, defaultVals []string) []string {
 		return defaultVals
 	}
 	return out
+}
+
+func getEnvBool(key string, defaultVal bool) bool {
+	if val := os.Getenv(key); val != "" {
+		if b, err := strconv.ParseBool(val); err == nil {
+			return b
+		}
+	}
+	return defaultVal
 }

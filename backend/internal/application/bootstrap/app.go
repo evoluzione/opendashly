@@ -31,7 +31,17 @@ func Build(ctx context.Context) (*App, error) {
 		return nil, err
 	}
 
-	client, err := storage.NewClient(ctx, cfg.ClickHouseAddr, cfg.ClickHouseUser, cfg.ClickHousePassword)
+	client, err := storage.NewClientWithOptions(ctx, storage.ClientOptions{
+		DSN:                 cfg.ClickHouseAddr,
+		User:                cfg.ClickHouseUser,
+		Password:            cfg.ClickHousePassword,
+		MaxOpenConns:        cfg.ClickHouseMaxOpenConns,
+		MaxIdleConns:        cfg.ClickHouseMaxIdleConns,
+		DialTimeout:         time.Duration(cfg.ClickHouseDialTimeout) * time.Second,
+		ReadTimeout:         time.Duration(cfg.ClickHouseReadTimeout) * time.Second,
+		MaxMemoryUsageBytes: cfg.ClickHouseMaxMemoryMiB * 1024 * 1024,
+		MaxExecutionTimeSec: cfg.ClickHouseMaxExecSec,
+	})
 	if err != nil {
 		return nil, err
 	}
@@ -52,8 +62,9 @@ func Build(ctx context.Context) (*App, error) {
 
 	retentionRepo := &retention.Repo{Conn: client.Conn}
 	cleanupService := &retention.CleanupService{
-		Repo: retentionRepo,
-		Conn: client.Conn,
+		Repo:              retentionRepo,
+		Conn:              client.Conn,
+		EnableCountBefore: cfg.RetentionPreCount,
 	}
 	retentionHandler := &handlers.RetentionHandler{
 		Repo:    retentionRepo,
@@ -76,7 +87,10 @@ func Build(ctx context.Context) (*App, error) {
 		TenantID:   "default",
 	}
 	usersHandler := &handlers.UsersHandler{Repo: authRepo}
-	servicesHandler := &handlers.ServicesHandler{Service: queryService}
+	servicesHandler := &handlers.ServicesHandler{
+		Service: queryService,
+		Timeout: time.Duration(cfg.ServiceListTimeoutSec) * time.Second,
+	}
 	authMiddleware := auth.Middleware(auth.MiddlewareOptions{
 		Mode:            cfg.AuthMode,
 		CookieName:      cfg.AuthCookieName,
