@@ -9,49 +9,55 @@ import (
 
 // Config holds runtime configuration for the API.
 type Config struct {
-	ClickHouseAddr         string
-	ClickHouseUser         string
-	ClickHousePassword     string
-	ClickHouseMaxMemoryMiB int
-	ClickHouseMaxExecSec   int
-	ClickHouseMaxOpenConns int
-	ClickHouseMaxIdleConns int
-	ClickHouseDialTimeout  int
-	ClickHouseReadTimeout  int
-	CollectorHealthURL     string
-	ListenAddr             string
-	AuthMode               string
-	AuthSecret             string
-	AuthCookieName         string
-	CleanupIntervalMinutes int
-	ServiceListTimeoutSec  int
-	RetentionPreCount      bool
-	CORSAllowedOrigins     []string
-	DebugQuery             bool
+	ClickHouseAddr               string
+	ClickHouseUser               string
+	ClickHousePassword           string
+	ClickHouseMaxMemoryMiB       int
+	ClickHouseExternalGroupByMiB int
+	ClickHouseExternalSortMiB    int
+	ClickHouseTempDiskMiB        int
+	ClickHouseMaxExecSec         int
+	ClickHouseMaxOpenConns       int
+	ClickHouseMaxIdleConns       int
+	ClickHouseDialTimeout        int
+	ClickHouseReadTimeout        int
+	CollectorHealthURL           string
+	ListenAddr                   string
+	AuthMode                     string
+	AuthSecret                   string
+	AuthCookieName               string
+	CleanupIntervalMinutes       int
+	ServiceListTimeoutSec        int
+	RetentionPreCount            bool
+	CORSAllowedOrigins           []string
+	DebugQuery                   bool
 }
 
 // Load reads configuration from environment variables.
 func Load() (*Config, error) {
 	cfg := &Config{
-		ClickHouseAddr:         os.Getenv("CLICKHOUSE_ADDR"),
-		ClickHouseUser:         os.Getenv("CLICKHOUSE_USER"),
-		ClickHousePassword:     os.Getenv("CLICKHOUSE_PASSWORD"),
-		ClickHouseMaxMemoryMiB: getEnvInt("CLICKHOUSE_MAX_MEMORY_MIB", 200),
-		ClickHouseMaxExecSec:   getEnvInt("CLICKHOUSE_MAX_EXECUTION_TIME_SECONDS", 8),
-		ClickHouseMaxOpenConns: getEnvInt("CLICKHOUSE_MAX_OPEN_CONNS", 5),
-		ClickHouseMaxIdleConns: getEnvInt("CLICKHOUSE_MAX_IDLE_CONNS", 3),
-		ClickHouseDialTimeout:  getEnvInt("CLICKHOUSE_DIAL_TIMEOUT_SECONDS", 5),
-		ClickHouseReadTimeout:  getEnvInt("CLICKHOUSE_READ_TIMEOUT_SECONDS", 10),
-		CollectorHealthURL:     os.Getenv("COLLECTOR_HEALTH_URL"),
-		ListenAddr:             os.Getenv("API_LISTEN_ADDR"),
-		AuthMode:               os.Getenv("AUTH_MODE"),
-		AuthSecret:             os.Getenv("AUTH_SECRET"),
-		AuthCookieName:         os.Getenv("AUTH_COOKIE_NAME"),
-		CleanupIntervalMinutes: getEnvInt("CLEANUP_INTERVAL_MINUTES", 1440),
-		ServiceListTimeoutSec:  getEnvInt("SERVICE_LIST_TIMEOUT_SECONDS", 15),
-		RetentionPreCount:      getEnvBool("RETENTION_COUNT_PRECHECK_ENABLED", false),
-		CORSAllowedOrigins:     getEnvCSV("CORS_ALLOWED_ORIGINS", []string{"http://localhost:5173"}),
-		DebugQuery:             os.Getenv("VITE_DEBUG_QUERY") == "true",
+		ClickHouseAddr:               os.Getenv("CLICKHOUSE_ADDR"),
+		ClickHouseUser:               os.Getenv("CLICKHOUSE_USER"),
+		ClickHousePassword:           os.Getenv("CLICKHOUSE_PASSWORD"),
+		ClickHouseMaxMemoryMiB:       getEnvInt("CLICKHOUSE_MAX_MEMORY_MIB", 200),
+		ClickHouseExternalGroupByMiB: getEnvInt("CLICKHOUSE_MAX_BYTES_BEFORE_EXTERNAL_GROUP_BY_MIB", 64),
+		ClickHouseExternalSortMiB:    getEnvInt("CLICKHOUSE_MAX_BYTES_BEFORE_EXTERNAL_SORT_MIB", 64),
+		ClickHouseTempDiskMiB:        getEnvInt("CLICKHOUSE_MAX_TEMP_DATA_ON_DISK_MIB", 1024),
+		ClickHouseMaxExecSec:         getEnvInt("CLICKHOUSE_MAX_EXECUTION_TIME_SECONDS", 8),
+		ClickHouseMaxOpenConns:       getEnvInt("CLICKHOUSE_MAX_OPEN_CONNS", 5),
+		ClickHouseMaxIdleConns:       getEnvInt("CLICKHOUSE_MAX_IDLE_CONNS", 3),
+		ClickHouseDialTimeout:        getEnvInt("CLICKHOUSE_DIAL_TIMEOUT_SECONDS", 5),
+		ClickHouseReadTimeout:        getEnvInt("CLICKHOUSE_READ_TIMEOUT_SECONDS", 10),
+		CollectorHealthURL:           os.Getenv("COLLECTOR_HEALTH_URL"),
+		ListenAddr:                   os.Getenv("API_LISTEN_ADDR"),
+		AuthMode:                     os.Getenv("AUTH_MODE"),
+		AuthSecret:                   os.Getenv("AUTH_SECRET"),
+		AuthCookieName:               os.Getenv("AUTH_COOKIE_NAME"),
+		CleanupIntervalMinutes:       getEnvInt("CLEANUP_INTERVAL_MINUTES", 1440),
+		ServiceListTimeoutSec:        getEnvInt("SERVICE_LIST_TIMEOUT_SECONDS", 15),
+		RetentionPreCount:            getEnvBool("RETENTION_COUNT_PRECHECK_ENABLED", false),
+		CORSAllowedOrigins:           getEnvCSV("CORS_ALLOWED_ORIGINS", []string{"http://localhost:5173"}),
+		DebugQuery:                   os.Getenv("VITE_DEBUG_QUERY") == "true",
 	}
 	if cfg.ClickHouseAddr == "" {
 		return nil, fmt.Errorf("CLICKHOUSE_ADDR is required")
