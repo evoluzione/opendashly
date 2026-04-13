@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"strings"
 	"sync"
 	"time"
 
@@ -69,29 +70,36 @@ func (s *Service) GetDashboard(ctx context.Context, req DashboardRequest) (*Dash
 		req.From.Format(time.RFC3339), req.To.Format(time.RFC3339), req.ServiceName)
 
 	var (
-		latencyDist    []LatencyBucket
-		slowest        []EndpointLatency
-		errorHotspots  []ErrorHotspot
-		latencySeries  []LatencyPercentilePoint
+		latencyDist     []LatencyBucket
+		slowest         []EndpointLatency
+		errorHotspots   []ErrorHotspot
+		latencySeries   []LatencyPercentilePoint
 		errorRateSeries []ErrorRatePoint
-		statusCodes    []StatusCodeBreakdown
-		topEndpoints   []EndpointThroughput
-		apdex          ApdexScore
-		throughput     ThroughputSummary
-		timeSeries     []ThroughputPoint
-		logVolume      []LogVolumePoint
-		logLevels      []LogLevelCount
-		errorRate      float64
+		statusCodes     []StatusCodeBreakdown
+		topEndpoints    []EndpointThroughput
+		apdex           ApdexScore
+		throughput      ThroughputSummary
+		timeSeries      []ThroughputPoint
+		logVolume       []LogVolumePoint
+		logLevels       []LogLevelCount
+		errorRate       float64
 	)
 
 	g, gctx := errgroup.WithContext(ctx)
-	g.SetLimit(4)
+	g.SetLimit(2)
+
+	warnings := make([]string, 0, 4)
+	var warningsMu sync.Mutex
 
 	g.Go(func() error {
 		var err error
 		latencyDist, err = s.getLatencyDistribution(gctx, req)
 		if err != nil {
 			log.Printf("metrics.service: latency distribution error: %v", err)
+			if isRecoverableDashboardError(err) {
+				appendRecoverableDashboardWarning(&warningsMu, &warnings, "latency distribution", err)
+				return nil
+			}
 			return fmt.Errorf("latency distribution: %w", err)
 		}
 		return nil
@@ -102,6 +110,10 @@ func (s *Service) GetDashboard(ctx context.Context, req DashboardRequest) (*Dash
 		slowest, err = s.getSlowestEndpoints(gctx, req)
 		if err != nil {
 			log.Printf("metrics.service: slowest endpoints error: %v", err)
+			if isRecoverableDashboardError(err) {
+				appendRecoverableDashboardWarning(&warningsMu, &warnings, "slowest endpoints", err)
+				return nil
+			}
 			return fmt.Errorf("slowest endpoints: %w", err)
 		}
 		return nil
@@ -112,6 +124,10 @@ func (s *Service) GetDashboard(ctx context.Context, req DashboardRequest) (*Dash
 		errorHotspots, err = s.getErrorHotspots(gctx, req)
 		if err != nil {
 			log.Printf("metrics.service: error hotspots error: %v", err)
+			if isRecoverableDashboardError(err) {
+				appendRecoverableDashboardWarning(&warningsMu, &warnings, "error hotspots", err)
+				return nil
+			}
 			return fmt.Errorf("error hotspots: %w", err)
 		}
 		return nil
@@ -122,6 +138,10 @@ func (s *Service) GetDashboard(ctx context.Context, req DashboardRequest) (*Dash
 		latencySeries, err = s.getLatencyPercentiles(gctx, req)
 		if err != nil {
 			log.Printf("metrics.service: latency percentiles error: %v", err)
+			if isRecoverableDashboardError(err) {
+				appendRecoverableDashboardWarning(&warningsMu, &warnings, "latency percentiles", err)
+				return nil
+			}
 			return fmt.Errorf("latency percentiles: %w", err)
 		}
 		return nil
@@ -132,6 +152,10 @@ func (s *Service) GetDashboard(ctx context.Context, req DashboardRequest) (*Dash
 		errorRateSeries, err = s.getErrorRateSeries(gctx, req)
 		if err != nil {
 			log.Printf("metrics.service: error rate series error: %v", err)
+			if isRecoverableDashboardError(err) {
+				appendRecoverableDashboardWarning(&warningsMu, &warnings, "error rate series", err)
+				return nil
+			}
 			return fmt.Errorf("error rate series: %w", err)
 		}
 		return nil
@@ -142,6 +166,10 @@ func (s *Service) GetDashboard(ctx context.Context, req DashboardRequest) (*Dash
 		statusCodes, err = s.getStatusCodeBreakdown(gctx, req)
 		if err != nil {
 			log.Printf("metrics.service: status code breakdown error: %v", err)
+			if isRecoverableDashboardError(err) {
+				appendRecoverableDashboardWarning(&warningsMu, &warnings, "status code breakdown", err)
+				return nil
+			}
 			return fmt.Errorf("status code breakdown: %w", err)
 		}
 		return nil
@@ -152,6 +180,10 @@ func (s *Service) GetDashboard(ctx context.Context, req DashboardRequest) (*Dash
 		topEndpoints, err = s.getTopEndpointsThroughput(gctx, req)
 		if err != nil {
 			log.Printf("metrics.service: top endpoints error: %v", err)
+			if isRecoverableDashboardError(err) {
+				appendRecoverableDashboardWarning(&warningsMu, &warnings, "top endpoints", err)
+				return nil
+			}
 			return fmt.Errorf("top endpoints: %w", err)
 		}
 		return nil
@@ -162,6 +194,10 @@ func (s *Service) GetDashboard(ctx context.Context, req DashboardRequest) (*Dash
 		apdex, err = s.getApdexScore(gctx, req)
 		if err != nil {
 			log.Printf("metrics.service: apdex score error: %v", err)
+			if isRecoverableDashboardError(err) {
+				appendRecoverableDashboardWarning(&warningsMu, &warnings, "apdex score", err)
+				return nil
+			}
 			return fmt.Errorf("apdex score: %w", err)
 		}
 		return nil
@@ -172,6 +208,10 @@ func (s *Service) GetDashboard(ctx context.Context, req DashboardRequest) (*Dash
 		throughput, timeSeries, err = s.getThroughput(gctx, req)
 		if err != nil {
 			log.Printf("metrics.service: throughput error: %v", err)
+			if isRecoverableDashboardError(err) {
+				appendRecoverableDashboardWarning(&warningsMu, &warnings, "throughput", err)
+				return nil
+			}
 			return fmt.Errorf("throughput: %w", err)
 		}
 		return nil
@@ -182,6 +222,10 @@ func (s *Service) GetDashboard(ctx context.Context, req DashboardRequest) (*Dash
 		logVolume, err = s.getLogVolume(gctx, req)
 		if err != nil {
 			log.Printf("metrics.service: log volume error: %v", err)
+			if isRecoverableDashboardError(err) {
+				appendRecoverableDashboardWarning(&warningsMu, &warnings, "log volume", err)
+				return nil
+			}
 			return fmt.Errorf("log volume: %w", err)
 		}
 		return nil
@@ -192,6 +236,10 @@ func (s *Service) GetDashboard(ctx context.Context, req DashboardRequest) (*Dash
 		logLevels, err = s.getLogLevels(gctx, req)
 		if err != nil {
 			log.Printf("metrics.service: log levels error: %v", err)
+			if isRecoverableDashboardError(err) {
+				appendRecoverableDashboardWarning(&warningsMu, &warnings, "log levels", err)
+				return nil
+			}
 			return fmt.Errorf("log levels: %w", err)
 		}
 		return nil
@@ -202,6 +250,10 @@ func (s *Service) GetDashboard(ctx context.Context, req DashboardRequest) (*Dash
 		errorRate, err = s.getErrorRate(gctx, req)
 		if err != nil {
 			log.Printf("metrics.service: error rate error: %v", err)
+			if isRecoverableDashboardError(err) {
+				appendRecoverableDashboardWarning(&warningsMu, &warnings, "error rate", err)
+				return nil
+			}
 			return fmt.Errorf("error rate: %w", err)
 		}
 		return nil
@@ -231,10 +283,41 @@ func (s *Service) GetDashboard(ctx context.Context, req DashboardRequest) (*Dash
 			VolumeSeries: logVolume,
 			Levels:       logLevels,
 		},
+		Warnings: warnings,
 	}
 
 	s.getCache().set(req, result)
 	return result, nil
+}
+
+func appendRecoverableDashboardWarning(mu *sync.Mutex, warnings *[]string, section string, err error) {
+	if err == nil {
+		return
+	}
+	mu.Lock()
+	*warnings = append(*warnings, fmt.Sprintf("%s unavailable: %v", section, err))
+	mu.Unlock()
+}
+
+func isRecoverableDashboardError(err error) bool {
+	if err == nil {
+		return false
+	}
+	lower := strings.ToLower(err.Error())
+	patterns := []string{
+		"memory limit exceeded",
+		"overcommittracker",
+		"timeout",
+		"deadline exceeded",
+		"temporarily unavailable",
+		"context canceled",
+	}
+	for _, pattern := range patterns {
+		if strings.Contains(lower, pattern) {
+			return true
+		}
+	}
+	return false
 }
 
 func (s *Service) getLatencyDistribution(ctx context.Context, req DashboardRequest) ([]LatencyBucket, error) {

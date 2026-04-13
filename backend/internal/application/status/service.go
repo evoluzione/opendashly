@@ -152,12 +152,18 @@ func fetchSeries(ctx context.Context, store *storage.Client, query string, ancho
 }
 
 const logsCountsQuery = `
+	WITH (
+		SELECT toUInt64(ifNull(sum(rows), 0))
+		FROM system.parts
+		WHERE active AND database = 'telemetry' AND table = 'otel_logs'
+	) AS total_rows
 	SELECT
-		count() AS total,
+		total_rows AS total,
 		countIf(Timestamp >= now() - INTERVAL 5 MINUTE) AS last5m,
 		countIf(Timestamp >= now() - INTERVAL 10 MINUTE) AS last10m,
-		countIf(Timestamp >= now() - INTERVAL 60 MINUTE) AS last60m
+		count() AS last60m
 	FROM telemetry.otel_logs
+	WHERE Timestamp >= now() - INTERVAL 60 MINUTE
 `
 
 const tracesCountsQuery = `

@@ -14,6 +14,9 @@
   <profiles>
     <default>
       <max_memory_usage>209715200</max_memory_usage>
+      <max_bytes_before_external_group_by>67108864</max_bytes_before_external_group_by>
+      <max_bytes_before_external_sort>67108864</max_bytes_before_external_sort>
+      <max_temporary_data_on_disk_size_for_query>1073741824</max_temporary_data_on_disk_size_for_query>
       <max_execution_time>8</max_execution_time>
     </default>
   </profiles>

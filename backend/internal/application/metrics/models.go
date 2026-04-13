@@ -138,4 +138,5 @@ type DashboardResponse struct {
 	Hotspots     HotspotsData     `json:"hotspots"`
 	Satisfaction SatisfactionData `json:"satisfaction"`
 	Logs         LogsData         `json:"logs"`
+	Warnings     []string         `json:"warnings,omitempty"`
 }

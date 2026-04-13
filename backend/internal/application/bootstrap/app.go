@@ -32,15 +32,18 @@ func Build(ctx context.Context) (*App, error) {
 	}
 
 	client, err := storage.NewClientWithOptions(ctx, storage.ClientOptions{
-		DSN:                 cfg.ClickHouseAddr,
-		User:                cfg.ClickHouseUser,
-		Password:            cfg.ClickHousePassword,
-		MaxOpenConns:        cfg.ClickHouseMaxOpenConns,
-		MaxIdleConns:        cfg.ClickHouseMaxIdleConns,
-		DialTimeout:         time.Duration(cfg.ClickHouseDialTimeout) * time.Second,
-		ReadTimeout:         time.Duration(cfg.ClickHouseReadTimeout) * time.Second,
-		MaxMemoryUsageBytes: cfg.ClickHouseMaxMemoryMiB * 1024 * 1024,
-		MaxExecutionTimeSec: cfg.ClickHouseMaxExecSec,
+		DSN:                           cfg.ClickHouseAddr,
+		User:                          cfg.ClickHouseUser,
+		Password:                      cfg.ClickHousePassword,
+		MaxOpenConns:                  cfg.ClickHouseMaxOpenConns,
+		MaxIdleConns:                  cfg.ClickHouseMaxIdleConns,
+		DialTimeout:                   time.Duration(cfg.ClickHouseDialTimeout) * time.Second,
+		ReadTimeout:                   time.Duration(cfg.ClickHouseReadTimeout) * time.Second,
+		MaxMemoryUsageBytes:           cfg.ClickHouseMaxMemoryMiB * 1024 * 1024,
+		MaxBytesBeforeExternalGroupBy: cfg.ClickHouseExternalGroupByMiB * 1024 * 1024,
+		MaxBytesBeforeExternalSort:    cfg.ClickHouseExternalSortMiB * 1024 * 1024,
+		MaxTempDataOnDiskBytes:        cfg.ClickHouseTempDiskMiB * 1024 * 1024,
+		MaxExecutionTimeSec:           cfg.ClickHouseMaxExecSec,
 	})
 	if err != nil {
 		return nil, err

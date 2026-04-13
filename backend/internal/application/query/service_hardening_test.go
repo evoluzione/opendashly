@@ -47,7 +47,13 @@ func TestDetermineQueryRunStatus(t *testing.T) {
 			wantStatus: "partial",
 		},
 		{
-			name:        "error when all requested fail",
+			name:       "partial when all requested fail with recoverable errors",
+			signals:    map[string]bool{"logs": true, "traces": false, "metrics": true},
+			errors:     map[string]string{"logs": "timeout", "metrics": "memory limit exceeded"},
+			wantStatus: "partial",
+		},
+		{
+			name:        "error when all requested fail with non recoverable errors",
 			signals:     map[string]bool{"logs": true, "traces": false, "metrics": true},
 			errors:      map[string]string{"logs": "timeout", "metrics": "down"},
 			wantErrLike: "all requested signals failed",

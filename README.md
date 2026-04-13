@@ -203,6 +203,9 @@ Small profile overrides (1 vCPU / 2 GB):
 ```bash
 SERVICE_LIST_TIMEOUT_SECONDS=25
 CLICKHOUSE_MAX_MEMORY_MIB=96
+CLICKHOUSE_MAX_BYTES_BEFORE_EXTERNAL_GROUP_BY_MIB=24
+CLICKHOUSE_MAX_BYTES_BEFORE_EXTERNAL_SORT_MIB=24
+CLICKHOUSE_MAX_TEMP_DATA_ON_DISK_MIB=512
 CLICKHOUSE_MAX_EXECUTION_TIME_SECONDS=25
 CLICKHOUSE_MAX_OPEN_CONNS=2
 CLICKHOUSE_MAX_IDLE_CONNS=1
@@ -229,6 +232,9 @@ Standard profile overrides (2 vCPU / 4 GB):
 ```bash
 SERVICE_LIST_TIMEOUT_SECONDS=20
 CLICKHOUSE_MAX_MEMORY_MIB=160
+CLICKHOUSE_MAX_BYTES_BEFORE_EXTERNAL_GROUP_BY_MIB=48
+CLICKHOUSE_MAX_BYTES_BEFORE_EXTERNAL_SORT_MIB=48
+CLICKHOUSE_MAX_TEMP_DATA_ON_DISK_MIB=768
 CLICKHOUSE_MAX_EXECUTION_TIME_SECONDS=20
 CLICKHOUSE_MAX_OPEN_CONNS=4
 CLICKHOUSE_MAX_IDLE_CONNS=2
@@ -255,6 +261,9 @@ Big profile overrides (4 vCPU / 8 GB):
 ```bash
 SERVICE_LIST_TIMEOUT_SECONDS=15
 CLICKHOUSE_MAX_MEMORY_MIB=256
+CLICKHOUSE_MAX_BYTES_BEFORE_EXTERNAL_GROUP_BY_MIB=64
+CLICKHOUSE_MAX_BYTES_BEFORE_EXTERNAL_SORT_MIB=64
+CLICKHOUSE_MAX_TEMP_DATA_ON_DISK_MIB=1024
 CLICKHOUSE_MAX_EXECUTION_TIME_SECONDS=15
 CLICKHOUSE_MAX_OPEN_CONNS=8
 CLICKHOUSE_MAX_IDLE_CONNS=4
@@ -277,6 +286,12 @@ CLICKHOUSE_MEMSWAP_LIMIT=1536m
 ```
 
 If you observe `sending queue is full` in collector logs, increase queue size and collector memory first. If you observe ClickHouse OOM or mutation backlog, increase ClickHouse memory and/or reduce cleanup frequency.
+
+Under memory pressure or timeouts, Opendashly now degrades gracefully for query-heavy endpoints:
+- ad-hoc query execution returns `status: "partial"` with per-signal failures in `signalErrors`
+- dashboard metrics can return partial data with `warnings` instead of failing the whole response
+
+Only non-recoverable failures should produce a full error response.
 
 **3. Start:**
 
