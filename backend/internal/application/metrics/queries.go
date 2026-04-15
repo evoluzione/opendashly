@@ -43,10 +43,7 @@ func serviceFilter(serviceName string) string {
 
 func serverSpanFilter() string {
 	return `
-			AND (
-				upper(toString(SpanKind)) IN ('SERVER', 'SPAN_KIND_SERVER')
-				OR toString(SpanKind) = '2'
-			)`
+			AND SpanKind IN ('SERVER', 'server', 'SPAN_KIND_SERVER', '2')`
 }
 
 func errorStatusClause() string {
@@ -239,9 +236,9 @@ func BuildStatusCodeBreakdownQuery(from, to time.Time, serviceName string) strin
 	return fmt.Sprintf(`
 		SELECT
 			multiIf(
-				toString(StatusCode) IN ('Ok', 'STATUS_CODE_OK', '1'), 'ok',
-				toString(StatusCode) IN ('Error', 'STATUS_CODE_ERROR', '2'), 'error',
-				toString(StatusCode) IN ('Unset', 'STATUS_CODE_UNSET', '0'), 'unset',
+				StatusCode IN ('Ok', 'STATUS_CODE_OK', '1'), 'ok',
+				StatusCode IN ('Error', 'STATUS_CODE_ERROR', '2'), 'error',
+				StatusCode IN ('Unset', 'STATUS_CODE_UNSET', '0'), 'unset',
 				'other'
 			) AS code,
 			count() AS total

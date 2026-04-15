@@ -11,6 +11,7 @@ import {
 type QueryState = {
   loading: boolean;
   error: string | null;
+  warnings: string[];
   result: QueryRunResult | null;
   lastRequest: QueryRequest | null;
   autoRefreshSeconds: number | null;
@@ -29,6 +30,7 @@ type ServiceState = {
 const initial: QueryState = {
   loading: false,
   error: null,
+  warnings: [],
   result: null,
   lastRequest: null,
   autoRefreshSeconds: null,
@@ -103,6 +105,7 @@ export async function executeQuery(
       ...state,
       loading: true,
       error: null,
+      warnings: [],
       result: options.retainResult ? state.result : null,
       lastRequest: request
     }));
@@ -130,15 +133,34 @@ export async function executeQuery(
     ) {
       result = mergeResult(previousResult, response, request);
     }
-    queryState.update((state) => ({ ...state, loading: false, error: null, result, isLiveUpdate: !!options.isBackground }));
+    const warnings =
+      response.signalErrors && Object.keys(response.signalErrors).length > 0
+        ? Object.entries(response.signalErrors).map(([signal, reason]) => `${signal}: ${reason}`)
+        : [];
+
+    queryState.update((state) => ({
+      ...state,
+      loading: false,
+      error: null,
+      warnings,
+      result,
+      isLiveUpdate: !!options.isBackground
+    }));
     scheduleAutoRefresh();
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Errore sconosciuto';
     debugLog('query.execute.error', { message, error: err });
+    const refreshWarning = `refresh failed: ${message}`;
     queryState.update((state) => ({
       ...state,
       loading: false,
       error: message,
+      warnings:
+        (options.retainResult || options.isBackground) &&
+        state.result &&
+        !state.warnings.includes(refreshWarning)
+          ? [...state.warnings, refreshWarning]
+          : state.warnings,
       result: options.retainResult || options.isBackground ? state.result : null
     }));
   }

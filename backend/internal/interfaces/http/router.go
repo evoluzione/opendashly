@@ -2,6 +2,7 @@ package http
 
 import (
 	"net/http"
+	"time"
 
 	"opendashly/backend/internal/application/ai"
 	"opendashly/backend/internal/application/dashboard"
@@ -72,6 +73,11 @@ func NewRouter(cfg RouterConfig) http.Handler {
 }
 
 func buildRouteHandlers(cfg RouterConfig) routeHandlers {
+	dashboardTimeout := 15 * time.Second
+	if cfg.Config != nil && cfg.Config.DashboardRequestTimeoutSec > 0 {
+		dashboardTimeout = time.Duration(cfg.Config.DashboardRequestTimeoutSec) * time.Second
+	}
+
 	return routeHandlers{
 		queryHandler:          &handlers.QueryHandler{Service: cfg.QueryService},
 		traceRelatedHandler:   &handlers.TraceRelatedHandler{Service: cfg.RelatedService},
@@ -85,10 +91,13 @@ func buildRouteHandlers(cfg RouterConfig) routeHandlers {
 			QueryService: cfg.QueryService,
 		},
 		aiAssistantSession: &handlers.AIAssistantSessionHandler{AIService: cfg.AIService},
-		dashboardHandler:   &handlers.DashboardHandler{Service: cfg.DashboardService},
-		aiSettingsHandler:  &handlers.AISettingsHandler{Service: cfg.AIService},
-		attributesHandler:  &handlers.AttributesHandler{Service: cfg.QueryService},
-		dashboardSettings:  &handlers.DashboardSettingsHandler{Service: cfg.DashboardSettings},
+		dashboardHandler: &handlers.DashboardHandler{
+			Service: cfg.DashboardService,
+			Timeout: dashboardTimeout,
+		},
+		aiSettingsHandler: &handlers.AISettingsHandler{Service: cfg.AIService},
+		attributesHandler: &handlers.AttributesHandler{Service: cfg.QueryService},
+		dashboardSettings: &handlers.DashboardSettingsHandler{Service: cfg.DashboardSettings},
 	}
 }
 

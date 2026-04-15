@@ -3,6 +3,7 @@ package handlers
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"log"
 	"net/http"
 	"time"
@@ -13,6 +14,7 @@ import (
 // DashboardHandler handles dashboard metrics requests.
 type DashboardHandler struct {
 	Service *metrics.Service
+	Timeout time.Duration
 }
 
 type dashboardRequest struct {
@@ -66,7 +68,12 @@ func (h *DashboardHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	log.Printf("dashboard.metrics request: from=%s to=%s service=%s",
 		from.Format(time.RFC3339), to.Format(time.RFC3339), req.ServiceName)
 
-	ctx, cancel := context.WithTimeout(r.Context(), 15*time.Second)
+	timeout := h.Timeout
+	if timeout <= 0 {
+		timeout = 15 * time.Second
+	}
+
+	ctx, cancel := context.WithTimeout(r.Context(), timeout)
 	defer cancel()
 
 	result, err := h.Service.GetDashboard(ctx, metrics.DashboardRequest{
@@ -76,7 +83,7 @@ func (h *DashboardHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	})
 	if err != nil {
 		log.Printf("dashboard.metrics failed: %v", err)
-		if ctx.Err() == context.DeadlineExceeded {
+		if errors.Is(ctx.Err(), context.DeadlineExceeded) {
 			http.Error(w, "Gateway timeout", http.StatusGatewayTimeout)
 			return
 		}

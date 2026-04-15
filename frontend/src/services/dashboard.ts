@@ -114,6 +114,7 @@ export interface DashboardResponse {
   hotspots: HotspotsData;
   satisfaction: SatisfactionData;
   logs: LogsData;
+  warnings?: string[];
 }
 
 export interface DashboardRequest {
@@ -123,8 +124,54 @@ export interface DashboardRequest {
 }
 
 export async function fetchDashboardMetrics(request: DashboardRequest): Promise<DashboardResponse> {
-  return apiRequest<DashboardResponse>('/api/dashboard/metrics', {
+  const payload = await apiRequest<DashboardResponse>('/api/dashboard/metrics', {
     method: 'POST',
     body: JSON.stringify(buildDashboardMetricsPayload(request))
   });
+  return normalizeDashboardResponse(payload);
+}
+
+function normalizeDashboardResponse(payload: DashboardResponse | null | undefined): DashboardResponse {
+  const safeHotspots = payload?.hotspots ?? ({} as HotspotsData);
+  const safeSatisfaction = payload?.satisfaction ?? ({} as SatisfactionData);
+  const safeLogs = payload?.logs ?? ({} as LogsData);
+
+  return {
+    hotspots: {
+      latencyDistribution: normalizeArray(safeHotspots.latencyDistribution),
+      slowestEndpoints: normalizeArray(safeHotspots.slowestEndpoints),
+      errorHotspots: normalizeArray(safeHotspots.errorHotspots),
+      topEndpoints: normalizeArray(safeHotspots.topEndpoints),
+      statusCodes: normalizeArray(safeHotspots.statusCodes)
+    },
+    satisfaction: {
+      apdex: safeSatisfaction.apdex ?? {
+        score: 0,
+        satisfied: 0,
+        tolerating: 0,
+        frustrated: 0,
+        total: 0,
+        threshold: 2000
+      },
+      errorRate: safeSatisfaction.errorRate ?? 0,
+      throughput: safeSatisfaction.throughput ?? {
+        totalRequests: 0,
+        totalErrors: 0,
+        requestsPerMin: 0,
+        errorsPerMin: 0
+      },
+      timeSeries: normalizeArray(safeSatisfaction.timeSeries),
+      latencySeries: normalizeArray(safeSatisfaction.latencySeries),
+      errorRateSeries: normalizeArray(safeSatisfaction.errorRateSeries)
+    },
+    logs: {
+      volumeSeries: normalizeArray(safeLogs.volumeSeries),
+      levels: normalizeArray(safeLogs.levels)
+    },
+    warnings: normalizeArray(payload?.warnings)
+  };
+}
+
+function normalizeArray<T>(value: T[] | null | undefined): T[] {
+  return Array.isArray(value) ? value : [];
 }

@@ -553,11 +553,13 @@
 
     <div class="results" class:dashboard-results={activeTab === "metriche"}>
       {#if activeTab === "metriche"}
-        {#if $dashboardState.error}
-          <div class="status error">{$dashboardState.error}</div>
-        {:else if $dashboardState.loading && !$dashboardState.data}
-          <div class="status">{t($locale, "home.loadingDashboard")}</div>
-        {:else if $dashboardState.data}
+        {#if $dashboardState.data}
+          {#if $dashboardState.warnings.length > 0}
+            <div class="inline-warning">{$dashboardState.warnings.join(" · ")}</div>
+          {/if}
+          {#if $dashboardState.error}
+            <div class="inline-warning">{$dashboardState.error}</div>
+          {/if}
           <div class="dashboard-grid">
             {#each getOrderedChartSettings() as chartSetting}
               {#if chartSetting.enabled}
@@ -702,18 +704,30 @@
               {/if}
             {/each}
           </div>
+        {:else if $dashboardState.loading && !$dashboardState.data}
+          <div class="status">{t($locale, "home.loadingDashboard")}</div>
+        {:else if $dashboardState.error}
+          <div class="status error">{$dashboardState.error}</div>
         {:else}
           <div class="status">{t($locale, "home.loadingMetrics")}</div>
         {/if}
-      {:else if $queryState.error}
-        <div class="status error">{$queryState.error}</div>
       {:else if !$queryState.result}
-        <div class="status">
-          {$queryState.loading
-            ? t($locale, "home.loadingResults")
-            : t($locale, "home.startQuery")}
-        </div>
+        {#if $queryState.error}
+          <div class="status error">{$queryState.error}</div>
+        {:else}
+          <div class="status">
+            {$queryState.loading
+              ? t($locale, "home.loadingResults")
+              : t($locale, "home.startQuery")}
+          </div>
+        {/if}
       {:else}
+        {#if $queryState.warnings.length > 0}
+          <div class="inline-warning">{$queryState.warnings.join(" · ")}</div>
+        {/if}
+        {#if $queryState.error}
+          <div class="inline-warning">{$queryState.error}</div>
+        {/if}
         {#if $queryState.loading}
           <div class="status">{t($locale, "home.updating")}</div>
         {/if}
@@ -962,6 +976,17 @@
     background: rgba(239, 68, 68, 0.05);
     border-radius: 12px;
     padding: 16px;
+  }
+
+  .inline-warning {
+    margin-bottom: 12px;
+    padding: 10px 12px;
+    border: 1px solid rgba(245, 158, 11, 0.35);
+    background: rgba(245, 158, 11, 0.08);
+    border-radius: 10px;
+    color: #92400e;
+    font-size: 12px;
+    line-height: 1.4;
   }
 
   .metrics-controls {

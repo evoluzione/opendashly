@@ -21,6 +21,10 @@ type Config struct {
 	ClickHouseMaxIdleConns       int
 	ClickHouseDialTimeout        int
 	ClickHouseReadTimeout        int
+	DashboardFreshCacheTTLSec    int
+	DashboardStaleCacheTTLSec    int
+	DashboardRequestTimeoutSec   int
+	DashboardQueryParallelism    int
 	CollectorHealthURL           string
 	ListenAddr                   string
 	AuthMode                     string
@@ -48,6 +52,10 @@ func Load() (*Config, error) {
 		ClickHouseMaxIdleConns:       getEnvInt("CLICKHOUSE_MAX_IDLE_CONNS", 3),
 		ClickHouseDialTimeout:        getEnvInt("CLICKHOUSE_DIAL_TIMEOUT_SECONDS", 5),
 		ClickHouseReadTimeout:        getEnvInt("CLICKHOUSE_READ_TIMEOUT_SECONDS", 10),
+		DashboardFreshCacheTTLSec:    getEnvInt("DASHBOARD_FRESH_CACHE_TTL_SECONDS", 30),
+		DashboardStaleCacheTTLSec:    getEnvInt("DASHBOARD_STALE_CACHE_TTL_SECONDS", 900),
+		DashboardRequestTimeoutSec:   getEnvInt("DASHBOARD_REQUEST_TIMEOUT_SECONDS", 15),
+		DashboardQueryParallelism:    getEnvInt("DASHBOARD_QUERY_PARALLELISM", 2),
 		CollectorHealthURL:           os.Getenv("COLLECTOR_HEALTH_URL"),
 		ListenAddr:                   os.Getenv("API_LISTEN_ADDR"),
 		AuthMode:                     os.Getenv("AUTH_MODE"),
