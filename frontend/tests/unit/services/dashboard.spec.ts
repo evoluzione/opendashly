@@ -49,7 +49,8 @@ describe('dashboard service', () => {
       logs: {
         volumeSeries: [],
         levels: []
-      }
+      },
+      warnings: []
     };
 
     vi.mocked(apiRequest).mockResolvedValue(payload);
@@ -61,5 +62,44 @@ describe('dashboard service', () => {
       method: 'POST',
       body: JSON.stringify(request)
     });
+  });
+
+  it('normalizza il payload quando il backend ritorna array null', async () => {
+    vi.mocked(apiRequest).mockResolvedValue({
+      hotspots: {
+        latencyDistribution: null,
+        slowestEndpoints: null,
+        errorHotspots: null,
+        topEndpoints: null,
+        statusCodes: null
+      },
+      satisfaction: {
+        apdex: null,
+        errorRate: null,
+        throughput: null,
+        timeSeries: null,
+        latencySeries: null,
+        errorRateSeries: null
+      },
+      logs: {
+        volumeSeries: null,
+        levels: null
+      },
+      warnings: null
+    } as any);
+
+    const result = await fetchDashboardMetrics({});
+
+    expect(result.hotspots.latencyDistribution).toEqual([]);
+    expect(result.hotspots.slowestEndpoints).toEqual([]);
+    expect(result.hotspots.errorHotspots).toEqual([]);
+    expect(result.hotspots.topEndpoints).toEqual([]);
+    expect(result.hotspots.statusCodes).toEqual([]);
+    expect(result.satisfaction.timeSeries).toEqual([]);
+    expect(result.satisfaction.latencySeries).toEqual([]);
+    expect(result.satisfaction.errorRateSeries).toEqual([]);
+    expect(result.logs.volumeSeries).toEqual([]);
+    expect(result.logs.levels).toEqual([]);
+    expect(result.warnings).toEqual([]);
   });
 });

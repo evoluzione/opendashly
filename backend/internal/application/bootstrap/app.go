@@ -57,6 +57,9 @@ func Build(ctx context.Context) (*App, error) {
 	traceSpansService := &query.TraceSpansService{Storage: client}
 	statusService := &status.Service{Storage: client, CollectorHealthURL: cfg.CollectorHealthURL}
 	dashboardService := &metrics.Service{Storage: client}
+	dashboardService.FreshCacheTTL = time.Duration(cfg.DashboardFreshCacheTTLSec) * time.Second
+	dashboardService.StaleCacheTTL = time.Duration(cfg.DashboardStaleCacheTTLSec) * time.Second
+	dashboardService.QueryParallelism = cfg.DashboardQueryParallelism
 	savedRepo := query.NewSavedQueryRepo()
 	authRepo := &auth.Repo{Conn: client.Conn}
 	if err := seedDefaultAdmin(ctx, authRepo); err != nil {

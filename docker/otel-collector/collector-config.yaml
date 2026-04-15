@@ -26,6 +26,8 @@ exporters:
       enabled: true
       queue_size: ${env:OTEL_SENDING_QUEUE_SIZE}
       num_consumers: ${env:OTEL_SENDING_QUEUE_CONSUMERS}
+      storage: file_storage
+      blocking: true
     retry_on_failure:
       enabled: true
       initial_interval: ${env:OTEL_RETRY_INITIAL_INTERVAL}
@@ -35,9 +37,12 @@ exporters:
 extensions:
   health_check:
     endpoint: 0.0.0.0:13133
+  file_storage:
+    directory: ${env:OTEL_FILE_STORAGE_DIR}
+    create_directory: true
 
 service:
-  extensions: [health_check]
+  extensions: [health_check, file_storage]
   telemetry:
     logs:
       level: warn

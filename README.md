@@ -214,10 +214,12 @@ CLEANUP_INTERVAL_MINUTES=1440
 
 OTEL_MEMORY_LIMIT_MIB=96
 OTEL_MEMORY_SPIKE_LIMIT_MIB=20
+OTEL_FILE_STORAGE_DIR=/var/lib/otelcol/queue
 OTEL_BATCH_SEND_SIZE=500
-OTEL_BATCH_TIMEOUT=5s
-OTEL_SENDING_QUEUE_SIZE=200
+OTEL_BATCH_TIMEOUT=2s
+OTEL_SENDING_QUEUE_SIZE=5000
 OTEL_SENDING_QUEUE_CONSUMERS=1
+OTEL_RETRY_MAX_ELAPSED_TIME=0
 
 APP_MEM_LIMIT=320m
 APP_MEMSWAP_LIMIT=320m
@@ -243,10 +245,12 @@ CLEANUP_INTERVAL_MINUTES=720
 
 OTEL_MEMORY_LIMIT_MIB=170
 OTEL_MEMORY_SPIKE_LIMIT_MIB=35
-OTEL_BATCH_SEND_SIZE=1000
-OTEL_BATCH_TIMEOUT=3s
-OTEL_SENDING_QUEUE_SIZE=500
-OTEL_SENDING_QUEUE_CONSUMERS=2
+OTEL_FILE_STORAGE_DIR=/var/lib/otelcol/queue
+OTEL_BATCH_SEND_SIZE=500
+OTEL_BATCH_TIMEOUT=2s
+OTEL_SENDING_QUEUE_SIZE=5000
+OTEL_SENDING_QUEUE_CONSUMERS=1
+OTEL_RETRY_MAX_ELAPSED_TIME=0
 
 APP_MEM_LIMIT=512m
 APP_MEMSWAP_LIMIT=512m
@@ -272,10 +276,12 @@ CLEANUP_INTERVAL_MINUTES=360
 
 OTEL_MEMORY_LIMIT_MIB=300
 OTEL_MEMORY_SPIKE_LIMIT_MIB=60
-OTEL_BATCH_SEND_SIZE=2000
+OTEL_FILE_STORAGE_DIR=/var/lib/otelcol/queue
+OTEL_BATCH_SEND_SIZE=500
 OTEL_BATCH_TIMEOUT=2s
-OTEL_SENDING_QUEUE_SIZE=2000
-OTEL_SENDING_QUEUE_CONSUMERS=4
+OTEL_SENDING_QUEUE_SIZE=5000
+OTEL_SENDING_QUEUE_CONSUMERS=1
+OTEL_RETRY_MAX_ELAPSED_TIME=0
 
 APP_MEM_LIMIT=768m
 APP_MEMSWAP_LIMIT=768m
@@ -285,13 +291,22 @@ CLICKHOUSE_MEM_LIMIT=1536m
 CLICKHOUSE_MEMSWAP_LIMIT=1536m
 ```
 
-If you observe `sending queue is full` in collector logs, increase queue size and collector memory first. If you observe ClickHouse OOM or mutation backlog, increase ClickHouse memory and/or reduce cleanup frequency.
+`otel-collector` now uses persistent queue storage (`file_storage`) and `blocking: true`, so under pressure it applies backpressure instead of dropping data aggressively. If backlog remains high for a long period, tune queue size first, then collector/ClickHouse resources.
 
 Under memory pressure or timeouts, Opendashly now degrades gracefully for query-heavy endpoints:
 - ad-hoc query execution returns `status: "partial"` with per-signal failures in `signalErrors`
 - dashboard metrics can return partial data with `warnings` instead of failing the whole response
 
 Only non-recoverable failures should produce a full error response.
+
+Dashboard hardening env (same for all profiles):
+
+```bash
+DASHBOARD_FRESH_CACHE_TTL_SECONDS=30
+DASHBOARD_STALE_CACHE_TTL_SECONDS=900
+DASHBOARD_REQUEST_TIMEOUT_SECONDS=15
+DASHBOARD_QUERY_PARALLELISM=2
+```
 
 **3. Start:**
 

@@ -6,6 +6,7 @@ import { buildRollingDashboardRequest } from './dashboard.domain';
 type DashboardState = {
   loading: boolean;
   error: string | null;
+  warnings: string[];
   data: DashboardResponse | null;
   lastRequest: DashboardRequest | null;
   autoRefreshSeconds: number | null;
@@ -15,6 +16,7 @@ type DashboardState = {
 const initial: DashboardState = {
   loading: false,
   error: null,
+  warnings: [],
   data: null,
   lastRequest: null,
   autoRefreshSeconds: null,
@@ -60,15 +62,21 @@ export async function loadDashboard(request: DashboardRequest) {
       ...state,
       loading: false,
       error: null,
+      warnings: response.warnings ?? [],
       data: response
     }));
     scheduleAutoRefresh();
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Errore sconosciuto';
+    const refreshWarning = `refresh failed: ${message}`;
     dashboardState.update((state) => ({
       ...state,
       loading: false,
-      error: message
+      error: message,
+      warnings:
+        state.data && !state.warnings.includes(refreshWarning)
+          ? [...state.warnings, refreshWarning]
+          : state.warnings
     }));
   }
 }
