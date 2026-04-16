@@ -25,11 +25,7 @@
     <div class="login-left-inner">
       <div class="branding">
         <div class="logo">
-          <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M12 2L2 7l10 5 10-5-10-5z"/>
-            <path d="M2 17l10 5 10-5"/>
-            <path d="M2 12l10 5 10-5"/>
-          </svg>
+          <img src="/sidebar-mark.svg" alt="OpenDashly" />
         </div>
         <div class="brand-text">
           <h1>Opendashly</h1>
@@ -141,13 +137,16 @@
   .logo {
     width: 56px;
     height: 56px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    background: linear-gradient(135deg, var(--color-primary-600) 0%, var(--color-primary-500) 100%);
     border-radius: 16px;
-    color: white;
     box-shadow: 0 8px 24px rgba(var(--rgb-primary-600), 0.4);
+    overflow: hidden;
+  }
+
+  .logo img {
+    width: 100%;
+    height: 100%;
+    display: block;
+    object-fit: cover;
   }
 
   .brand-text h1 {

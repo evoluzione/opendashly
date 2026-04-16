@@ -14,18 +14,7 @@
 <aside class="sidebar">
   <div class="brand">
     <div class="logo">
-      <svg
-        width="20"
-        height="20"
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="currentColor"
-        stroke-width="2"
-      >
-        <path d="M12 2L2 7l10 5 10-5-10-5z" />
-        <path d="M2 17l10 5 10-5" />
-        <path d="M2 12l10 5 10-5" />
-      </svg>
+      <img src="/sidebar-mark.svg" alt="OpenDashly" />
     </div>
     <div class="brand-text">
       <span class="name">Opendashly</span>
@@ -185,12 +174,19 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    width: 42px;
-    height: 42px;
-    border-radius: 12px;
-    background: linear-gradient(135deg, var(--color-primary-600) 0%, var(--color-primary-500) 100%);
-    color: white;
-    box-shadow: 0 4px 12px rgba(var(--rgb-primary-600), 0.4);
+    width: 56px;
+    height: 56px;
+    border-radius: 16px;
+    box-shadow: 0 8px 24px rgba(var(--rgb-primary-600), 0.4);
+    overflow: hidden;
+    background: transparent;
+  }
+
+  .logo img {
+    width: 100%;
+    height: 100%;
+    display: block;
+    object-fit: cover;
   }
 
   .brand-text {
@@ -206,10 +202,10 @@
   }
 
   .tagline {
-    font-size: 11px;
+    font-size: 13px;
     color: var(--color-slate-500);
     text-transform: uppercase;
-    letter-spacing: 0.08em;
+    letter-spacing: 0.1em;
   }
 
   .nav-section {

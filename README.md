@@ -1,19 +1,16 @@
 <div align="center">
 
-<table>
-  <tr>
-    <td align="right" valign="middle">
-      <picture>
-        <source media="(prefers-color-scheme: dark)" srcset="assets/opendashly-mark-dark.svg" />
-        <source media="(prefers-color-scheme: light)" srcset="assets/opendashly-mark-light.svg" />
-        <img src="assets/opendashly-mark-light.svg" alt="OpenDashly logo" width="72" />
-      </picture>
-    </td>
-    <td align="left" valign="middle">
-      <p><strong><span style="font-size: 2.2em;">Opendashly</span></strong></p>
-    </td>
-  </tr>
-</table>
+<div style="display: inline-flex; align-items: center; gap: 24px; text-align: left;">
+  <picture style="flex: 0 0 auto; display: block; line-height: 0;">
+    <source media="(prefers-color-scheme: dark)" srcset="assets/opendashly-mark-dark.svg" />
+    <source media="(prefers-color-scheme: light)" srcset="assets/opendashly-mark-light.svg" />
+    <img src="assets/opendashly-mark-light.svg" alt="OpenDashly logo" width="96" height="96" style="display: block;" />
+  </picture>
+  <div style="display: flex; flex-direction: column; justify-content: center; line-height: 1; transform: translateY(-2px);">
+    <strong style="font-size: 2.45em; line-height: 0.95; letter-spacing: -0.03em; color: #f8fafc;">Opendashly</strong>
+    <span style="margin-top: 8px; font-size: 1em; letter-spacing: 0.12em; text-transform: uppercase; color: #64748b; line-height: 1;">Dashboard</span>
+  </div>
+</div>
 
 **Complete observability for OpenTelemetry-instrumented services — logs, traces, and metrics in one self-hosted platform.**
 
