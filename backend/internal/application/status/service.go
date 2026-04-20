@@ -167,34 +167,46 @@ const logsCountsQuery = `
 `
 
 const tracesCountsQuery = `
+	WITH (
+		SELECT toUInt64(ifNull(sum(rows), 0))
+		FROM system.parts
+		WHERE active AND database = 'telemetry' AND table = 'otel_traces'
+	) AS total_rows
 	SELECT
-		uniqExact(TraceId) AS total,
-		uniqExactIf(TraceId, Timestamp >= now() - INTERVAL 5 MINUTE) AS last5m,
-		uniqExactIf(TraceId, Timestamp >= now() - INTERVAL 10 MINUTE) AS last10m,
-		uniqExactIf(TraceId, Timestamp >= now() - INTERVAL 60 MINUTE) AS last60m
+		total_rows AS total,
+		uniqIf(TraceId, Timestamp >= now() - INTERVAL 5 MINUTE) AS last5m,
+		uniqIf(TraceId, Timestamp >= now() - INTERVAL 10 MINUTE) AS last10m,
+		uniq(TraceId) AS last60m
 	FROM telemetry.otel_traces
+	WHERE Timestamp >= now() - INTERVAL 60 MINUTE
 `
 
 const metricsCountsQuery = `
+	WITH (
+		SELECT toUInt64(ifNull(sum(rows), 0))
+		FROM system.parts
+		WHERE active AND database = 'telemetry'
+		  AND table IN ('otel_metrics_sum', 'otel_metrics_gauge')
+	) AS total_rows
 	SELECT
-		sum(total) AS total,
+		total_rows AS total,
 		sum(last5m) AS last5m,
 		sum(last10m) AS last10m,
 		sum(last60m) AS last60m
 	FROM (
 		SELECT
-			count() AS total,
 			countIf(TimeUnix >= now() - INTERVAL 5 MINUTE) AS last5m,
 			countIf(TimeUnix >= now() - INTERVAL 10 MINUTE) AS last10m,
-			countIf(TimeUnix >= now() - INTERVAL 60 MINUTE) AS last60m
+			count() AS last60m
 		FROM telemetry.otel_metrics_sum
+		WHERE TimeUnix >= now() - INTERVAL 60 MINUTE
 		UNION ALL
 		SELECT
-			count() AS total,
 			countIf(TimeUnix >= now() - INTERVAL 5 MINUTE) AS last5m,
 			countIf(TimeUnix >= now() - INTERVAL 10 MINUTE) AS last10m,
-			countIf(TimeUnix >= now() - INTERVAL 60 MINUTE) AS last60m
+			count() AS last60m
 		FROM telemetry.otel_metrics_gauge
+		WHERE TimeUnix >= now() - INTERVAL 60 MINUTE
 	)
 `
 
