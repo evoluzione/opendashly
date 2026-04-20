@@ -55,6 +55,8 @@ func BuildMetricsCountQuery(filters map[string]string, filterList []FilterItem, 
 		gaugeQuery += where
 	}
 	// We count distinct series (Name + Unit) using approximate aggregate for better performance on large datasets.
-	query := "SELECT uniqCombined64(tuple(MetricName, MetricUnit)) FROM (" + sumQuery + " UNION ALL " + gaugeQuery + ")"
+	// Pass MetricName and MetricUnit as separate arguments to uniqCombined64 instead of wrapping them in tuple():
+	// the tuple form materializes a Tuple(String, String) per row, blowing up memory on multi-day windows.
+	query := "SELECT uniqCombined64(MetricName, MetricUnit) FROM (" + sumQuery + " UNION ALL " + gaugeQuery + ")"
 	return query
 }

@@ -14,8 +14,13 @@ type LogsPageCursor struct {
 }
 
 // BuildLogsQuery creates a ClickHouse SQL statement for logs.
+//
+// Two-step pattern: an inner top-N subquery selects only the PK columns
+// (Timestamp, TraceId, SpanId) needed for sorting + pagination, then the outer
+// query materializes the wide Map columns (ResourceAttributes, LogAttributes)
+// only for those N rows. This avoids OOM on multi-day windows where reading
+// the wide columns across the full filtered set exceeds ClickHouse memory.
 func BuildLogsQuery(filters map[string]string, filterList []FilterItem, from, to time.Time, limit, offset int, cursor *LogsPageCursor) string {
-	base := "SELECT Timestamp AS timestamp, SeverityText AS severity, Body AS body, TraceId AS traceId, SpanId AS spanId, ResourceAttributes AS resourceAttributes, LogAttributes AS logAttributes FROM telemetry.otel_logs"
 	filteredForLogs := filterListForSignal("logs", filterList)
 	bodySearch, effectiveFilterList := extractLogsBodySearch(filteredForLogs)
 	clauses := buildOtelClauses("Timestamp", filters, effectiveFilterList, from, to, "ServiceName", "TraceId", "SeverityText", []string{"ResourceAttributes", "LogAttributes"})
@@ -30,17 +35,37 @@ func BuildLogsQuery(filters map[string]string, filterList []FilterItem, from, to
 		spanID := EscapeLiteral(cursor.SpanID)
 		clauses = append(clauses, fmt.Sprintf("(Timestamp < %s OR (Timestamp = %s AND TraceId < '%s') OR (Timestamp = %s AND TraceId = '%s' AND SpanId < '%s'))", ts, ts, traceID, ts, traceID, spanID))
 	}
-	query := base
+
+	whereClause := ""
 	if len(clauses) > 0 {
-		query += " WHERE " + strings.Join(clauses, " AND ")
+		whereClause = " WHERE " + strings.Join(clauses, " AND ")
 	}
+
+	if limit <= 0 {
+		// No pagination: keep the legacy single-pass shape.
+		query := "SELECT Timestamp AS timestamp, SeverityText AS severity, Body AS body, TraceId AS traceId, SpanId AS spanId, ResourceAttributes AS resourceAttributes, LogAttributes AS logAttributes FROM telemetry.otel_logs"
+		query += whereClause
+		query += " ORDER BY Timestamp DESC, TraceId DESC, SpanId DESC"
+		return query
+	}
+
+	inner := "SELECT Timestamp, TraceId, SpanId FROM telemetry.otel_logs"
+	inner += whereClause
+	inner += " ORDER BY Timestamp DESC, TraceId DESC, SpanId DESC"
+	inner += " LIMIT " + strconv.Itoa(limit)
+	if offset > 0 && cursor == nil {
+		inner += " OFFSET " + strconv.Itoa(offset)
+	}
+
+	query := "SELECT Timestamp AS timestamp, SeverityText AS severity, Body AS body, TraceId AS traceId, SpanId AS spanId, ResourceAttributes AS resourceAttributes, LogAttributes AS logAttributes FROM telemetry.otel_logs"
+	query += whereClause
+	if whereClause == "" {
+		query += " WHERE "
+	} else {
+		query += " AND "
+	}
+	query += "(Timestamp, TraceId, SpanId) IN (" + inner + ")"
 	query += " ORDER BY Timestamp DESC, TraceId DESC, SpanId DESC"
-	if limit > 0 {
-		query += " LIMIT " + strconv.Itoa(limit)
-		if offset > 0 && cursor == nil {
-			query += " OFFSET " + strconv.Itoa(offset)
-		}
-	}
 	return query
 }
 
