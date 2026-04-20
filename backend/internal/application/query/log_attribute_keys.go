@@ -23,11 +23,15 @@ var defaultLogAttributeSeed = []string{
 func buildLogAttributeKeysQuery(search string) string {
 	query := "SELECT DISTINCT key FROM (" +
 		"SELECT arrayJoin(mapKeys(ResourceAttributes)) AS key FROM (" +
-		"SELECT ResourceAttributes FROM telemetry.otel_logs ORDER BY Timestamp DESC LIMIT 5000" +
+		"SELECT ResourceAttributes FROM telemetry.otel_logs " +
+		"WHERE Timestamp >= now() - INTERVAL 24 HOUR " +
+		"ORDER BY Timestamp DESC LIMIT 5000" +
 		") " +
 		"UNION ALL " +
 		"SELECT arrayJoin(mapKeys(LogAttributes)) AS key FROM (" +
-		"SELECT LogAttributes FROM telemetry.otel_logs ORDER BY Timestamp DESC LIMIT 5000" +
+		"SELECT LogAttributes FROM telemetry.otel_logs " +
+		"WHERE Timestamp >= now() - INTERVAL 24 HOUR " +
+		"ORDER BY Timestamp DESC LIMIT 5000" +
 		") " +
 		"UNION ALL SELECT 'service.name' AS key " +
 		"UNION ALL SELECT 'severity' AS key " +

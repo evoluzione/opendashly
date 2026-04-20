@@ -7,7 +7,7 @@ import (
 )
 
 const (
-	servicesCacheTTL   = 5 * time.Minute
+	servicesCacheTTL   = 30 * time.Minute
 	attributesCacheTTL = 5 * time.Minute
 )
 
