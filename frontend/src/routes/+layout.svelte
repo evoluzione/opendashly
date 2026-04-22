@@ -5,6 +5,7 @@
   import { get } from 'svelte/store';
   import { goto } from '$app/navigation';
   import { authState, loadSession } from '../lib/stores/auth';
+  import { workspaceState, loadWorkspace } from '../lib/stores/workspace';
   import { initializeLocale, locale, t } from '$lib/i18n';
   import AIAssistantWidget from '../components/AIAssistantWidget.svelte';
 
@@ -13,6 +14,7 @@
   onMount(() => {
     initializeLocale();
     void loadSession();
+    void loadWorkspace();
   });
 
   onMount(() => {
@@ -29,11 +31,28 @@
     });
     return () => unsubscribe();
   });
-  
+
   $: currentPath = $page.url.pathname;
   $: isPublicRoute = publicRoutes.includes(currentPath) || currentPath === '/first-login';
   $: showContent = !$authState.loading && ($authState.user || isPublicRoute);
+
+  function sectionLabel(path: string, loc: typeof $locale): string {
+    if (path.startsWith('/settings')) return t(loc, 'settings.title');
+    if (path.startsWith('/admin')) return t(loc, 'sidebar.administration');
+    if (path.startsWith('/query')) return t(loc, 'sidebar.logs');
+    if (path.startsWith('/traces')) return t(loc, 'sidebar.traces');
+    if (path.startsWith('/assistant-ai')) return t(loc, 'assistant.title');
+    if (path === '/') return t(loc, 'common.dashboard');
+    return '';
+  }
+
+  $: section = sectionLabel(currentPath, $locale);
+  $: pageTitle = section ? `${$workspaceState.title} – ${section}` : $workspaceState.title;
 </script>
+
+<svelte:head>
+  <title>{pageTitle}</title>
+</svelte:head>
 
 {#if $authState.loading && !isPublicRoute}
   <div class="loading-screen">

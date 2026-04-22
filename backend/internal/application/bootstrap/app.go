@@ -12,6 +12,7 @@ import (
 	"opendashly/backend/internal/application/query"
 	"opendashly/backend/internal/application/retention"
 	"opendashly/backend/internal/application/status"
+	"opendashly/backend/internal/application/workspace"
 	"opendashly/backend/internal/infrastructure/config"
 	"opendashly/backend/internal/infrastructure/storage"
 	httpapi "opendashly/backend/internal/interfaces/http"
@@ -82,6 +83,8 @@ func Build(ctx context.Context) (*App, error) {
 	aiService := &ai.Service{Repo: aiRepo}
 	dashboardSettingsRepo := &dashboard.Repo{Conn: client.Conn}
 	dashboardSettingsService := &dashboard.Service{Repo: dashboardSettingsRepo}
+	workspaceRepo := &workspace.Repo{Conn: client.Conn}
+	workspaceService := &workspace.Service{Repo: workspaceRepo}
 
 	scheduler := retention.NewScheduler(cleanupService, cfg.CleanupIntervalMinutes)
 	go scheduler.Start(context.Background())
@@ -117,6 +120,7 @@ func Build(ctx context.Context) (*App, error) {
 		DashboardService:   dashboardService,
 		AIService:          aiService,
 		DashboardSettings:  dashboardSettingsService,
+		WorkspaceSettings:  workspaceService,
 		SavedRepo:          savedRepo,
 		AuthHandler:        authHandler,
 		UsersHandler:       usersHandler,

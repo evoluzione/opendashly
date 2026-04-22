@@ -1,5 +1,6 @@
 <script lang="ts">
   import { authState, logoutUser } from "../lib/stores/auth";
+  import { workspaceState } from "../lib/stores/workspace";
   import { locale, t } from "$lib/i18n";
 
   export let activeTab: "logs" | "metriche" | "tracce" | null = null;
@@ -18,7 +19,7 @@
     </div>
     <div class="brand-text">
       <span class="name">Opendashly</span>
-      <span class="tagline">{t($locale, "common.dashboard")}</span>
+      <span class="tagline">{$workspaceState.title}</span>
     </div>
   </div>
 
@@ -176,10 +177,12 @@
     justify-content: center;
     width: 56px;
     height: 56px;
+    min-width: 56px;
     border-radius: 16px;
     box-shadow: 0 8px 24px rgba(var(--rgb-primary-600), 0.4);
     overflow: hidden;
     background: transparent;
+    flex-shrink: 0;
   }
 
   .logo img {
@@ -192,6 +195,7 @@
   .brand-text {
     display: flex;
     flex-direction: column;
+    min-width: 0;
   }
 
   .name {
@@ -206,6 +210,7 @@
     color: var(--color-slate-500);
     text-transform: uppercase;
     letter-spacing: 0.1em;
+    word-break: break-word;
   }
 
   .nav-section {

@@ -9,6 +9,7 @@ import (
 	"opendashly/backend/internal/application/metrics"
 	"opendashly/backend/internal/application/query"
 	"opendashly/backend/internal/application/status"
+	"opendashly/backend/internal/application/workspace"
 	"opendashly/backend/internal/infrastructure/config"
 	handlers "opendashly/backend/internal/interfaces/http/handlers"
 
@@ -26,6 +27,7 @@ type RouterConfig struct {
 	DashboardService   *metrics.Service
 	AIService          *ai.Service
 	DashboardSettings  *dashboard.Service
+	WorkspaceSettings  *workspace.Service
 	AuthHandler        *handlers.AuthHandler
 	UsersHandler       *handlers.UsersHandler
 	ServicesHandler    *handlers.ServicesHandler
@@ -48,6 +50,7 @@ type routeHandlers struct {
 	aiSettingsHandler      *handlers.AISettingsHandler
 	attributesHandler      *handlers.AttributesHandler
 	dashboardSettings      *handlers.DashboardSettingsHandler
+	workspaceSettings      *handlers.WorkspaceSettingsHandler
 }
 
 // NewRouter builds the API router.
@@ -98,6 +101,7 @@ func buildRouteHandlers(cfg RouterConfig) routeHandlers {
 		aiSettingsHandler: &handlers.AISettingsHandler{Service: cfg.AIService},
 		attributesHandler: &handlers.AttributesHandler{Service: cfg.QueryService},
 		dashboardSettings: &handlers.DashboardSettingsHandler{Service: cfg.DashboardSettings},
+		workspaceSettings: &handlers.WorkspaceSettingsHandler{Service: cfg.WorkspaceSettings},
 	}
 }
 
@@ -122,12 +126,14 @@ func registerAPIRoutes(r *chi.Mux, cfg RouterConfig, h routeHandlers) {
 	r.Get("/api/status/runtime", h.statusHandler.ServeRuntimeHTTP)
 	r.Post("/api/dashboard/metrics", h.dashboardHandler.ServeHTTP)
 	r.Get("/api/dashboard/settings", h.dashboardSettings.Get)
+	r.Get("/api/workspace/settings", h.workspaceSettings.Get)
 
 	// Admin Settings
 	r.Get("/api/admin/ai/settings", h.aiSettingsHandler.Get)
 	r.Put("/api/admin/ai/settings", h.aiSettingsHandler.Update)
 	r.Get("/api/admin/dashboard/settings", h.dashboardSettings.Get)
 	r.Put("/api/admin/dashboard/settings", h.dashboardSettings.Update)
+	r.Put("/api/admin/workspace/settings", h.workspaceSettings.Update)
 
 	registerOptionalRoutes(r, cfg)
 }
