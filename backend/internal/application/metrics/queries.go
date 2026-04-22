@@ -128,9 +128,9 @@ func BuildSlowestEndpointsQuery(from, to time.Time, serviceName string, limit in
 			SpanName AS endpoint,
 			ServiceName AS service,
 			avg(Duration/1000000) AS avg_ms,
-			quantileTDigest(0.50)(Duration/1000000) AS p50,
-			quantileTDigest(0.95)(Duration/1000000) AS p95,
-			quantileTDigest(0.99)(Duration/1000000) AS p99,
+			toFloat64(quantileTDigest(0.50)(Duration/1000000)) AS p50,
+			toFloat64(quantileTDigest(0.95)(Duration/1000000)) AS p95,
+			toFloat64(quantileTDigest(0.99)(Duration/1000000)) AS p99,
 			count() AS cnt
 		FROM telemetry.otel_traces
 		WHERE Timestamp >= '%s' AND Timestamp <= '%s'
@@ -226,9 +226,9 @@ func BuildLatencyPercentilesQuery(from, to time.Time, serviceName string) string
 	return fmt.Sprintf(`
 		SELECT
 			toStartOfInterval(Timestamp, INTERVAL %s) AS bucket,
-			quantileTDigest(0.50)(Duration/1000000) AS p50,
-			quantileTDigest(0.95)(Duration/1000000) AS p95,
-			quantileTDigest(0.99)(Duration/1000000) AS p99
+			toFloat64(quantileTDigest(0.50)(Duration/1000000)) AS p50,
+			toFloat64(quantileTDigest(0.95)(Duration/1000000)) AS p95,
+			toFloat64(quantileTDigest(0.99)(Duration/1000000)) AS p99
 		FROM telemetry.otel_traces
 		WHERE Timestamp >= '%s' AND Timestamp <= '%s'
 			%s
