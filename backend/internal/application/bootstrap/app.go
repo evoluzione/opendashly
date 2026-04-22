@@ -60,6 +60,7 @@ func Build(ctx context.Context) (*App, error) {
 	dashboardService.FreshCacheTTL = time.Duration(cfg.DashboardFreshCacheTTLSec) * time.Second
 	dashboardService.StaleCacheTTL = time.Duration(cfg.DashboardStaleCacheTTLSec) * time.Second
 	dashboardService.QueryParallelism = cfg.DashboardQueryParallelism
+	dashboardService.HalveOnOOM = cfg.DashboardHalveOnOOM
 	savedRepo := query.NewSavedQueryRepo()
 	authRepo := &auth.Repo{Conn: client.Conn}
 	if err := seedDefaultAdmin(ctx, authRepo); err != nil {

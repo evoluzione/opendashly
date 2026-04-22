@@ -25,6 +25,7 @@ type Config struct {
 	DashboardStaleCacheTTLSec    int
 	DashboardRequestTimeoutSec   int
 	DashboardQueryParallelism    int
+	DashboardHalveOnOOM          bool
 	CollectorHealthURL           string
 	ListenAddr                   string
 	AuthMode                     string
@@ -55,7 +56,8 @@ func Load() (*Config, error) {
 		DashboardFreshCacheTTLSec:    getEnvInt("DASHBOARD_FRESH_CACHE_TTL_SECONDS", 30),
 		DashboardStaleCacheTTLSec:    getEnvInt("DASHBOARD_STALE_CACHE_TTL_SECONDS", 900),
 		DashboardRequestTimeoutSec:   getEnvInt("DASHBOARD_REQUEST_TIMEOUT_SECONDS", 15),
-		DashboardQueryParallelism:    getEnvInt("DASHBOARD_QUERY_PARALLELISM", 2),
+		DashboardQueryParallelism:    getEnvInt("DASHBOARD_QUERY_PARALLELISM", 1),
+		DashboardHalveOnOOM:          getEnvBool("DASHBOARD_HALVE_ON_OOM", true),
 		CollectorHealthURL:           os.Getenv("COLLECTOR_HEALTH_URL"),
 		ListenAddr:                   os.Getenv("API_LISTEN_ADDR"),
 		AuthMode:                     os.Getenv("AUTH_MODE"),

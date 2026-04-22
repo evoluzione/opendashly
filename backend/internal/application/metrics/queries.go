@@ -13,6 +13,20 @@ const (
 	ApdexToleratingMultiplier = 4
 )
 
+// querySettings keeps every dashboard query inside a tight memory envelope so
+// ClickHouse can run them on 1-2 GB droplets without tripping the
+// OvercommitTracker. External GROUP BY / sort spill to disk well before the
+// 150 MiB ceiling so hash tables never dominate RAM.
+const querySettings = ` SETTINGS
+	max_memory_usage = 157286400,
+	max_bytes_before_external_group_by = 33554432,
+	max_bytes_before_external_sort = 33554432,
+	group_by_two_level_threshold = 10000,
+	group_by_two_level_threshold_bytes = 33554432,
+	max_threads = 1,
+	distributed_aggregation_memory_efficient = 1,
+	optimize_aggregation_in_order = 1`
+
 // Latency bucket definitions in milliseconds
 var latencyBuckets = []struct {
 	Start int
@@ -101,19 +115,22 @@ func BuildLatencyDistributionQuery(from, to time.Time, serviceName string) strin
 				%s
 		GROUP BY bucket_start, bucket_end
 		ORDER BY bucket_start
-		`, formatTime(from), formatTime(to), serverSpanFilter(), serviceFilter(serviceName))
+		%s
+		`, formatTime(from), formatTime(to), serverSpanFilter(), serviceFilter(serviceName), querySettings)
 }
 
 // BuildSlowestEndpointsQuery builds a query to get the slowest endpoints by P95.
+// quantileTDigest is memory-bounded (O(1) state per group) so it survives high
+// SpanName cardinality without exploding the aggregation hash table.
 func BuildSlowestEndpointsQuery(from, to time.Time, serviceName string, limit int) string {
 	return fmt.Sprintf(`
 		SELECT
 			SpanName AS endpoint,
 			ServiceName AS service,
 			avg(Duration/1000000) AS avg_ms,
-			quantile(0.50)(Duration/1000000) AS p50,
-			quantile(0.95)(Duration/1000000) AS p95,
-			quantile(0.99)(Duration/1000000) AS p99,
+			quantileTDigest(0.50)(Duration/1000000) AS p50,
+			quantileTDigest(0.95)(Duration/1000000) AS p95,
+			quantileTDigest(0.99)(Duration/1000000) AS p99,
 			count() AS cnt
 		FROM telemetry.otel_traces
 		WHERE Timestamp >= '%s' AND Timestamp <= '%s'
@@ -124,7 +141,8 @@ func BuildSlowestEndpointsQuery(from, to time.Time, serviceName string, limit in
 		HAVING cnt >= 5
 		ORDER BY p95 DESC
 		LIMIT %d
-		`, formatTime(from), formatTime(to), endpointSpanFilter(), serverSpanFilter(), serviceFilter(serviceName), limit)
+		%s
+		`, formatTime(from), formatTime(to), endpointSpanFilter(), serverSpanFilter(), serviceFilter(serviceName), limit, querySettings)
 }
 
 // BuildErrorHotspotsQuery builds a query to get endpoints with highest error rates.
@@ -146,7 +164,8 @@ func BuildErrorHotspotsQuery(from, to time.Time, serviceName string, limit int) 
 		HAVING total_count >= 5 AND error_count > 0
 		ORDER BY error_rate DESC, error_count DESC
 		LIMIT %d
-		`, errorStatusClause(), errorStatusClause(), formatTime(from), formatTime(to), endpointSpanFilter(), serverSpanFilter(), serviceFilter(serviceName), limit)
+		%s
+		`, errorStatusClause(), errorStatusClause(), formatTime(from), formatTime(to), endpointSpanFilter(), serverSpanFilter(), serviceFilter(serviceName), limit, querySettings)
 }
 
 // BuildApdexQuery builds a query to calculate APDEX score.
@@ -162,8 +181,9 @@ func BuildApdexQuery(from, to time.Time, serviceName string) string {
 		WHERE Timestamp >= '%s' AND Timestamp <= '%s'
 				%s
 				%s
+		%s
 		`, ApdexThresholdMs, ApdexThresholdMs, toleratingThreshold, toleratingThreshold,
-		formatTime(from), formatTime(to), serverSpanFilter(), serviceFilter(serviceName))
+		formatTime(from), formatTime(to), serverSpanFilter(), serviceFilter(serviceName), querySettings)
 }
 
 // BuildThroughputQuery builds a query to get throughput time series.
@@ -181,7 +201,8 @@ func BuildThroughputQuery(from, to time.Time, serviceName string) string {
 				%s
 		GROUP BY bucket
 		ORDER BY bucket
-		`, interval, errorStatusClause(), formatTime(from), formatTime(to), serverSpanFilter(), serviceFilter(serviceName))
+		%s
+		`, interval, errorStatusClause(), formatTime(from), formatTime(to), serverSpanFilter(), serviceFilter(serviceName), querySettings)
 }
 
 // BuildErrorRateQuery builds a query to get overall error rate.
@@ -195,7 +216,8 @@ func BuildErrorRateQuery(from, to time.Time, serviceName string) string {
 		WHERE Timestamp >= '%s' AND Timestamp <= '%s'
 				%s
 				%s
-		`, errorStatusClause(), errorStatusClause(), formatTime(from), formatTime(to), serverSpanFilter(), serviceFilter(serviceName))
+		%s
+		`, errorStatusClause(), errorStatusClause(), formatTime(from), formatTime(to), serverSpanFilter(), serviceFilter(serviceName), querySettings)
 }
 
 // BuildLatencyPercentilesQuery builds a query for latency percentiles over time.
@@ -204,16 +226,17 @@ func BuildLatencyPercentilesQuery(from, to time.Time, serviceName string) string
 	return fmt.Sprintf(`
 		SELECT
 			toStartOfInterval(Timestamp, INTERVAL %s) AS bucket,
-			quantile(0.50)(Duration/1000000) AS p50,
-			quantile(0.95)(Duration/1000000) AS p95,
-			quantile(0.99)(Duration/1000000) AS p99
+			quantileTDigest(0.50)(Duration/1000000) AS p50,
+			quantileTDigest(0.95)(Duration/1000000) AS p95,
+			quantileTDigest(0.99)(Duration/1000000) AS p99
 		FROM telemetry.otel_traces
 		WHERE Timestamp >= '%s' AND Timestamp <= '%s'
 			%s
 			%s
 		GROUP BY bucket
 		ORDER BY bucket
-	`, interval, formatTime(from), formatTime(to), serverSpanFilter(), serviceFilter(serviceName))
+		%s
+	`, interval, formatTime(from), formatTime(to), serverSpanFilter(), serviceFilter(serviceName), querySettings)
 }
 
 // BuildErrorRateTimeSeriesQuery builds a query for error rate over time.
@@ -231,7 +254,8 @@ func BuildErrorRateTimeSeriesQuery(from, to time.Time, serviceName string) strin
 			%s
 		GROUP BY bucket
 		ORDER BY bucket
-	`, interval, errorStatusClause(), errorStatusClause(), formatTime(from), formatTime(to), serverSpanFilter(), serviceFilter(serviceName))
+		%s
+	`, interval, errorStatusClause(), errorStatusClause(), formatTime(from), formatTime(to), serverSpanFilter(), serviceFilter(serviceName), querySettings)
 }
 
 // BuildStatusCodeBreakdownQuery builds a query for status code distribution.
@@ -251,7 +275,8 @@ func BuildStatusCodeBreakdownQuery(from, to time.Time, serviceName string) strin
 			%s
 		GROUP BY code
 		ORDER BY total DESC
-	`, formatTime(from), formatTime(to), serverSpanFilter(), serviceFilter(serviceName))
+		%s
+	`, formatTime(from), formatTime(to), serverSpanFilter(), serviceFilter(serviceName), querySettings)
 }
 
 // BuildTopEndpointsThroughputQuery builds a query for top endpoints by throughput.
@@ -271,7 +296,8 @@ func BuildTopEndpointsThroughputQuery(from, to time.Time, serviceName string, li
 		GROUP BY endpoint, service
 		ORDER BY request_count DESC
 		LIMIT %d
-	`, errorStatusClause(), errorStatusClause(), formatTime(from), formatTime(to), endpointSpanFilter(), serverSpanFilter(), serviceFilter(serviceName), limit)
+		%s
+	`, errorStatusClause(), errorStatusClause(), formatTime(from), formatTime(to), endpointSpanFilter(), serverSpanFilter(), serviceFilter(serviceName), limit, querySettings)
 }
 
 // BuildLogVolumeQuery builds a query for log volume over time.
@@ -285,7 +311,8 @@ func BuildLogVolumeQuery(from, to time.Time, serviceName string) string {
 		WHERE Timestamp >= '%s' AND Timestamp <= '%s'%s
 		GROUP BY bucket
 		ORDER BY bucket
-	`, interval, formatTime(from), formatTime(to), serviceFilter(serviceName))
+		%s
+	`, interval, formatTime(from), formatTime(to), serviceFilter(serviceName), querySettings)
 }
 
 // BuildLogLevelsQuery builds a query for log level distribution.
@@ -298,7 +325,8 @@ func BuildLogLevelsQuery(from, to time.Time, serviceName string) string {
 		WHERE Timestamp >= '%s' AND Timestamp <= '%s'%s
 		GROUP BY level
 		ORDER BY total DESC
-	`, formatTime(from), formatTime(to), serviceFilter(serviceName))
+		%s
+	`, formatTime(from), formatTime(to), serviceFilter(serviceName), querySettings)
 }
 
 // GetLatencyBuckets returns the latency bucket definitions.
