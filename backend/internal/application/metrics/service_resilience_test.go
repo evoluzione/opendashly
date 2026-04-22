@@ -143,7 +143,10 @@ func TestGetDashboard_AllRecoverableFailuresReturnStaleSnapshot(t *testing.T) {
 	}
 }
 
-func TestGetDashboard_NonRecoverableErrorStillFails(t *testing.T) {
+func TestGetDashboard_NonRecoverableErrorDegradesToWarning(t *testing.T) {
+	// Resilience contract: any fetcher failure — recoverable or not — must
+	// degrade the affected widget to a warning instead of bubbling a 5xx.
+	// A single misbehaving query can never take the whole dashboard down.
 	nonRecoverableErr := errors.New("syntax error")
 	fetchers := testSuccessFetchers()
 	fetchers.slowestEndpoints = func(context.Context, DashboardRequest) ([]EndpointLatency, error) {
@@ -156,16 +159,82 @@ func TestGetDashboard_NonRecoverableErrorStillFails(t *testing.T) {
 		fetchers:         &fetchers,
 	}
 
-	_, err := svc.GetDashboard(context.Background(), DashboardRequest{
+	result, err := svc.GetDashboard(context.Background(), DashboardRequest{
 		From: time.Date(2026, 4, 15, 10, 0, 0, 0, time.UTC),
 		To:   time.Date(2026, 4, 15, 11, 0, 0, 0, time.UTC),
 	})
-	if err == nil {
-		t.Fatal("expected non recoverable error")
+	if err != nil {
+		t.Fatalf("dashboard must not bubble errors, got %v", err)
 	}
-	if !strings.Contains(err.Error(), "slowest endpoints") {
-		t.Fatalf("expected non recoverable slowest endpoints error, got %v", err)
+	if result == nil {
+		t.Fatal("expected dashboard response, got nil")
 	}
+
+	found := false
+	for _, w := range result.Warnings {
+		if strings.Contains(w, "slowest endpoints") && strings.Contains(w, "syntax error") {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Fatalf("expected slowest-endpoints warning, got %v", result.Warnings)
+	}
+	assertDashboardSlicesInitialized(t, result)
+}
+
+func TestGetDashboard_HalveOnOOMRetriesAndSucceeds(t *testing.T) {
+	// When a fetcher fails with a recoverable (memory) error, HalveOnOOM
+	// retries once over the last half of the window and returns a partial
+	// result instead of surfacing an error.
+	recoverableErr := errors.New("memory limit exceeded")
+	req := DashboardRequest{
+		From: time.Date(2026, 4, 15, 10, 0, 0, 0, time.UTC),
+		To:   time.Date(2026, 4, 15, 11, 0, 0, 0, time.UTC),
+	}
+	midpoint := req.To.Add(-req.To.Sub(req.From) / 2)
+
+	calls := 0
+	fetchers := testSuccessFetchers()
+	fetchers.slowestEndpoints = func(_ context.Context, r DashboardRequest) ([]EndpointLatency, error) {
+		calls++
+		if calls == 1 {
+			return nil, recoverableErr
+		}
+		if !r.From.Equal(midpoint) {
+			t.Fatalf("expected retry to use halved window from=%s, got %s", midpoint, r.From)
+		}
+		return []EndpointLatency{{Endpoint: "GET /half", Service: "api", P95: 123}}, nil
+	}
+
+	svc := &Service{
+		Storage:          &storage.Client{},
+		QueryParallelism: 4,
+		HalveOnOOM:       true,
+		fetchers:         &fetchers,
+	}
+
+	result, err := svc.GetDashboard(context.Background(), req)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if calls != 2 {
+		t.Fatalf("expected exactly 2 fetcher calls (original + halved retry), got %d", calls)
+	}
+	if len(result.Hotspots.SlowestEndpoints) != 1 || result.Hotspots.SlowestEndpoints[0].Endpoint != "GET /half" {
+		t.Fatalf("expected slowest endpoints from halved retry, got %#v", result.Hotspots.SlowestEndpoints)
+	}
+	partialHintFound := false
+	for _, w := range result.Warnings {
+		if strings.Contains(w, "slowest endpoints") && strings.Contains(w, "partial window") {
+			partialHintFound = true
+			break
+		}
+	}
+	if !partialHintFound {
+		t.Fatalf("expected partial-window hint in warnings, got %v", result.Warnings)
+	}
+	assertDashboardSlicesInitialized(t, result)
 }
 
 func assertDashboardSlicesInitialized(t *testing.T, result *DashboardResponse) {

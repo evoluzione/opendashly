@@ -1,7 +1,7 @@
 <clickhouse>
-  <max_server_memory_usage_to_ram_ratio>0.62</max_server_memory_usage_to_ram_ratio>
-  <mark_cache_size>67108864</mark_cache_size>
-  <uncompressed_cache_size>33554432</uncompressed_cache_size>
+  <max_server_memory_usage_to_ram_ratio>0.80</max_server_memory_usage_to_ram_ratio>
+  <mark_cache_size>33554432</mark_cache_size>
+  <uncompressed_cache_size>16777216</uncompressed_cache_size>
   <background_pool_size>2</background_pool_size>
   <background_merges_mutations_concurrency_ratio>2</background_merges_mutations_concurrency_ratio>
 
@@ -13,12 +13,14 @@
 
   <profiles>
     <default>
-      <max_memory_usage>209715200</max_memory_usage>
-      <max_bytes_before_external_group_by>67108864</max_bytes_before_external_group_by>
-      <max_bytes_before_external_sort>67108864</max_bytes_before_external_sort>
+      <max_memory_usage>157286400</max_memory_usage>
+      <max_bytes_before_external_group_by>33554432</max_bytes_before_external_group_by>
+      <max_bytes_before_external_sort>33554432</max_bytes_before_external_sort>
       <max_temporary_data_on_disk_size_for_query>1073741824</max_temporary_data_on_disk_size_for_query>
       <max_execution_time>8</max_execution_time>
       <max_threads>2</max_threads>
+      <group_by_two_level_threshold>10000</group_by_two_level_threshold>
+      <group_by_two_level_threshold_bytes>33554432</group_by_two_level_threshold_bytes>
     </default>
   </profiles>
 </clickhouse>

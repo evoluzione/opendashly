@@ -19,6 +19,11 @@ type Service struct {
 	FreshCacheTTL    time.Duration
 	StaleCacheTTL    time.Duration
 	QueryParallelism int
+	// HalveOnOOM retries a failing fetcher once over the most recent half of
+	// the requested window when ClickHouse reports memory pressure. The widget
+	// is annotated with a "partial window" warning but never blocks the
+	// dashboard response.
+	HalveOnOOM bool
 
 	fetchers  *dashboardFetchers
 	cache     *dashboardCache
@@ -147,219 +152,207 @@ func (s *Service) GetDashboard(ctx context.Context, req DashboardRequest) (*Dash
 	}
 
 	g.Go(func() error {
-		section, err := fetchers.latencyDistribution(gctx, req)
+		section, hint, err := runWithHalving(gctx, req, s.HalveOnOOM, fetchers.latencyDistribution)
 		if err != nil {
 			log.Printf("metrics.service: latency distribution error: %v", err)
-			if isRecoverableDashboardError(err) {
-				if hasStale {
-					latencyDist = cloneOrEmptySlice(staleSnapshot.Hotspots.LatencyDistribution)
-				}
-				appendRecoverableDashboardWarning(&warningsMu, &warnings, "latency distribution", err)
-				return nil
+			if hasStale && isRecoverableDashboardError(err) {
+				latencyDist = cloneOrEmptySlice(staleSnapshot.Hotspots.LatencyDistribution)
 			}
-			return fmt.Errorf("latency distribution: %w", err)
+			appendRecoverableDashboardWarning(&warningsMu, &warnings, "latency distribution", err)
+			return nil
 		}
 		latencyDist = cloneOrEmptySlice(section)
+		appendDashboardHint(&warningsMu, &warnings, "latency distribution", hint)
 		markSuccess()
 		return nil
 	})
 
 	g.Go(func() error {
-		section, err := fetchers.slowestEndpoints(gctx, req)
+		section, hint, err := runWithHalving(gctx, req, s.HalveOnOOM, fetchers.slowestEndpoints)
 		if err != nil {
 			log.Printf("metrics.service: slowest endpoints error: %v", err)
-			if isRecoverableDashboardError(err) {
-				if hasStale {
-					slowest = cloneOrEmptySlice(staleSnapshot.Hotspots.SlowestEndpoints)
-				}
-				appendRecoverableDashboardWarning(&warningsMu, &warnings, "slowest endpoints", err)
-				return nil
+			if hasStale && isRecoverableDashboardError(err) {
+				slowest = cloneOrEmptySlice(staleSnapshot.Hotspots.SlowestEndpoints)
 			}
-			return fmt.Errorf("slowest endpoints: %w", err)
+			appendRecoverableDashboardWarning(&warningsMu, &warnings, "slowest endpoints", err)
+			return nil
 		}
 		slowest = cloneOrEmptySlice(section)
+		appendDashboardHint(&warningsMu, &warnings, "slowest endpoints", hint)
 		markSuccess()
 		return nil
 	})
 
 	g.Go(func() error {
-		section, err := fetchers.errorHotspots(gctx, req)
+		section, hint, err := runWithHalving(gctx, req, s.HalveOnOOM, fetchers.errorHotspots)
 		if err != nil {
 			log.Printf("metrics.service: error hotspots error: %v", err)
-			if isRecoverableDashboardError(err) {
-				if hasStale {
-					errorHotspots = cloneOrEmptySlice(staleSnapshot.Hotspots.ErrorHotspots)
-				}
-				appendRecoverableDashboardWarning(&warningsMu, &warnings, "error hotspots", err)
-				return nil
+			if hasStale && isRecoverableDashboardError(err) {
+				errorHotspots = cloneOrEmptySlice(staleSnapshot.Hotspots.ErrorHotspots)
 			}
-			return fmt.Errorf("error hotspots: %w", err)
+			appendRecoverableDashboardWarning(&warningsMu, &warnings, "error hotspots", err)
+			return nil
 		}
 		errorHotspots = cloneOrEmptySlice(section)
+		appendDashboardHint(&warningsMu, &warnings, "error hotspots", hint)
 		markSuccess()
 		return nil
 	})
 
 	g.Go(func() error {
-		section, err := fetchers.latencyPercentiles(gctx, req)
+		section, hint, err := runWithHalving(gctx, req, s.HalveOnOOM, fetchers.latencyPercentiles)
 		if err != nil {
 			log.Printf("metrics.service: latency percentiles error: %v", err)
-			if isRecoverableDashboardError(err) {
-				if hasStale {
-					latencySeries = cloneOrEmptySlice(staleSnapshot.Satisfaction.LatencySeries)
-				}
-				appendRecoverableDashboardWarning(&warningsMu, &warnings, "latency percentiles", err)
-				return nil
+			if hasStale && isRecoverableDashboardError(err) {
+				latencySeries = cloneOrEmptySlice(staleSnapshot.Satisfaction.LatencySeries)
 			}
-			return fmt.Errorf("latency percentiles: %w", err)
+			appendRecoverableDashboardWarning(&warningsMu, &warnings, "latency percentiles", err)
+			return nil
 		}
 		latencySeries = cloneOrEmptySlice(section)
+		appendDashboardHint(&warningsMu, &warnings, "latency percentiles", hint)
 		markSuccess()
 		return nil
 	})
 
 	g.Go(func() error {
-		section, err := fetchers.errorRateSeries(gctx, req)
+		section, hint, err := runWithHalving(gctx, req, s.HalveOnOOM, fetchers.errorRateSeries)
 		if err != nil {
 			log.Printf("metrics.service: error rate series error: %v", err)
-			if isRecoverableDashboardError(err) {
-				if hasStale {
-					errorRateSeries = cloneOrEmptySlice(staleSnapshot.Satisfaction.ErrorRateSeries)
-				}
-				appendRecoverableDashboardWarning(&warningsMu, &warnings, "error rate series", err)
-				return nil
+			if hasStale && isRecoverableDashboardError(err) {
+				errorRateSeries = cloneOrEmptySlice(staleSnapshot.Satisfaction.ErrorRateSeries)
 			}
-			return fmt.Errorf("error rate series: %w", err)
+			appendRecoverableDashboardWarning(&warningsMu, &warnings, "error rate series", err)
+			return nil
 		}
 		errorRateSeries = cloneOrEmptySlice(section)
+		appendDashboardHint(&warningsMu, &warnings, "error rate series", hint)
 		markSuccess()
 		return nil
 	})
 
 	g.Go(func() error {
-		section, err := fetchers.statusCodeBreakdown(gctx, req)
+		section, hint, err := runWithHalving(gctx, req, s.HalveOnOOM, fetchers.statusCodeBreakdown)
 		if err != nil {
 			log.Printf("metrics.service: status code breakdown error: %v", err)
-			if isRecoverableDashboardError(err) {
-				if hasStale {
-					statusCodes = cloneOrEmptySlice(staleSnapshot.Hotspots.StatusCodes)
-				}
-				appendRecoverableDashboardWarning(&warningsMu, &warnings, "status code breakdown", err)
-				return nil
+			if hasStale && isRecoverableDashboardError(err) {
+				statusCodes = cloneOrEmptySlice(staleSnapshot.Hotspots.StatusCodes)
 			}
-			return fmt.Errorf("status code breakdown: %w", err)
+			appendRecoverableDashboardWarning(&warningsMu, &warnings, "status code breakdown", err)
+			return nil
 		}
 		statusCodes = cloneOrEmptySlice(section)
+		appendDashboardHint(&warningsMu, &warnings, "status code breakdown", hint)
 		markSuccess()
 		return nil
 	})
 
 	g.Go(func() error {
-		section, err := fetchers.topEndpoints(gctx, req)
+		section, hint, err := runWithHalving(gctx, req, s.HalveOnOOM, fetchers.topEndpoints)
 		if err != nil {
 			log.Printf("metrics.service: top endpoints error: %v", err)
-			if isRecoverableDashboardError(err) {
-				if hasStale {
-					topEndpoints = cloneOrEmptySlice(staleSnapshot.Hotspots.TopEndpoints)
-				}
-				appendRecoverableDashboardWarning(&warningsMu, &warnings, "top endpoints", err)
-				return nil
+			if hasStale && isRecoverableDashboardError(err) {
+				topEndpoints = cloneOrEmptySlice(staleSnapshot.Hotspots.TopEndpoints)
 			}
-			return fmt.Errorf("top endpoints: %w", err)
+			appendRecoverableDashboardWarning(&warningsMu, &warnings, "top endpoints", err)
+			return nil
 		}
 		topEndpoints = cloneOrEmptySlice(section)
+		appendDashboardHint(&warningsMu, &warnings, "top endpoints", hint)
 		markSuccess()
 		return nil
 	})
 
 	g.Go(func() error {
-		section, err := fetchers.apdexScore(gctx, req)
+		section, hint, err := runWithHalving(gctx, req, s.HalveOnOOM, fetchers.apdexScore)
 		if err != nil {
 			log.Printf("metrics.service: apdex score error: %v", err)
-			if isRecoverableDashboardError(err) {
-				if hasStale {
-					apdex = staleSnapshot.Satisfaction.Apdex
-				}
-				appendRecoverableDashboardWarning(&warningsMu, &warnings, "apdex score", err)
-				return nil
+			if hasStale && isRecoverableDashboardError(err) {
+				apdex = staleSnapshot.Satisfaction.Apdex
 			}
-			return fmt.Errorf("apdex score: %w", err)
+			appendRecoverableDashboardWarning(&warningsMu, &warnings, "apdex score", err)
+			return nil
 		}
 		apdex = section
+		appendDashboardHint(&warningsMu, &warnings, "apdex score", hint)
 		markSuccess()
 		return nil
 	})
 
 	g.Go(func() error {
 		throughputSection, timeSeriesSection, err := fetchers.throughput(gctx, req)
+		hint := ""
+		if err != nil && s.HalveOnOOM && isRecoverableDashboardError(err) {
+			retryReq := halvedWindow(req)
+			if retryReq.From.Before(req.To) {
+				if t2, p2, err2 := fetchers.throughput(gctx, retryReq); err2 == nil {
+					throughputSection = t2
+					timeSeriesSection = p2
+					err = nil
+					hint = "partial window (last half) due to backend pressure"
+				}
+			}
+		}
 		if err != nil {
 			log.Printf("metrics.service: throughput error: %v", err)
-			if isRecoverableDashboardError(err) {
-				if hasStale {
-					throughput = staleSnapshot.Satisfaction.Throughput
-					timeSeries = cloneOrEmptySlice(staleSnapshot.Satisfaction.TimeSeries)
-				}
-				appendRecoverableDashboardWarning(&warningsMu, &warnings, "throughput", err)
-				return nil
+			if hasStale && isRecoverableDashboardError(err) {
+				throughput = staleSnapshot.Satisfaction.Throughput
+				timeSeries = cloneOrEmptySlice(staleSnapshot.Satisfaction.TimeSeries)
 			}
-			return fmt.Errorf("throughput: %w", err)
+			appendRecoverableDashboardWarning(&warningsMu, &warnings, "throughput", err)
+			return nil
 		}
 		throughput = throughputSection
 		timeSeries = cloneOrEmptySlice(timeSeriesSection)
+		appendDashboardHint(&warningsMu, &warnings, "throughput", hint)
 		markSuccess()
 		return nil
 	})
 
 	g.Go(func() error {
-		section, err := fetchers.logVolume(gctx, req)
+		section, hint, err := runWithHalving(gctx, req, s.HalveOnOOM, fetchers.logVolume)
 		if err != nil {
 			log.Printf("metrics.service: log volume error: %v", err)
-			if isRecoverableDashboardError(err) {
-				if hasStale {
-					logVolume = cloneOrEmptySlice(staleSnapshot.Logs.VolumeSeries)
-				}
-				appendRecoverableDashboardWarning(&warningsMu, &warnings, "log volume", err)
-				return nil
+			if hasStale && isRecoverableDashboardError(err) {
+				logVolume = cloneOrEmptySlice(staleSnapshot.Logs.VolumeSeries)
 			}
-			return fmt.Errorf("log volume: %w", err)
+			appendRecoverableDashboardWarning(&warningsMu, &warnings, "log volume", err)
+			return nil
 		}
 		logVolume = cloneOrEmptySlice(section)
+		appendDashboardHint(&warningsMu, &warnings, "log volume", hint)
 		markSuccess()
 		return nil
 	})
 
 	g.Go(func() error {
-		section, err := fetchers.logLevels(gctx, req)
+		section, hint, err := runWithHalving(gctx, req, s.HalveOnOOM, fetchers.logLevels)
 		if err != nil {
 			log.Printf("metrics.service: log levels error: %v", err)
-			if isRecoverableDashboardError(err) {
-				if hasStale {
-					logLevels = cloneOrEmptySlice(staleSnapshot.Logs.Levels)
-				}
-				appendRecoverableDashboardWarning(&warningsMu, &warnings, "log levels", err)
-				return nil
+			if hasStale && isRecoverableDashboardError(err) {
+				logLevels = cloneOrEmptySlice(staleSnapshot.Logs.Levels)
 			}
-			return fmt.Errorf("log levels: %w", err)
+			appendRecoverableDashboardWarning(&warningsMu, &warnings, "log levels", err)
+			return nil
 		}
 		logLevels = cloneOrEmptySlice(section)
+		appendDashboardHint(&warningsMu, &warnings, "log levels", hint)
 		markSuccess()
 		return nil
 	})
 
 	g.Go(func() error {
-		section, err := fetchers.errorRate(gctx, req)
+		section, hint, err := runWithHalving(gctx, req, s.HalveOnOOM, fetchers.errorRate)
 		if err != nil {
 			log.Printf("metrics.service: error rate error: %v", err)
-			if isRecoverableDashboardError(err) {
-				if hasStale {
-					errorRate = staleSnapshot.Satisfaction.ErrorRate
-				}
-				appendRecoverableDashboardWarning(&warningsMu, &warnings, "error rate", err)
-				return nil
+			if hasStale && isRecoverableDashboardError(err) {
+				errorRate = staleSnapshot.Satisfaction.ErrorRate
 			}
-			return fmt.Errorf("error rate: %w", err)
+			appendRecoverableDashboardWarning(&warningsMu, &warnings, "error rate", err)
+			return nil
 		}
 		errorRate = section
+		appendDashboardHint(&warningsMu, &warnings, "error rate", hint)
 		markSuccess()
 		return nil
 	})
@@ -409,6 +402,52 @@ func appendRecoverableDashboardWarning(mu *sync.Mutex, warnings *[]string, secti
 	mu.Lock()
 	*warnings = append(*warnings, fmt.Sprintf("%s unavailable: %v", section, err))
 	mu.Unlock()
+}
+
+func appendDashboardHint(mu *sync.Mutex, warnings *[]string, section, hint string) {
+	if hint == "" {
+		return
+	}
+	mu.Lock()
+	*warnings = append(*warnings, fmt.Sprintf("%s: %s", section, hint))
+	mu.Unlock()
+}
+
+// halvedWindow returns the second half of req's time window.
+func halvedWindow(req DashboardRequest) DashboardRequest {
+	half := req
+	half.From = req.To.Add(-req.To.Sub(req.From) / 2)
+	return half
+}
+
+// runWithHalving calls fetcher(req); on a recoverable error it retries once
+// over the second half of the window when halve is true. Returns the result,
+// an optional warning hint, and a non-nil error only when both attempts fail.
+func runWithHalving[T any](
+	ctx context.Context,
+	req DashboardRequest,
+	halve bool,
+	fetcher func(context.Context, DashboardRequest) (T, error),
+) (T, string, error) {
+	result, err := fetcher(ctx, req)
+	if err == nil {
+		return result, "", nil
+	}
+	if !halve || !isRecoverableDashboardError(err) {
+		var zero T
+		return zero, "", err
+	}
+	retryReq := halvedWindow(req)
+	if !retryReq.From.Before(req.To) {
+		var zero T
+		return zero, "", err
+	}
+	result2, err2 := fetcher(ctx, retryReq)
+	if err2 == nil {
+		return result2, "partial window (last half) due to backend pressure", nil
+	}
+	var zero T
+	return zero, "", err
 }
 
 func isRecoverableDashboardError(err error) bool {

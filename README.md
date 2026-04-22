@@ -173,21 +173,7 @@ The production stack uses prebuilt images from GHCR — no repository clone need
 
 ### Deploy
 
-**1. Create `.env` from template** alongside `docker-compose.prod.yml`:
-
-```bash
-cp .env.example .env
-```
-
-Set at least:
-
-```bash
-AUTH_SECRET=replace-with-32+-char-random-string
-CLICKHOUSE_PASSWORD=replace-with-strong-password
-CORS_ALLOWED_ORIGINS=http://your-host:5173
-```
-
-**2. Choose a VM profile** and apply the related overrides in `.env`.
+**1. Pick a VM profile.** Copy the matching `.env` block below next to `docker-compose.prod.yml` and fill in the three secrets on top.
 
 | Profile | VM size | Use when |
 |---|---|---|
@@ -195,10 +181,22 @@ CORS_ALLOWED_ORIGINS=http://your-host:5173
 | Standard | 2 vCPU / 4 GB RAM | Small production baseline |
 | Big | 4 vCPU / 8 GB RAM | Higher telemetry throughput |
 
-Small profile overrides (1 vCPU / 2 GB):
+Each block is a complete drop-in `.env` — no extra defaults to merge. All three assume the new resilience layer (`quantileTDigest`, per-query `SETTINGS`, halved-window retry, never-5xx widgets) so the dashboard keeps serving even when ClickHouse is memory-pressured.
+
+<details>
+<summary><b>Small — 1 vCPU / 2 GB</b></summary>
 
 ```bash
+# --- Secrets (fill in) -------------------------------------------------------
+AUTH_SECRET=replace-with-32-plus-random-chars
+CLICKHOUSE_PASSWORD=replace-with-strong-password
+CORS_ALLOWED_ORIGINS=http://your-host:5173
+
+# --- Backend & dashboard -----------------------------------------------------
 SERVICE_LIST_TIMEOUT_SECONDS=25
+CLEANUP_INTERVAL_MINUTES=1440
+RETENTION_COUNT_PRECHECK_ENABLED=false
+
 CLICKHOUSE_MAX_MEMORY_MIB=96
 CLICKHOUSE_MAX_BYTES_BEFORE_EXTERNAL_GROUP_BY_MIB=24
 CLICKHOUSE_MAX_BYTES_BEFORE_EXTERNAL_SORT_MIB=24
@@ -206,30 +204,58 @@ CLICKHOUSE_MAX_TEMP_DATA_ON_DISK_MIB=512
 CLICKHOUSE_MAX_EXECUTION_TIME_SECONDS=25
 CLICKHOUSE_MAX_OPEN_CONNS=2
 CLICKHOUSE_MAX_IDLE_CONNS=1
+CLICKHOUSE_DIAL_TIMEOUT_SECONDS=5
 CLICKHOUSE_READ_TIMEOUT_SECONDS=40
-CLEANUP_INTERVAL_MINUTES=1440
 
+DASHBOARD_FRESH_CACHE_TTL_SECONDS=30
+DASHBOARD_STALE_CACHE_TTL_SECONDS=900
+DASHBOARD_REQUEST_TIMEOUT_SECONDS=25
+DASHBOARD_QUERY_PARALLELISM=1
+DASHBOARD_HALVE_ON_OOM=true
+
+# --- OpenTelemetry Collector -------------------------------------------------
+OTEL_FILE_STORAGE_DIR=/var/lib/otelcol/queue
+OTEL_MEMORY_LIMITER_CHECK_INTERVAL=1s
 OTEL_MEMORY_LIMIT_MIB=96
 OTEL_MEMORY_SPIKE_LIMIT_MIB=20
-OTEL_FILE_STORAGE_DIR=/var/lib/otelcol/queue
 OTEL_BATCH_SEND_SIZE=500
 OTEL_BATCH_TIMEOUT=2s
+OTEL_EXPORTER_TIMEOUT=10s
 OTEL_SENDING_QUEUE_SIZE=5000
 OTEL_SENDING_QUEUE_CONSUMERS=1
+OTEL_RETRY_INITIAL_INTERVAL=1s
+OTEL_RETRY_MAX_INTERVAL=30s
 OTEL_RETRY_MAX_ELAPSED_TIME=0
 
+# --- Container memory caps ---------------------------------------------------
 APP_MEM_LIMIT=320m
 APP_MEMSWAP_LIMIT=320m
 OTEL_COLLECTOR_MEM_LIMIT=192m
 OTEL_COLLECTOR_MEMSWAP_LIMIT=192m
 CLICKHOUSE_MEM_LIMIT=896m
 CLICKHOUSE_MEMSWAP_LIMIT=896m
+
+# --- ClickHouse port bindings (localhost only on prod compose) ---------------
+CLICKHOUSE_HTTP_PORT=8123
+CLICKHOUSE_TCP_PORT=9000
 ```
 
-Standard profile overrides (2 vCPU / 4 GB):
+</details>
+
+<details>
+<summary><b>Standard — 2 vCPU / 4 GB</b></summary>
 
 ```bash
+# --- Secrets (fill in) -------------------------------------------------------
+AUTH_SECRET=replace-with-32-plus-random-chars
+CLICKHOUSE_PASSWORD=replace-with-strong-password
+CORS_ALLOWED_ORIGINS=http://your-host:5173
+
+# --- Backend & dashboard -----------------------------------------------------
 SERVICE_LIST_TIMEOUT_SECONDS=20
+CLEANUP_INTERVAL_MINUTES=720
+RETENTION_COUNT_PRECHECK_ENABLED=false
+
 CLICKHOUSE_MAX_MEMORY_MIB=160
 CLICKHOUSE_MAX_BYTES_BEFORE_EXTERNAL_GROUP_BY_MIB=48
 CLICKHOUSE_MAX_BYTES_BEFORE_EXTERNAL_SORT_MIB=48
@@ -237,30 +263,58 @@ CLICKHOUSE_MAX_TEMP_DATA_ON_DISK_MIB=768
 CLICKHOUSE_MAX_EXECUTION_TIME_SECONDS=20
 CLICKHOUSE_MAX_OPEN_CONNS=4
 CLICKHOUSE_MAX_IDLE_CONNS=2
+CLICKHOUSE_DIAL_TIMEOUT_SECONDS=5
 CLICKHOUSE_READ_TIMEOUT_SECONDS=30
-CLEANUP_INTERVAL_MINUTES=720
 
+DASHBOARD_FRESH_CACHE_TTL_SECONDS=30
+DASHBOARD_STALE_CACHE_TTL_SECONDS=900
+DASHBOARD_REQUEST_TIMEOUT_SECONDS=20
+DASHBOARD_QUERY_PARALLELISM=1
+DASHBOARD_HALVE_ON_OOM=true
+
+# --- OpenTelemetry Collector -------------------------------------------------
+OTEL_FILE_STORAGE_DIR=/var/lib/otelcol/queue
+OTEL_MEMORY_LIMITER_CHECK_INTERVAL=1s
 OTEL_MEMORY_LIMIT_MIB=170
 OTEL_MEMORY_SPIKE_LIMIT_MIB=35
-OTEL_FILE_STORAGE_DIR=/var/lib/otelcol/queue
 OTEL_BATCH_SEND_SIZE=500
 OTEL_BATCH_TIMEOUT=2s
+OTEL_EXPORTER_TIMEOUT=10s
 OTEL_SENDING_QUEUE_SIZE=5000
 OTEL_SENDING_QUEUE_CONSUMERS=1
+OTEL_RETRY_INITIAL_INTERVAL=1s
+OTEL_RETRY_MAX_INTERVAL=30s
 OTEL_RETRY_MAX_ELAPSED_TIME=0
 
+# --- Container memory caps ---------------------------------------------------
 APP_MEM_LIMIT=512m
 APP_MEMSWAP_LIMIT=512m
 OTEL_COLLECTOR_MEM_LIMIT=320m
 OTEL_COLLECTOR_MEMSWAP_LIMIT=320m
-CLICKHOUSE_MEM_LIMIT=1024m
-CLICKHOUSE_MEMSWAP_LIMIT=1024m
+CLICKHOUSE_MEM_LIMIT=2048m
+CLICKHOUSE_MEMSWAP_LIMIT=2048m
+
+# --- ClickHouse port bindings (localhost only on prod compose) ---------------
+CLICKHOUSE_HTTP_PORT=8123
+CLICKHOUSE_TCP_PORT=9000
 ```
 
-Big profile overrides (4 vCPU / 8 GB):
+</details>
+
+<details>
+<summary><b>Big — 4 vCPU / 8 GB</b></summary>
 
 ```bash
+# --- Secrets (fill in) -------------------------------------------------------
+AUTH_SECRET=replace-with-32-plus-random-chars
+CLICKHOUSE_PASSWORD=replace-with-strong-password
+CORS_ALLOWED_ORIGINS=http://your-host:5173
+
+# --- Backend & dashboard -----------------------------------------------------
 SERVICE_LIST_TIMEOUT_SECONDS=15
+CLEANUP_INTERVAL_MINUTES=360
+RETENTION_COUNT_PRECHECK_ENABLED=false
+
 CLICKHOUSE_MAX_MEMORY_MIB=256
 CLICKHOUSE_MAX_BYTES_BEFORE_EXTERNAL_GROUP_BY_MIB=64
 CLICKHOUSE_MAX_BYTES_BEFORE_EXTERNAL_SORT_MIB=64
@@ -268,42 +322,53 @@ CLICKHOUSE_MAX_TEMP_DATA_ON_DISK_MIB=1024
 CLICKHOUSE_MAX_EXECUTION_TIME_SECONDS=15
 CLICKHOUSE_MAX_OPEN_CONNS=8
 CLICKHOUSE_MAX_IDLE_CONNS=4
+CLICKHOUSE_DIAL_TIMEOUT_SECONDS=5
 CLICKHOUSE_READ_TIMEOUT_SECONDS=20
-CLEANUP_INTERVAL_MINUTES=360
 
-OTEL_MEMORY_LIMIT_MIB=300
-OTEL_MEMORY_SPIKE_LIMIT_MIB=60
-OTEL_FILE_STORAGE_DIR=/var/lib/otelcol/queue
-OTEL_BATCH_SEND_SIZE=500
-OTEL_BATCH_TIMEOUT=2s
-OTEL_SENDING_QUEUE_SIZE=5000
-OTEL_SENDING_QUEUE_CONSUMERS=1
-OTEL_RETRY_MAX_ELAPSED_TIME=0
-
-APP_MEM_LIMIT=768m
-APP_MEMSWAP_LIMIT=768m
-OTEL_COLLECTOR_MEM_LIMIT=512m
-OTEL_COLLECTOR_MEMSWAP_LIMIT=512m
-CLICKHOUSE_MEM_LIMIT=1536m
-CLICKHOUSE_MEMSWAP_LIMIT=1536m
-```
-
-`otel-collector` now uses persistent queue storage (`file_storage`) and `blocking: true`, so under pressure it applies backpressure instead of dropping data aggressively. If backlog remains high for a long period, tune queue size first, then collector/ClickHouse resources.
-
-Under memory pressure or timeouts, Opendashly now degrades gracefully for query-heavy endpoints:
-- ad-hoc query execution returns `status: "partial"` with per-signal failures in `signalErrors`
-- dashboard metrics can return partial data with `warnings` instead of failing the whole response
-
-Only non-recoverable failures should produce a full error response.
-
-Dashboard hardening env (same for all profiles):
-
-```bash
 DASHBOARD_FRESH_CACHE_TTL_SECONDS=30
 DASHBOARD_STALE_CACHE_TTL_SECONDS=900
 DASHBOARD_REQUEST_TIMEOUT_SECONDS=15
 DASHBOARD_QUERY_PARALLELISM=2
+DASHBOARD_HALVE_ON_OOM=true
+
+# --- OpenTelemetry Collector -------------------------------------------------
+OTEL_FILE_STORAGE_DIR=/var/lib/otelcol/queue
+OTEL_MEMORY_LIMITER_CHECK_INTERVAL=1s
+OTEL_MEMORY_LIMIT_MIB=300
+OTEL_MEMORY_SPIKE_LIMIT_MIB=60
+OTEL_BATCH_SEND_SIZE=500
+OTEL_BATCH_TIMEOUT=2s
+OTEL_EXPORTER_TIMEOUT=10s
+OTEL_SENDING_QUEUE_SIZE=5000
+OTEL_SENDING_QUEUE_CONSUMERS=1
+OTEL_RETRY_INITIAL_INTERVAL=1s
+OTEL_RETRY_MAX_INTERVAL=30s
+OTEL_RETRY_MAX_ELAPSED_TIME=0
+
+# --- Container memory caps ---------------------------------------------------
+APP_MEM_LIMIT=768m
+APP_MEMSWAP_LIMIT=768m
+OTEL_COLLECTOR_MEM_LIMIT=512m
+OTEL_COLLECTOR_MEMSWAP_LIMIT=512m
+CLICKHOUSE_MEM_LIMIT=4096m
+CLICKHOUSE_MEMSWAP_LIMIT=4096m
+
+# --- ClickHouse port bindings (localhost only on prod compose) ---------------
+CLICKHOUSE_HTTP_PORT=8123
+CLICKHOUSE_TCP_PORT=9000
 ```
+
+</details>
+
+<br/>
+
+**2. Resilience behavior** — shared across all profiles:
+
+- ad-hoc query execution returns `status: "partial"` with per-signal failures in `signalErrors`
+- dashboard metrics always return a response: any failing widget (recoverable or not) is reported via `warnings`, never a 5xx
+- on a `memory limit exceeded` error each widget retries once over the last half of the requested window (warning: `partial window (last half) due to backend pressure`)
+- dashboard queries use `quantileTDigest` and inline `SETTINGS` so a single hot widget can't exhaust ClickHouse on small VMs
+- `otel-collector` uses persistent queue storage (`file_storage`) and `blocking: true`, so under pressure it applies backpressure instead of dropping data aggressively. If backlog stays high for a long period, tune queue size first, then collector/ClickHouse resources.
 
 **3. Start:**
 
