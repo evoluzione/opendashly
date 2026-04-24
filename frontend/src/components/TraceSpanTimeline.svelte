@@ -115,6 +115,16 @@
     return Math.max(0, Math.round(toMs(span.startTime) - startMs));
   }
 
+  function downloadJson(data: unknown, filename: string) {
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
   $: validSpans = spans.filter(
     (span) => durationMs(span) > 0 && durationMs(span) <= maxDisplayMs,
   );
@@ -521,58 +531,56 @@
               on:click={() => toggleSpanDetails(span.spanId)}
             >
               <div class="meta" style={`--depth:${row.depth}`}>
-                <div class="meta-title">
-                  <span class="depth-branch" style={`opacity:${row.depth > 0 ? 1 : 0}`}>↳</span>
-                  <span class="source-dot" style={`background:${color}`}></span>
-                  <span class="name">{span.name || t($locale, "traceTimeline.span")}</span>
-                  {#if kind && kind.kind !== "internal"}
-                    <span
-                      class="kind-badge"
-                      title={kind.label}
-                      style={`background:${kind.color}20;color:${kind.color};border-color:${kind.color}40`}
-                    >
-                      {#if kind.kind === "producer"}
-                        <svg class="kind-icon-svg" viewBox="0 0 14 14" aria-hidden="true" focusable="false">
-                          <rect x="1.75" y="3" width="5.5" height="8" rx="1.2" fill="none" stroke="currentColor" stroke-width="1.3"/>
-                          <path d="M6.5 7h5" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
-                          <path d="M9.5 4.5 12 7 9.5 9.5" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-                        </svg>
-                      {:else if kind.kind === "consumer"}
-                        <svg class="kind-icon-svg" viewBox="0 0 14 14" aria-hidden="true" focusable="false">
-                          <rect x="6.75" y="3" width="5.5" height="8" rx="1.2" fill="none" stroke="currentColor" stroke-width="1.3"/>
-                          <path d="M7.5 7h-5" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
-                          <path d="M4.5 9.5 2 7l2.5-2.5" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-                        </svg>
-                      {:else}
-                        {kind.icon}
-                      {/if}
-                    </span>
-                  {/if}
-                  {#if externalIp}
-                    <span
-                      class="external-ip-badge"
-                      title={t($locale, "traceTimeline.callToExternalIp", { ip: externalIp.ip, source: externalIp.sourceKey })}
-                    >
-                      <svg class="external-ip-icon" viewBox="0 0 14 14" aria-hidden="true" focusable="false">
-                        <path d="M2.5 11.5 11.5 2.5" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
-                        <path d="M8.5 2.5h3v3" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-                        <circle cx="4" cy="10" r="2.2" fill="none" stroke="currentColor" stroke-width="1.3"/>
+                <span class="depth-branch" style={`opacity:${row.depth > 0 ? 1 : 0}`}>↳</span>
+                <span class="source-dot" style={`background:${color}`}></span>
+                <span class="name">{span.name || t($locale, "traceTimeline.span")}</span>
+                {#if kind && kind.kind !== "internal"}
+                  <span
+                    class="kind-badge"
+                    title={kind.label}
+                    style={`background:${kind.color}20;color:${kind.color};border-color:${kind.color}40`}
+                  >
+                    {#if kind.kind === "producer"}
+                      <svg class="kind-icon-svg" viewBox="0 0 14 14" aria-hidden="true" focusable="false">
+                        <rect x="1.75" y="3" width="5.5" height="8" rx="1.2" fill="none" stroke="currentColor" stroke-width="1.3"/>
+                        <path d="M6.5 7h5" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+                        <path d="M9.5 4.5 12 7 9.5 9.5" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
                       </svg>
-                    </span>
-                  {/if}
-                  {#if row.parallelSiblingCount > 0}
-                    <span
-                      class="parallel-badge"
-                      title={t($locale, "traceTimeline.parallelSpan", { count: row.parallelSiblingCount })}
-                    >
-                      <svg class="parallel-icon" viewBox="0 0 14 14" aria-hidden="true" focusable="false">
-                        <path d="M4 2v10M10 2v10" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
-                        <path d="M4 4h3M10 10H7" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
+                    {:else if kind.kind === "consumer"}
+                      <svg class="kind-icon-svg" viewBox="0 0 14 14" aria-hidden="true" focusable="false">
+                        <rect x="6.75" y="3" width="5.5" height="8" rx="1.2" fill="none" stroke="currentColor" stroke-width="1.3"/>
+                        <path d="M7.5 7h-5" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+                        <path d="M4.5 9.5 2 7l2.5-2.5" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
                       </svg>
-                      <span>x{row.parallelSiblingCount + 1}</span>
-                    </span>
-                  {/if}
-                </div>
+                    {:else}
+                      {kind.icon}
+                    {/if}
+                  </span>
+                {/if}
+                {#if externalIp}
+                  <span
+                    class="external-ip-badge"
+                    title={t($locale, "traceTimeline.callToExternalIp", { ip: externalIp.ip, source: externalIp.sourceKey })}
+                  >
+                    <svg class="external-ip-icon" viewBox="0 0 14 14" aria-hidden="true" focusable="false">
+                      <path d="M2.5 11.5 11.5 2.5" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+                      <path d="M8.5 2.5h3v3" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                      <circle cx="4" cy="10" r="2.2" fill="none" stroke="currentColor" stroke-width="1.3"/>
+                    </svg>
+                  </span>
+                {/if}
+                {#if row.parallelSiblingCount > 0}
+                  <span
+                    class="parallel-badge"
+                    title={t($locale, "traceTimeline.parallelSpan", { count: row.parallelSiblingCount })}
+                  >
+                    <svg class="parallel-icon" viewBox="0 0 14 14" aria-hidden="true" focusable="false">
+                      <path d="M4 2v10M10 2v10" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
+                      <path d="M4 4h3M10 10H7" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
+                    </svg>
+                    <span>x{row.parallelSiblingCount + 1}</span>
+                  </span>
+                {/if}
                 <span class="service">{span.service || t($locale, "traceTimeline.unknownServiceLower")}</span>
               </div>
 
@@ -587,10 +595,14 @@
                     >!</span
                   >
                 {/each}
-                <span class="bar-label">{formatDuration(offsetMs(span))}</span>
               </div>
 
-              <div class="duration">{formatDuration(durationMs(span))}</div>
+              <div class="duration">
+                {#if offsetMs(span) > 0}
+                  <span class="duration-offset">+{formatDuration(offsetMs(span))}</span>
+                {/if}
+                <span class="duration-value">{formatDuration(durationMs(span))}</span>
+              </div>
             </button>
           {/each}
         </div>
@@ -604,13 +616,53 @@
                 <h5>{selectedSpan.name || t($locale, "traceTimeline.unnamedSpan")}</h5>
                 <p>{selectedSpan.service || t($locale, "traceTimeline.unknownService")}</p>
               </div>
-              <button
-                type="button"
-                class="details-close"
-                on:click={() => (selectedSpanId = "")}
-              >
-                {t($locale, "traceTimeline.hideDetails")}
-              </button>
+              <div class="details-actions">
+                <button
+                  type="button"
+                  class="details-close icon-btn"
+                  on:click={() => downloadJson(selectedSpan, `span-${selectedSpan.spanId ?? 'unknown'}.json`)}
+                  title={t($locale, "traceTimeline.downloadSpan")}
+                  aria-label={t($locale, "traceTimeline.downloadSpan")}
+                >
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    width="14"
+                    height="14"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                    <polyline points="7 10 12 15 17 10"></polyline>
+                    <line x1="12" y1="15" x2="12" y2="3"></line>
+                  </svg>
+                </button>
+                <button
+                  type="button"
+                  class="details-close icon-btn"
+                  on:click={() => (selectedSpanId = "")}
+                  title={t($locale, "common.close")}
+                  aria-label={t($locale, "common.close")}
+                >
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    width="14"
+                    height="14"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <line x1="18" y1="6" x2="6" y2="18"></line>
+                    <line x1="6" y1="6" x2="18" y2="18"></line>
+                  </svg>
+                </button>
+              </div>
             </div>
           </div>
 
@@ -712,42 +764,6 @@
           </div>
 
           <div class="details-section">
-            <div class="section-head">
-              <span class="section-title-wrap">
-                <span class="section-title">{t($locale, "traceTimeline.logs")}</span>
-                <span class="section-count" title={`Totale: ${selectedSpanLogs.length}`}>
-                  <span>{selectedSpanLogs.length}</span>
-                </span>
-              </span>
-              <button
-                type="button"
-                class="section-toggle"
-                on:click={() => (showRelatedEvents = !showRelatedEvents)}
-                aria-expanded={showRelatedEvents}
-              >
-                {showRelatedEvents ? t($locale, "common.close") : t($locale, "traceTimeline.expand")}
-              </button>
-            </div>
-            {#if showRelatedEvents}
-              {#if selectedSpanLogs.length === 0}
-                <p class="empty-section">{t($locale, "traceTimeline.noLogs")}</p>
-              {:else}
-                <div class="scroll-block">
-                  {#each selectedSpanLogs as log}
-                    <div class="log-card">
-                      <div class="log-head">
-                        <strong>{log.severity || "-"}</strong>
-                        <span>{formatTimestamp(log.timestamp)}</span>
-                      </div>
-                      <pre class="log-body">{log.body || "-"}</pre>
-                    </div>
-                  {/each}
-                </div>
-              {/if}
-            {/if}
-          </div>
-
-          <div class="details-section">
             <span class="section-title">{t($locale, "traceTimeline.attributes")}</span>
             {#if !selectedSpan.attributes || Object.keys(selectedSpan.attributes).length === 0}
               <p class="empty-section">{t($locale, "traceTimeline.noAttributes")}</p>
@@ -818,96 +834,92 @@
   }
 
   .timeline-layout.with-details {
-    grid-template-columns: minmax(420px, 1fr) minmax(340px, 0.8fr);
+    grid-template-columns: 2fr 1fr;
   }
 
   .span-list {
     border: 1px solid rgba(148, 163, 184, 0.2);
     border-radius: 12px;
     background: var(--color-slate-50);
-    padding: 12px;
+    padding: 8px;
     display: flex;
     flex-direction: column;
-    gap: 10px;
+    gap: 6px;
     min-height: 0;
   }
 
   .span-header {
     display: grid;
-    grid-template-columns: minmax(260px, 320px) 1fr 80px;
-    gap: 12px;
+    grid-template-columns: minmax(240px, 320px) 1fr 72px;
+    gap: 8px;
     align-items: center;
-    font-size: 11px;
+    font-size: 10px;
     text-transform: uppercase;
     letter-spacing: 0.08em;
     color: var(--color-slate-400);
     font-weight: 600;
-    padding: 0 4px 8px;
+    padding: 0 4px 6px;
     border-bottom: 1px solid rgba(148, 163, 184, 0.3);
   }
 
   .span-grid {
     display: flex;
     flex-direction: column;
-    gap: 8px;
+    gap: 3px;
     overflow-y: auto;
     min-height: 0;
-    padding-right: 4px;
+    padding-right: 2px;
   }
 
   .span-row {
     border: 1px solid transparent;
-    background: white;
-    border-radius: 10px;
+    background: transparent;
+    border-radius: 4px;
     display: grid;
-    grid-template-columns: minmax(260px, 320px) 1fr 80px;
-    gap: 12px;
+    grid-template-columns: minmax(240px, 320px) 1fr 72px;
+    gap: 8px;
     align-items: center;
     text-align: left;
-    padding: 10px;
+    padding: 5px 6px;
     cursor: pointer;
+    min-height: 0;
   }
 
   .span-row:hover {
-    border-color: rgba(59, 130, 246, 0.35);
+    background: rgba(59, 130, 246, 0.04);
+    border-color: rgba(59, 130, 246, 0.2);
   }
 
   .span-row.selected {
+    background: rgba(37, 99, 235, 0.06);
     border-color: var(--color-info-600);
-    box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.12);
   }
 
   .meta {
     display: flex;
-    flex-direction: column;
+    flex-direction: row;
+    align-items: center;
     gap: 4px;
     min-width: 0;
     padding-left: min(calc(var(--depth, 0) * 10px), 48px);
   }
 
-  .meta-title {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    min-width: 0;
-  }
-
   .depth-branch {
-    font-size: 10px;
+    font-size: 9px;
     color: var(--color-slate-400);
     flex-shrink: 0;
   }
 
   .source-dot {
-    width: 8px;
-    height: 8px;
+    width: 6px;
+    height: 6px;
     border-radius: 999px;
     flex-shrink: 0;
   }
 
   .name {
     font-size: 12px;
-    font-weight: 600;
+    font-weight: 500;
     color: var(--color-slate-950);
     overflow: hidden;
     text-overflow: ellipsis;
@@ -918,19 +930,20 @@
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    min-width: 22px;
-    padding: 2px 6px;
+    min-width: 18px;
+    padding: 1px 4px;
     border-radius: 999px;
     border: 1px solid;
-    font-size: 11px;
+    font-size: 10px;
     font-weight: 700;
     white-space: nowrap;
     line-height: 1;
+    flex-shrink: 0;
   }
 
   .kind-icon-svg {
-    width: 12px;
-    height: 12px;
+    width: 10px;
+    height: 10px;
     display: block;
   }
 
@@ -938,19 +951,20 @@
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    min-width: 22px;
-    font-size: 11px;
+    min-width: 18px;
+    font-size: 10px;
     color: var(--color-primary-450);
     background: var(--color-primary-25);
     border: 1px solid #ddd6fe;
-    padding: 2px 6px;
+    padding: 1px 4px;
     border-radius: 999px;
     line-height: 1;
+    flex-shrink: 0;
   }
 
   .external-ip-icon {
-    width: 11px;
-    height: 11px;
+    width: 10px;
+    height: 10px;
     display: block;
   }
 
@@ -958,87 +972,94 @@
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    gap: 4px;
-    min-width: 30px;
-    font-size: 10px;
+    gap: 2px;
+    min-width: 24px;
+    font-size: 9px;
     font-weight: 700;
-    color: var(--color-slate-700);
-    background: var(--color-slate-50);
+    color: var(--color-slate-600);
+    background: var(--color-slate-100);
     border: 1px solid var(--color-slate-300);
-    padding: 2px 7px;
+    padding: 1px 5px;
     border-radius: 999px;
     line-height: 1;
+    flex-shrink: 0;
   }
 
   .parallel-icon {
-    width: 11px;
-    height: 11px;
+    width: 9px;
+    height: 9px;
     display: block;
     opacity: 0.85;
   }
 
   .service {
-    font-size: 11px;
-    color: var(--color-slate-500);
-    padding-left: 16px;
+    font-size: 10px;
+    color: var(--color-slate-400);
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+    flex-shrink: 0;
+    margin-left: 2px;
   }
 
   .bar-track {
     position: relative;
-    height: 18px;
+    height: 12px;
     background: repeating-linear-gradient(
       90deg,
-      rgba(148, 163, 184, 0.15),
-      rgba(148, 163, 184, 0.15) 1px,
+      rgba(148, 163, 184, 0.12),
+      rgba(148, 163, 184, 0.12) 1px,
       transparent 1px,
       transparent 40px
     );
     border-radius: 999px;
-    overflow: hidden;
+    overflow: visible;
   }
 
   .bar {
     position: absolute;
-    top: 3px;
-    height: 12px;
+    top: 2px;
+    height: 8px;
     border-radius: 999px;
   }
 
   .bar-error-event {
     position: absolute;
-    top: 1px;
+    top: 0;
     transform: translateX(-50%);
-    width: 14px;
-    height: 14px;
+    width: 12px;
+    height: 12px;
     border-radius: 999px;
     background: var(--color-danger-600);
     color: var(--color-white);
     border: 1px solid var(--color-white);
-    font-size: 10px;
+    font-size: 9px;
     font-weight: 800;
-    line-height: 12px;
+    line-height: 10px;
     text-align: center;
     box-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
   }
 
-  .bar-label {
-    position: absolute;
-    top: -16px;
-    left: 4px;
-    font-size: 9px;
-    color: var(--color-slate-400);
-    font-weight: 600;
+  .duration {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    justify-content: center;
+    text-align: right;
+    white-space: nowrap;
+    line-height: 1.2;
   }
 
-  .duration {
-    font-size: 11px;
+  .duration-offset {
+    font-size: 9px;
+    color: var(--color-slate-400);
+    font-weight: 500;
+  }
+
+  .duration-value {
+    font-size: 10px;
     color: var(--color-slate-600);
     font-weight: 600;
-    text-align: right;
-    padding-right: 4px;
   }
 
   .span-details {
@@ -1075,6 +1096,12 @@
     color: var(--color-slate-500);
   }
 
+  .details-actions {
+    display: flex;
+    gap: 6px;
+    flex-shrink: 0;
+  }
+
   .details-close {
     border: 1px solid var(--color-slate-200);
     background: var(--color-slate-50);
@@ -1085,6 +1112,13 @@
     padding: 6px 8px;
     cursor: pointer;
     white-space: nowrap;
+  }
+
+  .details-close.icon-btn {
+    padding: 6px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
   }
 
   .details-close:hover {

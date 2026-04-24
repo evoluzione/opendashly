@@ -207,6 +207,7 @@ const translations: Record<Locale, TranslationMap> = {
     'logs.spanId': 'Span ID',
     'logs.structuredBody': 'Structured body',
     'logs.resourceAttributes': 'Resource attributes',
+    'logs.downloadJson': 'Download this log entry as JSON (message, severity, timestamp, attributes, trace/span IDs)',
 
     'traces.empty': 'No traces found for selected filters.',
     'traces.unnamed': 'Unnamed trace',
@@ -220,6 +221,8 @@ const translations: Record<Locale, TranslationMap> = {
     'traces.errors': 'Errors {count}',
     'traces.lastSpan': 'Last span {time}',
     'traces.hideDetails': 'Hide details',
+    'traces.downloadJson': 'Download the full trace as JSON (summary, all spans with attributes and events, correlated logs and metrics)',
+    'traceTimeline.downloadSpan': 'Download this span as JSON (timings, attributes, events, exceptions)',
 
     'traceTimeline.title': 'Span timeline',
     'traceTimeline.totalDuration': 'Total duration: {ms} ms',
@@ -734,6 +737,7 @@ const translations: Record<Locale, TranslationMap> = {
     'logs.spanId': 'Span ID',
     'logs.structuredBody': 'Corpo strutturato',
     'logs.resourceAttributes': 'Attributi risorsa',
+    'logs.downloadJson': 'Scarica questo log come JSON (messaggio, severità, timestamp, attributi, trace/span ID)',
 
     'traces.empty': 'Nessuna traccia trovata per i filtri selezionati.',
     'traces.unnamed': 'Traccia senza nome',
@@ -747,6 +751,8 @@ const translations: Record<Locale, TranslationMap> = {
     'traces.errors': 'Errori {count}',
     'traces.lastSpan': 'Ultimo span {time}',
     'traces.hideDetails': 'Nascondi dettagli',
+    'traces.downloadJson': 'Scarica la traccia completa come JSON (riepilogo, tutti gli span con attributi ed eventi, log e metriche correlati)',
+    'traceTimeline.downloadSpan': 'Scarica questo span come JSON (tempi, attributi, eventi, eccezioni)',
 
     'traceTimeline.title': 'Linea temporale degli span',
     'traceTimeline.totalDuration': 'Durata totale: {ms} ms',

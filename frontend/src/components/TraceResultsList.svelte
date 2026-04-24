@@ -2,6 +2,7 @@
   import { createEventDispatcher, onDestroy } from "svelte";
   import CorrelationPanel from "./CorrelationPanel.svelte";
   import TraceSpanTimeline from "./TraceSpanTimeline.svelte";
+  import { fetchRelated, fetchTraceSpans } from "../services/traces";
   import { getLocaleTag, locale, t } from "../lib/i18n";
 
   export let traces: any[] = [];
@@ -31,6 +32,38 @@
     const target = event.currentTarget as HTMLSelectElement | null;
     if (!target) return;
     changePageSize(target.value);
+  }
+
+  function downloadJson(data: any, filename: string) {
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  let isDownloadingTrace = false;
+
+  async function downloadTrace() {
+    if (!selectedTrace || isDownloadingTrace) return;
+    isDownloadingTrace = true;
+    try {
+      const traceId = selectedTrace.traceId;
+      const [spansResult, relatedResult] = await Promise.allSettled([
+        fetchTraceSpans(traceId),
+        fetchRelated(traceId),
+      ]);
+      const payload = {
+        ...selectedTrace,
+        spans: spansResult.status === 'fulfilled' ? spansResult.value : null,
+        related: relatedResult.status === 'fulfilled' ? relatedResult.value : null,
+      };
+      downloadJson(payload, `trace-${traceId ?? 'unknown'}.json`);
+    } finally {
+      isDownloadingTrace = false;
+    }
   }
 
   function closeModal() {
@@ -292,27 +325,53 @@
             <h3>{selectedTrace.name || t($locale, "traces.unnamed")}</h3>
           </div>
         </div>
-        <button
-          type="button"
-          class="close-btn"
-          on:click={closeModal}
-          aria-label={t($locale, "common.close")}
-        >
-          <svg
-            xmlns="http://www.w3.org/2000/svg"
-            width="18"
-            height="18"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="2"
-            stroke-linecap="round"
-            stroke-linejoin="round"
+        <div class="header-actions">
+          <button
+            type="button"
+            class="close-btn"
+            on:click={downloadTrace}
+            disabled={isDownloadingTrace}
+            aria-label={t($locale, 'traces.downloadJson')}
+            title={t($locale, 'traces.downloadJson')}
           >
-            <line x1="18" y1="6" x2="6" y2="18"></line>
-            <line x1="6" y1="6" x2="18" y2="18"></line>
-          </svg>
-        </button>
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              width="18"
+              height="18"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+              <polyline points="7 10 12 15 17 10"></polyline>
+              <line x1="12" y1="15" x2="12" y2="3"></line>
+            </svg>
+          </button>
+          <button
+            type="button"
+            class="close-btn"
+            on:click={closeModal}
+            aria-label={t($locale, "common.close")}
+          >
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              width="18"
+              height="18"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <line x1="18" y1="6" x2="6" y2="18"></line>
+              <line x1="6" y1="6" x2="18" y2="18"></line>
+            </svg>
+          </button>
+        </div>
       </header>
       <div class="modal-body">
         <div class="meta">
@@ -681,6 +740,12 @@
     font-size: 18px;
     color: white;
     font-weight: 600;
+  }
+
+  .header-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
   }
 
   .close-btn {

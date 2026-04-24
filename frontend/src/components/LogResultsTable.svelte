@@ -9,6 +9,7 @@
   export let lastUpdatedLabel = "";
   export let pageSize = "100";
   export let pageSizeOptions: string[] = ["25", "50", "100", "200"];
+  export let inlineDetails = false;
 
   const dispatch = createEventDispatcher();
   let selectedLog: any | null = null;
@@ -204,6 +205,16 @@
     return severityStyles[key] ?? severityStyles.info;
   }
 
+  function downloadJson(data: any, filename: string) {
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
   function closeLogModal() {
     selectedLog = null;
   }
@@ -254,7 +265,8 @@
   });
 </script>
 
-<div class="results-container">
+<div class="results-container" class:split-view={inlineDetails && selectedLog}>
+  <div class="list-pane">
   <div class="results-content">
     {#if logs.length === 0}
       <div class="empty">{t($locale, "logs.empty")}</div>
@@ -373,22 +385,23 @@
       </div>
     </div>
   {/if}
-</div>
+  </div>
 
-{#if selectedLog}
-  {@const structuredBody = parseStructured(selectedLog.body)}
-  {@const tags = buildTags(selectedLog)}
-  {@const mergedAttributes = mergeAttributes(selectedLog)}
-  <div
-    class="modal-backdrop"
-    role="button"
-    tabindex="0"
-    aria-label={t($locale, "logs.closeDetails")}
-    on:click|self={closeLogModal}
-    on:keydown={(event) => handleBackdropKeydown(event, closeLogModal)}
-  >
-    <div class="modal log-modal" role="dialog" aria-modal="true">
-      <header class="modal-header">
+  {#if selectedLog}
+    {@const structuredBody = parseStructured(selectedLog.body)}
+    {@const tags = buildTags(selectedLog)}
+    <!-- svelte-ignore a11y-no-noninteractive-tabindex -->
+    <div
+      class="details-wrapper"
+      class:as-modal={!inlineDetails}
+      role={!inlineDetails ? 'button' : undefined}
+      tabindex={!inlineDetails ? 0 : undefined}
+      aria-label={!inlineDetails ? t($locale, "logs.closeDetails") : undefined}
+      on:click|self={() => { if (!inlineDetails) closeLogModal(); }}
+      on:keydown={(event) => { if (!inlineDetails) handleBackdropKeydown(event, closeLogModal); }}
+    >
+      <div class="modal log-modal" class:inline-panel={inlineDetails} role="dialog" aria-modal="true">
+        <header class="modal-header">
         <div class="header-title">
           <svg
             xmlns="http://www.w3.org/2000/svg"
@@ -409,27 +422,52 @@
           </svg>
           <span>{t($locale, "logs.detailsTitle")}</span>
         </div>
-        <button
-          type="button"
-          class="close-btn"
-          on:click={closeLogModal}
-          aria-label={t($locale, "common.close")}
-        >
-          <svg
-            xmlns="http://www.w3.org/2000/svg"
-            width="20"
-            height="20"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="2"
-            stroke-linecap="round"
-            stroke-linejoin="round"
+        <div class="header-actions">
+          <button
+            type="button"
+            class="close-btn"
+            on:click={() => downloadJson(selectedLog, `log-${String(selectedLog.timestamp).replace(/[:.]/g, '-')}.json`)}
+            aria-label={t($locale, 'logs.downloadJson')}
+            title={t($locale, 'logs.downloadJson')}
           >
-            <line x1="18" y1="6" x2="6" y2="18"></line>
-            <line x1="6" y1="6" x2="18" y2="18"></line>
-          </svg>
-        </button>
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              width="20"
+              height="20"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+              <polyline points="7 10 12 15 17 10"></polyline>
+              <line x1="12" y1="15" x2="12" y2="3"></line>
+            </svg>
+          </button>
+          <button
+            type="button"
+            class="close-btn"
+            on:click={closeLogModal}
+            aria-label={t($locale, "common.close")}
+          >
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              width="20"
+              height="20"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <line x1="18" y1="6" x2="6" y2="18"></line>
+              <line x1="6" y1="6" x2="18" y2="18"></line>
+            </svg>
+          </button>
+        </div>
       </header>
 
       <div class="modal-body">
@@ -547,11 +585,12 @@
               </div>
             </section>
           {/if}
+          </div>
         </div>
       </div>
     </div>
-  </div>
-{/if}
+  {/if}
+</div>
 
 <style>
   .empty {
@@ -571,6 +610,24 @@
     height: 100%;
     min-height: 0;
     flex: 1;
+  }
+
+  .results-container.split-view {
+    display: grid;
+    grid-template-columns: 2fr 1fr;
+    grid-template-rows: minmax(0, 1fr);
+    gap: 12px;
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  .list-pane {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    min-width: 0;
+    flex: 1;
+    overflow: hidden;
   }
 
   .results-content {
@@ -780,7 +837,7 @@
     padding: 8px 12px !important;
   }
 
-  .modal-backdrop {
+  .details-wrapper.as-modal {
     position: fixed;
     inset: 0;
     background: rgba(var(--rgb-slate-950), 0.7);
@@ -790,6 +847,13 @@
     justify-content: center;
     padding: 24px;
     z-index: 100;
+  }
+
+  .details-wrapper:not(.as-modal) {
+    display: flex;
+    min-height: 0;
+    min-width: 0;
+    overflow: hidden;
   }
 
   .log-modal {
@@ -803,6 +867,150 @@
       0 0 0 1px rgba(255, 255, 255, 0.1);
     display: flex;
     flex-direction: column;
+  }
+
+  .log-modal.inline-panel {
+    width: 100%;
+    max-height: 100%;
+    height: 100%;
+    min-height: 0;
+    border-radius: 12px;
+    background: var(--color-white);
+    border: 1px solid rgba(148, 163, 184, 0.2);
+    box-shadow: none;
+    overflow-y: auto;
+  }
+
+  .log-modal.inline-panel .modal-header {
+    background: var(--color-white);
+    color: var(--color-slate-950);
+    border-bottom: 1px solid var(--color-slate-200);
+    padding: 12px;
+  }
+
+  .log-modal.inline-panel .header-title {
+    font-size: 11px;
+    color: var(--color-slate-500);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    font-weight: 700;
+  }
+
+  .log-modal.inline-panel .header-title svg {
+    color: var(--color-slate-500);
+    width: 16px;
+    height: 16px;
+  }
+
+  .log-modal.inline-panel .close-btn {
+    background: var(--color-slate-50);
+    border: 1px solid var(--color-slate-200);
+    color: var(--color-slate-600);
+    border-radius: 8px;
+    padding: 6px;
+  }
+
+  .log-modal.inline-panel .close-btn:hover {
+    background: var(--color-slate-100);
+    color: var(--color-slate-900);
+  }
+
+  .log-modal.inline-panel .close-btn svg {
+    width: 14px;
+    height: 14px;
+  }
+
+  .log-modal.inline-panel .modal-body {
+    padding: 12px;
+    gap: 10px;
+    overflow: visible;
+    flex: none;
+  }
+
+  .log-modal.inline-panel .log-header-info {
+    padding-bottom: 10px;
+  }
+
+  .log-modal.inline-panel .log-section,
+  .log-modal.inline-panel .log-section.compact,
+  .log-modal.inline-panel .log-section.message-section {
+    padding: 0;
+    background: transparent;
+    border: none;
+    border-radius: 0;
+    margin-bottom: 12px;
+  }
+
+  .log-modal.inline-panel .section-title {
+    margin: 0 0 6px 0;
+  }
+
+  .log-modal.inline-panel .secondary-info {
+    border-top: none;
+    padding-top: 0;
+    gap: 12px;
+  }
+
+  .log-modal.inline-panel .log-message {
+    font-size: 13px;
+    line-height: 1.5;
+  }
+
+  .log-modal.inline-panel .context-grid {
+    grid-template-columns: 1fr;
+    gap: 8px;
+  }
+
+  .log-modal.inline-panel .context-item {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+  }
+
+  .log-modal.inline-panel .context-label {
+    font-size: 10px;
+    word-break: break-word;
+  }
+
+  .log-modal.inline-panel .context-value {
+    font-size: 12px;
+  }
+
+  .log-modal.inline-panel .attributes-list,
+  .log-modal.inline-panel .attributes-list.compact {
+    gap: 4px;
+  }
+
+  .log-modal.inline-panel .attr-row {
+    display: grid;
+    grid-template-columns: minmax(120px, 170px) 1fr;
+    gap: 8px;
+    padding: 0;
+    background: transparent;
+    border: none;
+    border-radius: 0;
+    font-size: 11px;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  }
+
+  .log-modal.inline-panel .attr-row .attr-key {
+    font-size: 11px;
+    font-weight: 400;
+    text-transform: none;
+    letter-spacing: 0;
+    color: #0ea5e9;
+    font-family: inherit;
+  }
+
+  .log-modal.inline-panel .attr-row .attr-value {
+    font-size: 11px;
+    color: var(--color-slate-700);
+  }
+
+  .log-modal.inline-panel .code-block {
+    font-size: 11px;
+    padding: 8px;
   }
 
   .modal-header {
@@ -823,6 +1031,12 @@
     font-weight: 600;
   }
 
+  .header-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
   .close-btn {
     display: flex;
     align-items: center;
@@ -834,6 +1048,10 @@
     padding: 8px;
     border-radius: 8px;
     transition: all 0.2s ease;
+  }
+
+  .close-btn:hover {
+    background: rgba(255, 255, 255, 0.2);
   }
 
   .close-btn:hover {
