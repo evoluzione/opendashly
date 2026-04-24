@@ -874,7 +874,7 @@
   .span-grid {
     display: flex;
     flex-direction: column;
-    gap: 4px;
+    gap: 2px;
     overflow-y: auto;
     min-height: 0;
     min-width: 0;
@@ -892,13 +892,13 @@
     gap: 10px;
     align-items: center;
     text-align: left;
-    padding: 7px 8px;
+    padding: 5px 8px;
     cursor: pointer;
     font: inherit;
-    line-height: 1.25;
+    line-height: 1.15;
     min-height: 0;
     min-width: 0;
-    min-height: 30px;
+    min-height: 26px;
     outline: none;
   }
 

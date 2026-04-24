@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
 import process from "node:process";
+import { performance } from "node:perf_hooks";
 import { setTimeout as sleep } from "node:timers/promises";
 
 import { context, trace, SpanKind, SpanStatusCode } from "@opentelemetry/api";
@@ -480,6 +481,14 @@ function jitterMs(rng, base, jitter) {
   return Math.max(3, Math.round(base + (rng.next() * 2 - 1) * jitter));
 }
 
+function nowEpochMs() {
+  return performance.timeOrigin + performance.now();
+}
+
+function randomDurationMs(rng, min, max) {
+  return min + rng.next() * (max - min);
+}
+
 function statusTextFromCode(code) {
   if (code >= 500) {
     return "ERROR";
@@ -540,8 +549,16 @@ function emitFatPricingSpans(service, parentCtx, serverStartMs, serverDurationMs
   const sku = `SKU-${rng.int(1000, 9999)}`;
 
   for (let i = 0; i < itemCount; i += 1) {
-    const slotStart = serverStartMs + 1 + Math.floor((i / itemCount) * windowMs);
-    const calcDuration = rng.int(0, 2);
+    const slotStart = serverStartMs + 1 + (i / itemCount) * windowMs;
+    const findDuration = randomDurationMs(rng, 0.04, 0.85);
+    const strategiesDuration = randomDurationMs(rng, 0.03, 0.75);
+    const lowestDuration = randomDurationMs(rng, 0.05, 0.95);
+    const calcDuration = Math.max(
+      randomDurationMs(rng, 0.18, 1.8),
+      findDuration,
+      strategiesDuration,
+      lowestDuration
+    );
 
     const calcSpan = service.tracer.startSpan(
       "CalculateFinalPrice",
@@ -566,7 +583,7 @@ function emitFatPricingSpans(service, parentCtx, serverStartMs, serverDurationMs
       },
       calcCtx
     );
-    findSpan.end(slotStart + rng.int(0, 1));
+    findSpan.end(slotStart + findDuration);
 
     const strategiesSpan = service.tracer.startSpan(
       "GetPossibleStrategies",
@@ -577,7 +594,7 @@ function emitFatPricingSpans(service, parentCtx, serverStartMs, serverDurationMs
       },
       calcCtx
     );
-    strategiesSpan.end(slotStart + rng.int(0, 1));
+    strategiesSpan.end(slotStart + strategiesDuration);
 
     if (rng.next() < 0.35) {
       const lowestSpan = service.tracer.startSpan(
@@ -589,7 +606,7 @@ function emitFatPricingSpans(service, parentCtx, serverStartMs, serverDurationMs
         },
         calcCtx
       );
-      lowestSpan.end(slotStart + rng.int(0, 1));
+      lowestSpan.end(slotStart + lowestDuration);
     }
 
     calcSpan.end(slotStart + calcDuration);
@@ -679,7 +696,7 @@ async function simulateRequest(runtime, reqNo) {
   }
 
   const gateway = servicesByName.get(journey.rootService);
-  const rootStart = Date.now();
+  const rootStart = nowEpochMs();
 
   let rootSpan = null;
   let rootCtx = context.active();
@@ -733,7 +750,7 @@ async function simulateRequest(runtime, reqNo) {
     const httpStatus = isErrorCall ? failStatus : 200;
     const serverDuration = jitterMs(rng, call.baseMs, call.jitterMs);
     const clientDuration = Math.max(serverDuration + rng.int(2, 16), 5);
-    const callStart = Date.now();
+    const callStart = nowEpochMs();
 
     let clientSpan = null;
     let clientCtx = rootCtx;
