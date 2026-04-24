@@ -36,7 +36,7 @@
     <div class="grid">
       <div class="block">
         <h4>{t($locale, "correlation.logs")}</h4>
-        <LogResultsTable logs={related.logs} />
+        <LogResultsTable logs={related.logs} inlineDetails={true} />
       </div>
     </div>
   {/if}
@@ -51,6 +51,7 @@
     border-radius: 12px;
     padding: 12px;
     border: 1px solid rgba(148, 163, 184, 0.2);
+    min-height: 0;
   }
 
   header {
@@ -76,12 +77,17 @@
   .grid {
     display: grid;
     gap: 20px;
+    grid-template-rows: minmax(0, 1fr);
+    flex: 1;
+    min-height: 0;
   }
 
   .block {
     display: flex;
     flex-direction: column;
     gap: 10px;
+    min-height: 0;
+    min-width: 0;
   }
 
   .block h4 {
