@@ -600,6 +600,7 @@
               <div class="duration">
                 {#if offsetMs(span) > 0}
                   <span class="duration-offset">+{formatDuration(offsetMs(span))}</span>
+                  <span class="duration-sep" aria-hidden="true">·</span>
                 {/if}
                 <span class="duration-value">{formatDuration(durationMs(span))}</span>
               </div>
@@ -850,8 +851,8 @@
 
   .span-header {
     display: grid;
-    grid-template-columns: minmax(240px, 320px) 1fr 72px;
-    gap: 8px;
+    grid-template-columns: minmax(240px, 320px) 1fr 112px;
+    gap: 10px;
     align-items: center;
     font-size: 10px;
     text-transform: uppercase;
@@ -862,10 +863,14 @@
     border-bottom: 1px solid rgba(148, 163, 184, 0.3);
   }
 
+  .span-header > :last-child {
+    text-align: right;
+  }
+
   .span-grid {
     display: flex;
     flex-direction: column;
-    gap: 3px;
+    gap: 4px;
     overflow-y: auto;
     min-height: 0;
     padding-right: 2px;
@@ -876,11 +881,11 @@
     background: transparent;
     border-radius: 4px;
     display: grid;
-    grid-template-columns: minmax(240px, 320px) 1fr 72px;
-    gap: 8px;
+    grid-template-columns: minmax(240px, 320px) 1fr 112px;
+    gap: 10px;
     align-items: center;
     text-align: left;
-    padding: 5px 6px;
+    padding: 7px 8px;
     cursor: pointer;
     min-height: 0;
   }
@@ -1042,24 +1047,33 @@
 
   .duration {
     display: flex;
-    flex-direction: column;
-    align-items: flex-end;
-    justify-content: center;
+    flex-direction: row;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 4px;
     text-align: right;
     white-space: nowrap;
     line-height: 1.2;
   }
 
   .duration-offset {
-    font-size: 9px;
+    font-size: 10px;
     color: var(--color-slate-400);
     font-weight: 500;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .duration-sep {
+    font-size: 10px;
+    color: var(--color-slate-300);
+    font-weight: 400;
   }
 
   .duration-value {
-    font-size: 10px;
+    font-size: 11px;
     color: var(--color-slate-600);
     font-weight: 600;
+    font-variant-numeric: tabular-nums;
   }
 
   .span-details {
