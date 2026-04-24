@@ -253,6 +253,7 @@ const translations: Record<Locale, TranslationMap> = {
     'traceTimeline.expand': 'Expand',
     'traceTimeline.callToExternalIp': 'Call to external IP: {ip} ({source})',
     'traceTimeline.parallelSpan': 'Parallel span with {count} sibling in the same branch',
+    'traceTimeline.startOffset': 'Starts at +{ms}',
 
     'dashboard.noData': 'No data available',
     'dashboard.table.endpoint': 'Endpoint',
@@ -783,6 +784,7 @@ const translations: Record<Locale, TranslationMap> = {
     'traceTimeline.expand': 'Espandi',
     'traceTimeline.callToExternalIp': 'Chiamata verso IP esterno: {ip} ({source})',
     'traceTimeline.parallelSpan': 'Span parallelo con {count} sibling nello stesso ramo',
+    'traceTimeline.startOffset': 'Inizia a +{ms}',
 
     'dashboard.noData': 'Nessun dato disponibile',
     'dashboard.table.endpoint': 'Endpoint',

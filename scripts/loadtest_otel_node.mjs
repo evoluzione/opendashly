@@ -103,6 +103,28 @@ const JOURNEYS = [
     baseMs: 55,
     jitterMs: 30,
     errorBias: 0.15
+  },
+  {
+    id: "catalog-search-heavy",
+    weight: 3,
+    rootRoute: "/api/v1/catalog/search",
+    method: "GET",
+    rootService: "api-gateway",
+    calls: [
+      {
+        caller: "api-gateway",
+        callee: "catalog-service",
+        method: "GET",
+        route: "/catalog/search",
+        baseMs: 90,
+        jitterMs: 50,
+        fatPricing: { itemsRange: [40, 140] }
+      },
+      { caller: "catalog-service", callee: "inventory-service", method: "GET", route: "/inventory/availability", baseMs: 22, jitterMs: 18 }
+    ],
+    baseMs: 180,
+    jitterMs: 100,
+    errorBias: 0.15
   }
 ];
 
@@ -511,6 +533,69 @@ function spanName(method, route) {
   return `${method.toUpperCase()} ${route}`;
 }
 
+function emitFatPricingSpans(service, parentCtx, serverStartMs, serverDurationMs, rng, itemsRange) {
+  const [minItems, maxItems] = itemsRange;
+  const itemCount = rng.int(minItems, maxItems);
+  const windowMs = Math.max(1, serverDurationMs - 2);
+  const sku = `SKU-${rng.int(1000, 9999)}`;
+
+  for (let i = 0; i < itemCount; i += 1) {
+    const slotStart = serverStartMs + 1 + Math.floor((i / itemCount) * windowMs);
+    const calcDuration = rng.int(0, 2);
+
+    const calcSpan = service.tracer.startSpan(
+      "CalculateFinalPrice",
+      {
+        kind: SpanKind.INTERNAL,
+        attributes: {
+          "pricing.item_index": i,
+          "pricing.sku": `${sku}-${i}`
+        },
+        startTime: slotStart
+      },
+      parentCtx
+    );
+    const calcCtx = trace.setSpan(parentCtx, calcSpan);
+
+    const findSpan = service.tracer.startSpan(
+      "FindPrice",
+      {
+        kind: SpanKind.INTERNAL,
+        attributes: { "pricing.step": "find" },
+        startTime: slotStart
+      },
+      calcCtx
+    );
+    findSpan.end(slotStart + rng.int(0, 1));
+
+    const strategiesSpan = service.tracer.startSpan(
+      "GetPossibleStrategies",
+      {
+        kind: SpanKind.INTERNAL,
+        attributes: { "pricing.step": "strategies" },
+        startTime: slotStart
+      },
+      calcCtx
+    );
+    strategiesSpan.end(slotStart + rng.int(0, 1));
+
+    if (rng.next() < 0.35) {
+      const lowestSpan = service.tracer.startSpan(
+        "CalculateLowestPrice30Days",
+        {
+          kind: SpanKind.INTERNAL,
+          attributes: { "pricing.step": "lowest30d" },
+          startTime: slotStart
+        },
+        calcCtx
+      );
+      lowestSpan.end(slotStart + rng.int(0, 1));
+    }
+
+    calcSpan.end(slotStart + calcDuration);
+  }
+}
+
 function emitLog(service, ctx, severity, body, attributes) {
   if (!service.logger) {
     return;
@@ -715,6 +800,10 @@ async function simulateRequest(runtime, reqNo) {
       }
 
       serverCtx = trace.setSpan(clientCtx, serverSpan);
+
+      if (call.fatPricing) {
+        emitFatPricingSpans(callee, serverCtx, callStart + 1, serverDuration, rng, call.fatPricing.itemsRange);
+      }
     }
 
     const severity = statusTextFromCode(httpStatus);
