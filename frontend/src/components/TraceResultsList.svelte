@@ -768,7 +768,8 @@
 
   .modal-body {
     flex: 1;
-    overflow: auto;
+    overflow: hidden;
+    min-height: 0;
     padding: 20px 24px;
     display: flex;
     flex-direction: column;
@@ -800,9 +801,10 @@
   }
 
   .details-panel > div {
-    height: 100%;
     display: flex;
     flex-direction: column;
+    flex: 1;
+    min-height: 0;
   }
 
   .details-panel .spans-pane :global(.panel) {

@@ -102,13 +102,14 @@
   ];
 
   function durationMs(span: TraceSpan) {
-    return Math.max(0, Math.round((span.duration ?? 0) / 1_000_000));
+    return Math.max(0, (span.duration ?? 0) / 1_000_000);
   }
 
   function formatDuration(ms: number) {
     if (ms > maxDisplayMs) return "> 60 s";
-    if (ms < 1000) return `${ms} ms`;
-    return `${(ms / 1000).toFixed(2)} s`;
+    if (ms >= 1000) return `${(ms / 1000).toFixed(2)} s`;
+    if (ms >= 1) return `${Math.round(ms)} ms`;
+    return `${Math.round(ms * 1000)} µs`;
   }
 
   function offsetMs(span: TraceSpan) {
@@ -529,6 +530,9 @@
               class="span-row"
               class:selected={span.spanId === selectedSpanId}
               on:click={() => toggleSpanDetails(span.spanId)}
+              title={offsetMs(span) > 0
+                ? t($locale, "traceTimeline.startOffset", { ms: formatDuration(offsetMs(span)) })
+                : undefined}
             >
               <div class="meta" style={`--depth:${row.depth}`}>
                 <span class="depth-branch" style={`opacity:${row.depth > 0 ? 1 : 0}`}>↳</span>
@@ -598,10 +602,6 @@
               </div>
 
               <div class="duration">
-                {#if offsetMs(span) > 0}
-                  <span class="duration-offset">+{formatDuration(offsetMs(span))}</span>
-                  <span class="duration-sep" aria-hidden="true">·</span>
-                {/if}
                 <span class="duration-value">{formatDuration(durationMs(span))}</span>
               </div>
             </button>
@@ -828,14 +828,16 @@
 
   .timeline-layout {
     display: grid;
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: minmax(0, 1fr);
     gap: 12px;
     min-height: 0;
+    min-width: 0;
     flex: 1;
   }
 
   .timeline-layout.with-details {
-    grid-template-columns: 2fr 1fr;
+    grid-template-columns: minmax(0, 2fr) minmax(320px, 1fr);
   }
 
   .span-list {
@@ -847,11 +849,13 @@
     flex-direction: column;
     gap: 6px;
     min-height: 0;
+    min-width: 0;
+    overflow: hidden;
   }
 
   .span-header {
     display: grid;
-    grid-template-columns: minmax(240px, 320px) 1fr 112px;
+    grid-template-columns: minmax(240px, 320px) 1fr 80px;
     gap: 10px;
     align-items: center;
     font-size: 10px;
@@ -859,7 +863,7 @@
     letter-spacing: 0.08em;
     color: var(--color-slate-400);
     font-weight: 600;
-    padding: 0 4px 6px;
+    padding: 0 14px 6px 4px;
     border-bottom: 1px solid rgba(148, 163, 184, 0.3);
   }
 
@@ -870,34 +874,46 @@
   .span-grid {
     display: flex;
     flex-direction: column;
-    gap: 4px;
+    gap: 2px;
     overflow-y: auto;
     min-height: 0;
-    padding-right: 2px;
+    min-width: 0;
+    padding-right: 6px;
+    scrollbar-gutter: stable;
   }
 
   .span-row {
+    appearance: none;
     border: 1px solid transparent;
     background: transparent;
     border-radius: 4px;
     display: grid;
-    grid-template-columns: minmax(240px, 320px) 1fr 112px;
+    grid-template-columns: minmax(240px, 320px) 1fr 80px;
     gap: 10px;
     align-items: center;
     text-align: left;
-    padding: 7px 8px;
+    padding: 5px 8px;
     cursor: pointer;
+    font: inherit;
+    line-height: 1.15;
     min-height: 0;
+    min-width: 0;
+    min-height: 26px;
+    outline: none;
   }
 
   .span-row:hover {
-    background: rgba(59, 130, 246, 0.04);
-    border-color: rgba(59, 130, 246, 0.2);
+    background: rgba(59, 130, 246, 0.03);
+    border-color: transparent;
   }
 
   .span-row.selected {
     background: rgba(37, 99, 235, 0.06);
     border-color: var(--color-info-600);
+  }
+
+  .span-row:focus-visible {
+    box-shadow: 0 0 0 2px rgba(var(--rgb-primary-600), 0.18);
   }
 
   .meta {
@@ -1047,31 +1063,15 @@
 
   .duration {
     display: flex;
-    flex-direction: row;
     align-items: center;
     justify-content: flex-end;
-    gap: 4px;
     text-align: right;
     white-space: nowrap;
-    line-height: 1.2;
-  }
-
-  .duration-offset {
-    font-size: 10px;
-    color: var(--color-slate-400);
-    font-weight: 500;
-    font-variant-numeric: tabular-nums;
-  }
-
-  .duration-sep {
-    font-size: 10px;
-    color: var(--color-slate-300);
-    font-weight: 400;
   }
 
   .duration-value {
     font-size: 11px;
-    color: var(--color-slate-600);
+    color: var(--color-slate-700);
     font-weight: 600;
     font-variant-numeric: tabular-nums;
   }
@@ -1331,7 +1331,7 @@
 
   @media (max-width: 1120px) {
     .timeline-layout.with-details {
-      grid-template-columns: 1fr;
+      grid-template-columns: minmax(0, 1fr);
     }
 
     .span-details {
