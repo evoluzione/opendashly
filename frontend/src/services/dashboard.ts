@@ -114,7 +114,14 @@ export interface DashboardResponse {
   hotspots: HotspotsData;
   satisfaction: SatisfactionData;
   logs: LogsData;
+  health: DashboardHealth;
   warnings?: string[];
+}
+
+export interface DashboardHealth {
+  status: 'ok' | 'partial' | 'degraded';
+  source: 'rollup' | 'stale_cache' | 'empty';
+  reason?: 'backend_pressure' | 'rollup_warming' | 'partial_failure' | 'storage_unavailable' | string;
 }
 
 export interface DashboardRequest {
@@ -135,6 +142,7 @@ function normalizeDashboardResponse(payload: DashboardResponse | null | undefine
   const safeHotspots = payload?.hotspots ?? ({} as HotspotsData);
   const safeSatisfaction = payload?.satisfaction ?? ({} as SatisfactionData);
   const safeLogs = payload?.logs ?? ({} as LogsData);
+  const health = normalizeDashboardHealth(payload?.health);
 
   return {
     hotspots: {
@@ -168,10 +176,49 @@ function normalizeDashboardResponse(payload: DashboardResponse | null | undefine
       volumeSeries: normalizeArray(safeLogs.volumeSeries),
       levels: normalizeArray(safeLogs.levels)
     },
-    warnings: normalizeArray(payload?.warnings)
+    health,
+    warnings: normalizeDashboardWarnings(payload?.warnings, health)
   };
 }
 
 function normalizeArray<T>(value: T[] | null | undefined): T[] {
   return Array.isArray(value) ? value : [];
+}
+
+function normalizeDashboardHealth(value: DashboardHealth | null | undefined): DashboardHealth {
+  const status = value?.status;
+  const source = value?.source;
+  return {
+    status: status === 'partial' || status === 'degraded' ? status : 'ok',
+    source: source === 'stale_cache' || source === 'empty' ? source : 'rollup',
+    reason: value?.reason
+  };
+}
+
+function normalizeDashboardWarnings(
+  value: string[] | null | undefined,
+  health: DashboardHealth
+): string[] {
+  if (health.source === 'stale_cache' && health.reason === 'backend_pressure') {
+    return ['Metriche temporaneamente servite da cache: backend sotto pressione.'];
+  }
+  if (health.status === 'degraded' && health.reason === 'backend_pressure') {
+    return ['Metriche temporaneamente non disponibili: backend sotto pressione.'];
+  }
+
+  const warnings = normalizeArray(value)
+    .map((warning) => sanitizeDashboardWarning(warning))
+    .filter((warning, index, list) => warning && list.indexOf(warning) === index);
+  return warnings.slice(0, 3);
+}
+
+function sanitizeDashboardWarning(warning: string): string {
+  const lower = warning.toLowerCase();
+  if (lower.includes('memory limit exceeded') || lower.includes('overcommittracker')) {
+    return 'Metriche temporaneamente non disponibili: backend sotto pressione.';
+  }
+  if (warning.length > 180) {
+    return `${warning.slice(0, 177)}...`;
+  }
+  return warning;
 }

@@ -1,114 +1,59 @@
 <script lang="ts">
   import { onMount } from "svelte";
   import {
-    fetchStatusSummary,
     fetchRuntimeSummary,
+    fetchStatusSummary,
+    type RuntimeComponentHealth,
+    type RuntimeSummary,
     type StatusSummary,
     type TelemetryCounts,
-    type RuntimeSummary,
   } from "../../../services/status";
   import { getLocaleTag, locale, t } from "../../../lib/i18n";
+
+  type Tone = "ok" | "warn" | "error" | "muted";
+  type SignalKey = "logs" | "traces" | "metrics";
+
+  type SignalRow = {
+    key: SignalKey;
+    label: string;
+    data: TelemetryCounts;
+    points: number[];
+    trend: number | null;
+    freshness: number;
+    tone: Tone;
+  };
+
+  type MonitorState = {
+    tone: Tone;
+    label: string;
+    reason: string;
+  };
+
+  type Issue = {
+    tone: Tone;
+    title: string;
+    detail: string;
+  };
 
   let summary: StatusSummary | null = null;
   let runtimeSummary: RuntimeSummary | null = null;
   let loading = false;
   let error = "";
   let lastUpdated: Date | null = null;
-  let statusRefreshSpinning = false;
-  let statusRefreshToken = 0;
+  let refreshSpinning = false;
+  let refreshToken = 0;
 
-  const STATUS_REFRESH_MIN_SPIN_MS = 700;
+  const REFRESH_MIN_SPIN_MS = 500;
 
-  type SignalKey = "logs" | "traces" | "metrics";
-  type HealthTone = "ok" | "warn" | "error";
-
-  type SignalSeries = {
-    key: SignalKey;
-    label: string;
-    color: string;
-    tint: string;
-    data: TelemetryCounts;
-    points: number[];
-    max: number;
-    lastBucket: number;
-    recent15m: number;
-    previous15m: number;
-    trend15m: number | null;
-    freshnessMinutes: number;
-  };
-
-  type Insight = {
-    tone: HealthTone;
-    label: string;
-    detail: string;
-  };
-
-  const signalConfig: Record<SignalKey, { color: string; tint: string }> = {
-    logs: { color: "var(--color-info-600)", tint: "var(--color-info-100)" },
-    traces: { color: "var(--color-cyan-400)", tint: "var(--color-cyan-100)" },
-    metrics: { color: "var(--color-warning-500)", tint: "var(--color-warning-100)" },
-  };
-
-  let rows: SignalSeries[] = [];
-  $: rows = buildSignalRows(summary);
-
-  let health = appHealthState(summary, rows);
-  $: health = appHealthState(summary, rows);
-
-  let globalSeriesMax = 1;
-  $: globalSeriesMax = Math.max(...rows.map((row) => row.max), 1);
-
-  let latestTotal = 0;
-  $: latestTotal = rows.reduce((sum, row) => sum + row.lastBucket, 0);
-
-  let recent15mTotal = 0;
-  $: recent15mTotal = rows.reduce((sum, row) => sum + row.recent15m, 0);
-
-  let previous15mTotal = 0;
-  $: previous15mTotal = rows.reduce((sum, row) => sum + row.previous15m, 0);
-
-  let overallTrend15m: number | null = null;
-  $: overallTrend15m = computeTrend(recent15mTotal, previous15mTotal);
-
-  let quietSignals = 0;
-  $: quietSignals = rows.filter((row) => row.freshnessMinutes >= 10).length;
-
-  let insights: Insight[] = [];
-  $: insights = buildInsights(rows, health);
-
-  const timelineWidth = 860;
-  const timelineHeight = 260;
-  const timelineSvgHeight = 320;
-
-  let hoverIndex: number | null = null;
-  let timelinePointCount = 0;
-  $: timelinePointCount = rows[0]?.points.length ?? 0;
-
-  let yTicks: Array<{ value: number; y: number }> = [];
-  $: yTicks = buildYAxisTicks(globalSeriesMax, timelineHeight);
-
-  let hoverX = 0;
-  $: hoverX =
-    hoverIndex === null
-      ? 0
-      : xForIndex(hoverIndex, timelinePointCount, timelineWidth);
-
-  let hoverLabel = "";
-  $: hoverLabel =
-    hoverIndex === null
-      ? ""
-      : bucketLabel(hoverIndex, timelinePointCount);
-
-  let hoverValues: Array<{ key: SignalKey; label: string; color: string; value: number }> = [];
-  $: hoverValues =
-    hoverIndex === null
-      ? []
-      : rows.map((row) => ({
-          key: row.key,
-          label: row.label,
-          color: row.color,
-          value: row.points[hoverIndex] ?? 0,
-        }));
+  $: signals = buildSignals(summary);
+  $: monitorState = buildMonitorState(summary, runtimeSummary, signals, error);
+  $: issues = buildIssues(summary, runtimeSummary, signals, error);
+  $: totalLast5m = signals.reduce((sum, row) => sum + row.data.last5m, 0);
+  $: totalLast60m = signals.reduce((sum, row) => sum + row.data.last60m, 0);
+  $: componentCounts = countComponents(runtimeSummary?.components ?? []);
+  $: slowQueryCount = runtimeSummary?.queries.slowRunningNow ?? 0;
+  $: failedQueryCount = runtimeSummary?.queries.failedQueriesLast15m ?? 0;
+  $: memoryPercent = runtimeSummary?.resources.memoryUsedPercent ?? 0;
 
   function formatCount(value: number | undefined) {
     if (value === undefined || value === null) return "-";
@@ -126,7 +71,6 @@
   function formatPercent(value: number | undefined) {
     if (value === undefined || value === null || Number.isNaN(value)) return "-";
     return `${new Intl.NumberFormat(getLocaleTag($locale), {
-      minimumFractionDigits: 0,
       maximumFractionDigits: 1,
     }).format(value)}%`;
   }
@@ -146,21 +90,15 @@
   function formatUptime(seconds: number | undefined) {
     if (seconds === undefined || seconds === null || seconds < 0) return "-";
     const total = Math.floor(seconds);
-    const hours = Math.floor(total / 3600);
+    const days = Math.floor(total / 86400);
+    const hours = Math.floor((total % 86400) / 3600);
     const minutes = Math.floor((total % 3600) / 60);
-    const secs = total % 60;
+    if (days > 0) return `${days}d ${hours}h`;
     if (hours > 0) return `${hours}h ${minutes}m`;
-    if (minutes > 0) return `${minutes}m ${secs}s`;
-    return `${secs}s`;
+    return `${minutes}m`;
   }
 
-  function componentTone(status: string): "ok" | "warn" | "error" {
-    if (status === "up") return "ok";
-    if (status === "degraded") return "warn";
-    return "error";
-  }
-
-  function formatLastUpdated(date: Date | null): string {
+  function formatLastUpdated(date: Date | null) {
     if (!date) return "";
     return date.toLocaleTimeString(getLocaleTag($locale), {
       hour: "2-digit",
@@ -169,83 +107,50 @@
     });
   }
 
-  function sleep(ms: number): Promise<void> {
-    return new Promise((resolve) => {
-      setTimeout(resolve, ms);
-    });
-  }
-
-  function appHealthState(
-    value: StatusSummary | null,
-    seriesRows: SignalSeries[],
-  ): {
-    label: string;
-    tone: HealthTone;
-    reason: string;
-  } {
-    if (!value) {
-      return {
-        label: t($locale, "status.healthPending"),
-        tone: "warn",
-        reason: t($locale, "status.healthPendingReason"),
-      };
-    }
-    if (!value.checks.database || !value.ok) {
-      return {
-        label: t($locale, "status.healthCritical"),
-        tone: "error",
-        reason: value.error || t($locale, "status.healthCriticalReason"),
-      };
-    }
-    const inactiveSignals = seriesRows.filter(
-      (row) => row.freshnessMinutes >= 15,
-    ).length;
-    if (seriesRows.length > 0 && inactiveSignals === seriesRows.length) {
-      return {
-        label: t($locale, "status.healthInactive"),
-        tone: "warn",
-        reason: t($locale, "status.healthInactiveRecent"),
-      };
-    }
-    if (seriesRows.some((row) => row.trend15m !== null && row.trend15m <= -45)) {
-      return {
-        label: t($locale, "status.healthDegraded"),
-        tone: "warn",
-        reason: t($locale, "status.healthDegradedReason"),
-      };
-    }
-    const recentTotal =
-      value.counts.logs.last60m +
-      value.counts.traces.last60m +
-      value.counts.metrics.last60m;
-    if (recentTotal === 0) {
-      return {
-        label: t($locale, "status.healthInactive"),
-        tone: "warn",
-        reason: t($locale, "status.healthInactive60m"),
-      };
-    }
-    return {
-      label: t($locale, "status.healthOperational"),
-      tone: "ok",
-      reason: t($locale, "status.healthOperationalReason"),
-    };
-  }
-
   function formatTrend(value: number | null) {
-    if (value === null) return t($locale, "status.na");
+    if (value === null) return t($locale, "status.noBaseline");
     const rounded = Math.round(value);
     if (rounded > 0) return `+${rounded}%`;
     return `${rounded}%`;
   }
 
-  function buildPoints(data: TelemetryCounts): number[] {
-    if (data.series && data.series.length > 0) {
-      return data.series.map((point) => point.count);
-    }
+  function sleep(ms: number): Promise<void> {
+    return new Promise((resolve) => setTimeout(resolve, ms));
+  }
+
+  function buildSignals(value: StatusSummary | null): SignalRow[] {
+    if (!value) return [];
+    const labels: Record<SignalKey, string> = {
+      logs: t($locale, "sidebar.logs"),
+      traces: t($locale, "sidebar.traces"),
+      metrics: t($locale, "sidebar.metrics"),
+    };
+    const entries: Array<{ key: SignalKey; data: TelemetryCounts }> = [
+      { key: "logs", data: value.counts.logs },
+      { key: "traces", data: value.counts.traces },
+      { key: "metrics", data: value.counts.metrics },
+    ];
+
+    return entries.map(({ key, data }) => {
+      const points = data.series?.length ? data.series.map((point) => point.count) : fallbackPoints(data);
+      const recent15m = points.slice(-3).reduce((sum, point) => sum + point, 0);
+      const previous15m = points.slice(-6, -3).reduce((sum, point) => sum + point, 0);
+      const trend = computeTrend(recent15m, previous15m);
+      const freshness = freshnessFromPoints(points);
+      return {
+        key,
+        label: labels[key],
+        data,
+        points,
+        trend,
+        freshness,
+        tone: signalTone(data, freshness, trend),
+      };
+    });
+  }
+
+  function fallbackPoints(data: TelemetryCounts): number[] {
     return [
-      0,
-      0,
       0,
       0,
       0,
@@ -256,184 +161,208 @@
       Math.max(data.last10m - data.last5m, 0),
       data.last5m,
       data.last5m,
+      data.last5m,
+      data.last5m,
     ];
   }
 
   function computeTrend(current: number, previous: number): number | null {
-    if (previous === 0) {
-      if (current === 0) return 0;
-      return null;
-    }
+    if (previous === 0) return current === 0 ? 0 : null;
     return ((current - previous) / previous) * 100;
   }
 
-  function freshnessFromPoints(points: number[]): number {
-    for (let idx = points.length - 1; idx >= 0; idx--) {
-      if (points[idx] > 0) {
-        return (points.length - 1 - idx) * 5;
+  function freshnessFromPoints(points: number[]) {
+    for (let index = points.length - 1; index >= 0; index -= 1) {
+      if ((points[index] ?? 0) > 0) {
+        return (points.length - 1 - index) * 5;
       }
     }
     return points.length * 5;
   }
 
-  function buildSignalRows(value: StatusSummary | null): SignalSeries[] {
-    if (!value) return [];
-    const base: Array<{ key: SignalKey; data: TelemetryCounts }> = [
-      { key: "logs", data: value.counts.logs },
-      { key: "traces", data: value.counts.traces },
-      { key: "metrics", data: value.counts.metrics },
-    ];
-    const labels: Record<SignalKey, string> = {
-      logs: t($locale, "sidebar.logs"),
-      traces: t($locale, "sidebar.traces"),
-      metrics: t($locale, "sidebar.metrics"),
-    };
-    return base.map(({ key, data }) => {
-      const cfg = signalConfig[key];
-      const points = buildPoints(data);
-      const max = Math.max(...points, 1);
-      const lastBucket = points[points.length - 1] ?? 0;
-      const recent15m = points.slice(-3).reduce((sum, point) => sum + point, 0);
-      const previous15m = points
-        .slice(-6, -3)
-        .reduce((sum, point) => sum + point, 0);
-      const trend15m = computeTrend(recent15m, previous15m);
+  function signalTone(data: TelemetryCounts, freshness: number, trend: number | null): Tone {
+    if (data.last60m === 0 || freshness >= 20) return "error";
+    if (freshness >= 10 || (trend !== null && trend <= -45)) return "warn";
+    return "ok";
+  }
+
+  function buildMonitorState(
+    status: StatusSummary | null,
+    runtime: RuntimeSummary | null,
+    signalRows: SignalRow[],
+    currentError: string,
+  ): MonitorState {
+    if (currentError) {
       return {
-        key,
-        label: labels[key],
-        color: cfg.color,
-        tint: cfg.tint,
-        data,
-        points,
-        max,
-        lastBucket,
-        recent15m,
-        previous15m,
-        trend15m,
-        freshnessMinutes: freshnessFromPoints(points),
+        tone: "error",
+        label: t($locale, "status.stateCritical"),
+        reason: currentError,
       };
-    });
+    }
+    if (!status) {
+      return {
+        tone: "muted",
+        label: t($locale, "status.stateLoading"),
+        reason: t($locale, "status.stateLoadingReason"),
+      };
+    }
+    if (!status.ok || !status.checks.database) {
+      return {
+        tone: "error",
+        label: t($locale, "status.stateCritical"),
+        reason: status.error || t($locale, "status.databaseUnavailable"),
+      };
+    }
+    if (runtime && (!runtime.ok || runtime.components.some((component) => component.status === "down"))) {
+      return {
+        tone: "error",
+        label: t($locale, "status.stateCritical"),
+        reason: t($locale, "status.runtimeHasDownComponents"),
+      };
+    }
+    if (runtime && runtime.resources.memoryUsedPercent >= 85) {
+      return {
+        tone: "warn",
+        label: t($locale, "status.stateAttention"),
+        reason: t($locale, "status.memoryPressure"),
+      };
+    }
+    if (runtime && (runtime.queries.slowRunningNow > 0 || runtime.queries.failedQueriesLast15m > 0)) {
+      return {
+        tone: "warn",
+        label: t($locale, "status.stateAttention"),
+        reason: t($locale, "status.queryPressure"),
+      };
+    }
+    if (signalRows.length > 0 && signalRows.every((row) => row.tone === "error")) {
+      return {
+        tone: "warn",
+        label: t($locale, "status.stateAttention"),
+        reason: t($locale, "status.noRecentTelemetry"),
+      };
+    }
+    if (signalRows.some((row) => row.tone !== "ok")) {
+      return {
+        tone: "warn",
+        label: t($locale, "status.stateAttention"),
+        reason: t($locale, "status.someTelemetryQuiet"),
+      };
+    }
+    return {
+      tone: "ok",
+      label: t($locale, "status.stateOperational"),
+      reason: t($locale, "status.stateOperationalReason"),
+    };
   }
 
-  function linePath(points: number[], width: number, height: number, max: number): string {
-    if (points.length === 0) return "";
-    const step = width / Math.max(points.length - 1, 1);
-    const mapped = points.map((point, idx) => {
-      const x = idx * step;
-      const y = height - (point / max) * (height - 10) - 5;
-      return `${x.toFixed(1)},${y.toFixed(1)}`;
-    });
-    return `M${mapped.join(" L")}`;
-  }
-
-  function areaPath(points: number[], width: number, height: number, max: number): string {
-    if (points.length === 0) return "";
-    const line = linePath(points, width, height, max);
-    const step = width / Math.max(points.length - 1, 1);
-    const endX = step * (points.length - 1);
-    return `${line} L${endX.toFixed(1)},${height} L0,${height} Z`;
-  }
-
-  function heatAlpha(value: number, max: number): number {
-    if (value <= 0 || max <= 0) return 0.08;
-    const ratio = value / max;
-    return Math.min(1, Math.max(0.15, ratio));
-  }
-
-  function clamp(value: number, min: number, max: number): number {
-    return Math.min(max, Math.max(min, value));
-  }
-
-  function xForIndex(index: number, count: number, width: number): number {
-    if (count <= 1) return 0;
-    const step = width / (count - 1);
-    return index * step;
-  }
-
-  function yForValue(value: number, max: number, height: number): number {
-    return height - (value / Math.max(max, 1)) * (height - 10) - 5;
-  }
-
-  function buildYAxisTicks(max: number, height: number): Array<{ value: number; y: number }> {
-    const safeMax = Math.max(max, 1);
-    const values = [safeMax, safeMax * 0.66, safeMax * 0.33, 0]
-      .map((value) => Math.round(value))
-      .filter((value, idx, source) => source.indexOf(value) === idx)
-      .sort((a, b) => b - a);
-    return values.map((value) => ({
-      value,
-      y: yForValue(value, safeMax, height),
-    }));
-  }
-
-  function bucketLabel(index: number, count: number): string {
-    const minutesAgo = Math.max(0, (count - 1 - index) * 5);
-    return minutesAgo === 0 ? t($locale, "status.now") : `-${minutesAgo}m`;
-  }
-
-  function handleTimelineMove(event: MouseEvent) {
-    if (!timelinePointCount) return;
-    const target = event.currentTarget as SVGSVGElement;
-    const rect = target.getBoundingClientRect();
-    const relativeX = clamp(event.clientX - rect.left, 0, rect.width);
-    const raw = rect.width === 0 ? 0 : (relativeX / rect.width) * (timelinePointCount - 1);
-    hoverIndex = Math.round(raw);
-  }
-
-  function clearTimelineHover() {
-    hoverIndex = null;
-  }
-
-  function buildInsights(seriesRows: SignalSeries[], currentHealth: { tone: HealthTone }): Insight[] {
-    if (seriesRows.length === 0) return [];
-    const list: Insight[] = [];
-
-    for (const row of seriesRows) {
-      if (row.freshnessMinutes >= 15) {
+  function buildIssues(
+    status: StatusSummary | null,
+    runtime: RuntimeSummary | null,
+    signalRows: SignalRow[],
+    currentError: string,
+  ): Issue[] {
+    const list: Issue[] = [];
+    if (currentError) {
+      list.push({ tone: "error", title: t($locale, "status.issueRequestFailed"), detail: currentError });
+    }
+    if (status && (!status.ok || !status.checks.database)) {
+      list.push({
+        tone: "error",
+        title: t($locale, "status.issueDatabase"),
+        detail: status.error || t($locale, "status.databaseUnavailable"),
+      });
+    }
+    for (const row of signalRows) {
+      if (row.tone === "error") {
         list.push({
           tone: "error",
-          label: t($locale, "status.insightStopped", { label: row.label }),
-          detail: t($locale, "status.insightStoppedDetail", {
-            minutes: row.freshnessMinutes,
-          }),
+          title: t($locale, "status.issueSignalStopped", { label: row.label }),
+          detail: t($locale, "status.issueSignalStoppedDetail", { minutes: row.freshness }),
         });
-      } else if (row.trend15m !== null && row.trend15m <= -40) {
+      } else if (row.tone === "warn") {
         list.push({
           tone: "warn",
-          label: t($locale, "status.insightDropping", { label: row.label }),
-          detail: t($locale, "status.insightTrendDetail", {
-            trend: formatTrend(row.trend15m),
-          }),
-        });
-      } else if (row.trend15m !== null && row.trend15m >= 35) {
-        list.push({
-          tone: "ok",
-          label: t($locale, "status.insightGrowing", { label: row.label }),
-          detail: t($locale, "status.insightTrendDetail", {
-            trend: formatTrend(row.trend15m),
-          }),
+          title: t($locale, "status.issueSignalWeak", { label: row.label }),
+          detail: t($locale, "status.issueSignalWeakDetail", { trend: formatTrend(row.trend) }),
         });
       }
     }
-
+    if (runtime) {
+      for (const component of runtime.components) {
+        if (component.status === "down" || component.status === "degraded") {
+          list.push({
+            tone: component.status === "down" ? "error" : "warn",
+            title: t($locale, "status.issueComponent", { name: component.name }),
+            detail: component.error || component.status,
+          });
+        }
+      }
+      if (runtime.resources.memoryUsedPercent >= 85) {
+        list.push({
+          tone: "warn",
+          title: t($locale, "status.issueMemory"),
+          detail: `${formatPercent(runtime.resources.memoryUsedPercent)} · ${formatBytes(runtime.resources.memoryUsedBytes)}`,
+        });
+      }
+      if (runtime.queries.slowRunningNow > 0 || runtime.queries.failedQueriesLast15m > 0) {
+        list.push({
+          tone: "warn",
+          title: t($locale, "status.issueQueries"),
+          detail: t($locale, "status.issueQueriesDetail", {
+            slow: runtime.queries.slowRunningNow,
+            failed: runtime.queries.failedQueriesLast15m,
+          }),
+        });
+      }
+      for (const warning of runtime.warnings ?? []) {
+        list.push({
+          tone: "warn",
+          title: t($locale, "status.issueRuntimeWarning"),
+          detail: warning,
+        });
+      }
+    }
     if (list.length === 0) {
       list.push({
-        tone: currentHealth.tone,
-        label: t($locale, "status.insightStable"),
-        detail: t($locale, "status.insightStableDetail"),
+        tone: "ok",
+        title: t($locale, "status.noIssues"),
+        detail: t($locale, "status.noIssuesDetail"),
       });
     }
+    return list.slice(0, 6);
+  }
 
-    return list.slice(0, 4);
+  function countComponents(components: RuntimeComponentHealth[]) {
+    return {
+      total: components.length,
+      up: components.filter((component) => component.status === "up").length,
+      degraded: components.filter((component) => component.status === "degraded").length,
+      down: components.filter((component) => component.status === "down").length,
+    };
+  }
+
+  function componentTone(status: string): Tone {
+    if (status === "up") return "ok";
+    if (status === "degraded") return "warn";
+    return "error";
+  }
+
+  function barPercent(value: number, max: number) {
+    if (max <= 0) return 0;
+    return Math.min(100, Math.max(0, (value / max) * 100));
+  }
+
+  function sparkMax(points: number[]) {
+    return Math.max(...points, 1);
   }
 
   async function loadStatus() {
-    const spinToken = ++statusRefreshToken;
-    const spinStartedAt = Date.now();
-    statusRefreshSpinning = true;
-
+    const token = ++refreshToken;
+    const startedAt = Date.now();
+    refreshSpinning = true;
     loading = true;
     error = "";
+
     try {
       const [nextSummary, nextRuntime] = await Promise.allSettled([
         fetchStatusSummary(),
@@ -446,25 +375,17 @@
 
       summary = nextSummary.value;
       error = summary.error ?? "";
-
-      if (nextRuntime.status === "fulfilled") {
-        runtimeSummary = nextRuntime.value;
-      } else {
-        runtimeSummary = null;
-      }
+      runtimeSummary = nextRuntime.status === "fulfilled" ? nextRuntime.value : null;
       lastUpdated = new Date();
     } catch (err) {
       summary = null;
       runtimeSummary = null;
       error = err instanceof Error ? err.message : t($locale, "status.unknownError");
     } finally {
-      const elapsed = Date.now() - spinStartedAt;
-      const remaining = STATUS_REFRESH_MIN_SPIN_MS - elapsed;
-      if (remaining > 0) {
-        await sleep(remaining);
-      }
-      if (spinToken === statusRefreshToken) {
-        statusRefreshSpinning = false;
+      const remaining = REFRESH_MIN_SPIN_MS - (Date.now() - startedAt);
+      if (remaining > 0) await sleep(remaining);
+      if (token === refreshToken) {
+        refreshSpinning = false;
       }
       loading = false;
     }
@@ -475,20 +396,19 @@
   });
 </script>
 
-<section class="status-page">
-  <header class="status-header">
+<section class="monitor-page">
+  <header class="monitor-header">
     <div>
       <h1>{t($locale, "status.title")}</h1>
-      <p>{t($locale, "status.subtitle")}</p>
+      <p>{t($locale, "status.subtitleLean")}</p>
     </div>
-    <div class="status-actions">
+    <div class="header-actions">
       {#if lastUpdated}
-        <span class="last-updated">{t($locale, "status.lastRefresh", { time: formatLastUpdated(lastUpdated) })}</span>
+        <span>{t($locale, "status.lastRefresh", { time: formatLastUpdated(lastUpdated) })}</span>
       {/if}
-      <button type="button" class="refresh-btn" on:click={loadStatus} disabled={loading}>
+      <button type="button" on:click={loadStatus} disabled={loading}>
         <svg
-          class="refresh-icon"
-          class:spinning={statusRefreshSpinning}
+          class:spinning={refreshSpinning}
           viewBox="0 0 24 24"
           fill="none"
           stroke="currentColor"
@@ -506,1011 +426,631 @@
     </div>
   </header>
 
-  {#if error}
-    <div class="status-error">{error}</div>
-  {/if}
-
-  <section class="health-strip">
-    <article class={`health-card ${health.tone}`}>
-      <span class="health-kicker">{t($locale, "status.healthKicker")}</span>
-      <strong>{health.label}</strong>
-      <p>{health.reason}</p>
-    </article>
-
-    <article class="mini-card">
-      <span>{t($locale, "status.ingestionNow")}</span>
-      <strong>{summary ? formatCompact(latestTotal) : "-"}</strong>
-    </article>
-
-    <article class="mini-card">
-      <span>{t($locale, "status.trend15m")}</span>
-      <strong class={"trend " + ((overallTrend15m !== null && overallTrend15m < 0) ? "down" : "up")}>
-        {summary ? formatTrend(overallTrend15m) : "-"}
-      </strong>
-    </article>
-
-    <article class="mini-card">
-      <span>{t($locale, "status.quietSignals")}</span>
-      <strong>{summary ? quietSignals : "-"}</strong>
-    </article>
+  <section class={`state-panel ${monitorState.tone}`}>
+    <div class="state-copy">
+      <span>{t($locale, "status.currentState")}</span>
+      <strong>{monitorState.label}</strong>
+      <p>{monitorState.reason}</p>
+    </div>
+    <div class="state-metrics">
+      <div>
+        <span>{t($locale, "status.ingestion5m")}</span>
+        <strong>{summary ? formatCompact(totalLast5m) : "-"}</strong>
+      </div>
+      <div>
+        <span>{t($locale, "status.queryPressureShort")}</span>
+        <strong>{runtimeSummary ? formatCount(slowQueryCount) : "-"}</strong>
+      </div>
+      <div>
+        <span>{t($locale, "status.memoryShort")}</span>
+        <strong>{runtimeSummary ? formatPercent(memoryPercent) : "-"}</strong>
+      </div>
+      <div>
+        <span>{t($locale, "status.componentsShort")}</span>
+        <strong>{runtimeSummary ? `${componentCounts.up}/${componentCounts.total}` : "-"}</strong>
+      </div>
+    </div>
   </section>
 
-  {#if summary}
-    <article class="timeline-card">
-      <header class="timeline-header">
+  <div class="monitor-grid">
+    <section class="panel ingest-panel">
+      <header class="panel-header">
         <div>
-          <h2>{t($locale, "status.timelineTitle")}</h2>
-          <p>{t($locale, "status.timelineSubtitle")}</p>
+          <h2>{t($locale, "status.ingestionTitle")}</h2>
+          <p>{t($locale, "status.ingestionSubtitleLean")}</p>
         </div>
-        <div class="timeline-legend" role="list" aria-label={t($locale, "status.legendAria")}>
-          {#each rows as row}
-            <span role="listitem" class="legend-item">
-              <span class="dot" style={`--dot:${row.color}`}></span>{row.label}
-            </span>
+        <strong>{summary ? formatCompact(totalLast60m) : "-"}</strong>
+      </header>
+
+      {#if signals.length > 0}
+        <div class="signal-table">
+          {#each signals as signal}
+            <article class={`signal-line ${signal.tone}`}>
+              <div class="signal-name">
+                <span class={`status-dot ${signal.tone}`}></span>
+                <strong>{signal.label}</strong>
+              </div>
+              <div class="signal-kpis">
+                <span>{formatCompact(signal.data.last5m)} / 5m</span>
+                <span>{formatCompact(signal.data.last60m)} / 60m</span>
+                <span>{t($locale, "status.freshMinutes", { minutes: signal.freshness })}</span>
+                <span class:negative={signal.trend !== null && signal.trend < 0}>{formatTrend(signal.trend)}</span>
+              </div>
+              <div class="spark" aria-hidden="true">
+                {#each signal.points as point}
+                  <span style={`height:${Math.max(10, barPercent(point, sparkMax(signal.points)))}%`}></span>
+                {/each}
+              </div>
+            </article>
           {/each}
+        </div>
+      {:else}
+        <div class="empty-state">{loading ? t($locale, "common.loading") : t($locale, "status.empty")}</div>
+      {/if}
+    </section>
+
+    <section class="panel attention-panel">
+      <header class="panel-header">
+        <div>
+          <h2>{t($locale, "status.attentionTitle")}</h2>
+          <p>{t($locale, "status.attentionSubtitle")}</p>
         </div>
       </header>
 
-      <div class="timeline-chart" aria-label={t($locale, "status.timelineAria")}>
-        <svg
-          viewBox={`0 0 ${timelineWidth} ${timelineSvgHeight}`}
-          preserveAspectRatio="xMidYMid meet"
-          role="img"
-          on:mousemove={handleTimelineMove}
-          on:mouseleave={clearTimelineHover}
-        >
-          <text x="8" y="14" class="unit-label">{t($locale, "status.eventsPer5m")}</text>
-          {#each yTicks as tick}
-            <line x1="0" y1={tick.y} x2={timelineWidth} y2={tick.y} class={tick.value === 0 ? "axis" : "grid"}></line>
-            <text x="8" y={tick.y - 6} class="tick-label">{formatCompact(tick.value)}</text>
-          {/each}
-          {#each rows as row}
-            <path class="area" d={areaPath(row.points, timelineWidth, timelineHeight, globalSeriesMax)} style={`--stroke:${row.color};--fill:${row.tint}`}></path>
-            <path class="line" d={linePath(row.points, timelineWidth, timelineHeight, globalSeriesMax)} style={`--stroke:${row.color}`}></path>
-          {/each}
-          {#if hoverIndex !== null}
-            <line x1={hoverX} y1="0" x2={hoverX} y2={timelineHeight} class="cursor"></line>
-            {#each rows as row}
-              <circle
-                cx={hoverX}
-                cy={yForValue(row.points[hoverIndex] ?? 0, globalSeriesMax, timelineHeight)}
-                r="4"
-                class="cursor-dot"
-                style={`--dot:${row.color}`}
-              ></circle>
-            {/each}
-          {/if}
-        </svg>
-
-        {#if hoverIndex !== null}
-          <div class="timeline-tooltip" style={`left:${clamp((hoverX / timelineWidth) * 100, 8, 92)}%`}>
-            <div class="tooltip-time">{hoverLabel}</div>
-            {#each hoverValues as point}
-              <div class="tooltip-row">
-                <span class="tooltip-dot" style={`--dot:${point.color}`}></span>
-                <span>{point.label}</span>
-                <strong>{formatCount(point.value)}</strong>
-              </div>
-            {/each}
-          </div>
-        {/if}
-
-        <div class="timeline-labels" aria-hidden="true">
-          <span>-55m</span>
-          <span>-45m</span>
-          <span>-35m</span>
-          <span>-25m</span>
-          <span>-15m</span>
-          <span>-5m</span>
-          <span>{t($locale, "status.now")}</span>
-        </div>
+      <div class="issues">
+        {#each issues as issue}
+          <article class={`issue ${issue.tone}`}>
+            <span class={`status-dot ${issue.tone}`}></span>
+            <div>
+              <strong>{issue.title}</strong>
+              <p>{issue.detail}</p>
+            </div>
+          </article>
+        {/each}
       </div>
+    </section>
+  </div>
+
+  <section class="runtime-layout">
+    <article class="panel pressure-panel">
+      <header class="panel-header">
+        <div>
+          <h2>{t($locale, "status.runtimeTitleLean")}</h2>
+          <p>{t($locale, "status.runtimeSubtitleLean")}</p>
+        </div>
+      </header>
+
+      {#if runtimeSummary}
+        <div class="runtime-kpis">
+          <div>
+            <span>{t($locale, "status.dbRunningNow")}</span>
+            <strong>{formatCount(runtimeSummary.queries.runningNow)}</strong>
+          </div>
+          <div>
+            <span>{t($locale, "status.dbSlowNow", { sec: runtimeSummary.queries.slowThresholdSec })}</span>
+            <strong class:attention={runtimeSummary.queries.slowRunningNow > 0}>
+              {formatCount(runtimeSummary.queries.slowRunningNow)}
+            </strong>
+          </div>
+          <div>
+            <span>{t($locale, "status.dbFailed15m")}</span>
+            <strong class:attention={failedQueryCount > 0}>{formatCount(failedQueryCount)}</strong>
+          </div>
+          <div>
+            <span>{t($locale, "status.dbMaxElapsed")}</span>
+            <strong>{runtimeSummary.queries.maxRunningElapsedSec.toFixed(1)}s</strong>
+          </div>
+        </div>
+      {:else}
+        <div class="empty-state">{t($locale, "status.runtimeUnavailable")}</div>
+      {/if}
     </article>
 
-    <div class="status-grid">
-      <article class="heatmap-card">
-        <header>
-          <h3>{t($locale, "status.telemetryGapsTitle")}</h3>
-          <p>{t($locale, "status.telemetryGapsSubtitle")}</p>
-        </header>
-        <div class="heatmap">
-          {#each rows as row}
-            <div class="heatmap-row">
-              <span class="row-label">{row.label}</span>
-              <div class="cells" role="img" aria-label={t($locale, "status.heatmapAria", { label: row.label })}>
-                {#each row.points as point}
-                  <span
-                    class="cell"
-                    style={`--cell:${row.color};--a:${heatAlpha(point, row.max)}`}
-                    title={t($locale, "status.eventsTooltip", {
-                      label: row.label,
-                      count: formatCount(point),
-                    })}
-                  ></span>
-                {/each}
-              </div>
-              <span class="row-meta">{t($locale, "status.freshness", { minutes: row.freshnessMinutes })}</span>
-            </div>
-          {/each}
+    <article class="panel resource-panel">
+      <header class="panel-header">
+        <div>
+          <h2>{t($locale, "status.resourcesTitleLean")}</h2>
+          <p>{t($locale, "status.resourcesSubtitleLean")}</p>
         </div>
-      </article>
+      </header>
 
-      <article class="insights-card">
-        <header>
-          <h3>{t($locale, "status.insightsTitle")}</h3>
-          <p>{t($locale, "status.insightsSubtitle")}</p>
-        </header>
-        <div class="insights-list">
-          {#each insights as item}
-            <div class={`insight ${item.tone}`}>
-              <strong>{item.label}</strong>
-              <span>{item.detail}</span>
+      {#if runtimeSummary}
+        <div class="resource-list">
+          <div class="resource-row">
+            <div>
+              <span>{t($locale, "status.memoryUsed")}</span>
+              <strong>{formatBytes(runtimeSummary.resources.memoryUsedBytes)} / {formatBytes(runtimeSummary.resources.memoryLimitBytes)}</strong>
             </div>
-          {/each}
+            <div class="meter"><span style={`width:${Math.min(100, memoryPercent)}%`}></span></div>
+          </div>
+          <div class="resource-row">
+            <div>
+              <span>{t($locale, "status.cpuUsedOneCore")}</span>
+              <strong>{formatPercent(runtimeSummary.resources.cpuUsedPercentOneCore)}</strong>
+            </div>
+            <div class="meter"><span style={`width:${Math.min(100, runtimeSummary.resources.cpuUsedPercentOneCore)}%`}></span></div>
+          </div>
+          <div class="resource-meta">
+            <span>{t($locale, "status.goHeap")}: {formatBytes(runtimeSummary.resources.goHeapAllocBytes)}</span>
+            <span>{t($locale, "status.goroutines")}: {formatCount(runtimeSummary.resources.goRoutines)}</span>
+            <span>{t($locale, "status.backendUptime")}: {formatUptime(runtimeSummary.resources.backendUptimeSeconds)}</span>
+          </div>
         </div>
-      </article>
+      {:else}
+        <div class="empty-state">{t($locale, "status.runtimeUnavailable")}</div>
+      {/if}
+    </article>
 
-      <article class="signal-card-list">
-        <header>
-          <h3>{t($locale, "status.signalDetailTitle")}</h3>
-          <p>{t($locale, "status.signalDetailSubtitle")}</p>
-        </header>
-        <div class="signal-list">
-          {#each rows as row}
-            <div class="signal-row">
-              <div class="signal-meta">
-                <span class="signal-name">{row.label}</span>
-                <span class="signal-total">{t($locale, "status.total", { count: formatCompact(row.data.total) })}</span>
-              </div>
-              <div class="signal-kpis">
-                <span>{formatCompact(row.lastBucket)} /5m</span>
-                <span class={"trend " + ((row.trend15m !== null && row.trend15m < 0) ? "down" : "up")}>
-                  {formatTrend(row.trend15m)} 15m
+    <article class="panel components-panel">
+      <header class="panel-header">
+        <div>
+          <h2>{t($locale, "status.componentsTitleLean")}</h2>
+          <p>{t($locale, "status.componentsSubtitleLean")}</p>
+        </div>
+      </header>
+
+      {#if runtimeSummary}
+        <div class="components-list">
+          {#each runtimeSummary.components as component}
+            <div class="component-row">
+              <div>
+                <strong>{component.name}</strong>
+                <span>
+                  {#if component.error}
+                    {component.error}
+                  {:else if component.latencyMs !== undefined}
+                    {t($locale, "status.latency", { ms: component.latencyMs })}
+                  {:else}
+                    {component.status}
+                  {/if}
                 </span>
-                <span>{t($locale, "status.fresh", { minutes: row.freshnessMinutes })}</span>
               </div>
+              <span class={`component-chip ${componentTone(component.status)}`}>{component.status}</span>
             </div>
           {/each}
         </div>
-      </article>
-    </div>
-
-    {#if runtimeSummary}
-      <section class="infra-section">
-        <header class="infra-header">
-          <div>
-            <h2>{t($locale, "status.infrastructureTitle")}</h2>
-            <p>{t($locale, "status.infrastructureSubtitle")}</p>
-          </div>
-          <span class={`infra-badge ${runtimeSummary.ok ? "ok" : "error"}`}>
-            {runtimeSummary.ok ? t($locale, "status.stackHealthy") : t($locale, "status.stackIssue")}
-          </span>
-        </header>
-
-        <div class="infra-grid">
-          <article class="infra-card components-card">
-            <h3>{t($locale, "status.deployComponents")}</h3>
-            <div class="components-list">
-              {#each runtimeSummary.components as component}
-                <div class="component-row">
-                  <div>
-                    <strong>{component.name}</strong>
-                    {#if component.error}
-                      <p>{component.error}</p>
-                    {:else if component.latencyMs !== undefined}
-                      <p>{t($locale, "status.latency", { ms: component.latencyMs })}</p>
-                    {/if}
-                  </div>
-                  <span class={`chip ${componentTone(component.status)}`}>{component.status}</span>
-                </div>
-              {/each}
-            </div>
-          </article>
-
-          <article class="infra-card queries-card">
-            <h3>{t($locale, "status.dbHealthTitle")}</h3>
-            <div class="query-kpis">
-              <div>
-                <span>{t($locale, "status.dbRunningNow")}</span>
-                <strong>{formatCount(runtimeSummary.queries.runningNow)}</strong>
-              </div>
-              <div>
-                <span>{t($locale, "status.dbSlowNow", { sec: runtimeSummary.queries.slowThresholdSec })}</span>
-                <strong>{formatCount(runtimeSummary.queries.slowRunningNow)}</strong>
-              </div>
-              <div>
-                <span>{t($locale, "status.dbMaxElapsed")}</span>
-                <strong>{runtimeSummary.queries.maxRunningElapsedSec.toFixed(1)}s</strong>
-              </div>
-              <div>
-                <span>{t($locale, "status.dbSlow15m")}</span>
-                <strong>{formatCount(runtimeSummary.queries.slowQueriesLast15m)}</strong>
-              </div>
-              <div>
-                <span>{t($locale, "status.dbFailed15m")}</span>
-                <strong>{formatCount(runtimeSummary.queries.failedQueriesLast15m)}</strong>
-              </div>
-            </div>
-          </article>
-
-          <article class="infra-card resources-card">
-            <h3>{t($locale, "status.backendResources")}</h3>
-            <div class="resource-kpis">
-              <div>
-                <span>{t($locale, "status.cpuAvailable")}</span>
-                <strong>{runtimeSummary.resources.cpuCoresAvailable.toFixed(2)} core</strong>
-              </div>
-              <div>
-                <span>{t($locale, "status.cpuUsedOneCore")}</span>
-                <strong>{formatPercent(runtimeSummary.resources.cpuUsedPercentOneCore)}</strong>
-              </div>
-              <div>
-                <span>{t($locale, "status.memoryUsed")}</span>
-                <strong>{formatBytes(runtimeSummary.resources.memoryUsedBytes)}</strong>
-              </div>
-              <div>
-                <span>{t($locale, "status.memoryLimit")}</span>
-                <strong>{formatBytes(runtimeSummary.resources.memoryLimitBytes)}</strong>
-              </div>
-              <div>
-                <span>{t($locale, "status.memoryUsedPercent")}</span>
-                <strong>{formatPercent(runtimeSummary.resources.memoryUsedPercent)}</strong>
-              </div>
-              <div>
-                <span>{t($locale, "status.goHeap")}</span>
-                <strong>{formatBytes(runtimeSummary.resources.goHeapAllocBytes)}</strong>
-              </div>
-              <div>
-                <span>{t($locale, "status.goroutines")}</span>
-                <strong>{formatCount(runtimeSummary.resources.goRoutines)}</strong>
-              </div>
-              <div>
-                <span>{t($locale, "status.backendUptime")}</span>
-                <strong>{formatUptime(runtimeSummary.resources.backendUptimeSeconds)}</strong>
-              </div>
-            </div>
-          </article>
-        </div>
-
-        {#if runtimeSummary.warnings && runtimeSummary.warnings.length > 0}
-          <div class="runtime-warnings">
-            {#each runtimeSummary.warnings as warning}
-              <p>{warning}</p>
-            {/each}
-          </div>
-        {/if}
-      </section>
-    {/if}
-
-  {:else if !loading}
-    <div class="status-empty">{t($locale, "status.empty")}</div>
-  {/if}
+      {:else}
+        <div class="empty-state">{t($locale, "status.runtimeUnavailable")}</div>
+      {/if}
+    </article>
+  </section>
 </section>
 
 <style>
-  .status-page {
+  .monitor-page {
     display: flex;
     flex-direction: column;
-    gap: 18px;
+    gap: 16px;
   }
 
-  .status-header {
+  .monitor-header {
     display: flex;
-    align-items: flex-start;
     justify-content: space-between;
+    align-items: flex-start;
     gap: 16px;
     flex-wrap: wrap;
   }
 
-  h1 {
+  h1,
+  h2 {
     margin: 0;
-    font-size: 22px;
     color: var(--color-slate-950);
   }
 
-  p {
-    margin: 6px 0 0;
-    color: var(--color-slate-500);
-    font-size: 14px;
+  h1 {
+    font-size: 22px;
   }
 
-  .status-actions {
-    display: flex;
+  h2 {
+    font-size: 16px;
+  }
+
+  p {
+    margin: 4px 0 0;
+    color: var(--color-slate-500);
+    font-size: 13px;
+  }
+
+  .header-actions {
+    display: inline-flex;
     align-items: center;
     gap: 12px;
     flex-wrap: wrap;
   }
 
-  .last-updated {
+  .header-actions > span {
     font-size: 12px;
     color: var(--color-slate-500);
   }
 
-  .refresh-btn {
+  button {
     display: inline-flex;
     align-items: center;
     justify-content: center;
     gap: 8px;
     height: 34px;
-    box-sizing: border-box;
-    padding: 10px 14px;
-    border: none;
+    padding: 8px 12px;
+    border: 0;
     border-radius: 8px;
     background: var(--color-primary-600);
     color: var(--color-white);
     font-size: 12px;
-    font-weight: 500;
+    font-weight: 600;
     cursor: pointer;
-    transition:
-      background 0.15s ease,
-      transform 0.15s ease;
   }
 
-  .refresh-btn:hover:not(:disabled) {
-    background: var(--color-primary-700);
-  }
-
-  .refresh-btn:active:not(:disabled) {
-    transform: scale(0.98);
-  }
-
-  .refresh-btn:disabled {
-    opacity: 0.7;
+  button:disabled {
+    opacity: 0.65;
     cursor: not-allowed;
   }
 
-  .refresh-icon {
-    width: 12px;
-    height: 12px;
+  button svg {
+    width: 13px;
+    height: 13px;
   }
 
-  .refresh-icon.spinning {
+  .spinning {
     animation: spin 1s linear infinite;
   }
 
   @keyframes spin {
-    from {
-      transform: rotate(0deg);
-    }
     to {
       transform: rotate(360deg);
     }
   }
 
-  .status-grid {
-    display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: 14px;
-  }
-
-  .health-strip {
-    display: grid;
-    grid-template-columns: 1.4fr repeat(3, minmax(0, 1fr));
-    gap: 12px;
-  }
-
-  .health-card,
-  .mini-card,
-  .signal-card {
-    border-radius: 14px;
+  .state-panel,
+  .panel {
     border: 1px solid rgba(var(--rgb-slate-950), 0.08);
+    border-radius: 8px;
     background: var(--color-white);
-    padding: 14px;
     box-shadow: 0 10px 24px rgba(var(--rgb-slate-950), 0.06);
   }
 
-  .health-card {
+  .state-panel {
+    display: grid;
+    grid-template-columns: minmax(260px, 1.2fr) minmax(0, 2fr);
+    gap: 16px;
+    padding: 18px;
+    border-left: 4px solid var(--state-color);
+  }
+
+  .state-panel.ok {
+    --state-color: #22c55e;
+  }
+
+  .state-panel.warn {
+    --state-color: #f59e0b;
+  }
+
+  .state-panel.error {
+    --state-color: var(--color-danger-500);
+  }
+
+  .state-panel.muted {
+    --state-color: var(--color-slate-400);
+  }
+
+  .state-copy {
     display: flex;
     flex-direction: column;
     gap: 6px;
-    background: linear-gradient(140deg, var(--color-slate-50) 0%, var(--color-white) 100%);
   }
 
-  .health-card.ok {
-    border-color: #86efac;
-  }
-
-  .health-card.warn {
-    border-color: #fde68a;
-  }
-
-  .health-card.error {
-    border-color: var(--color-danger-75);
-  }
-
-  .health-kicker {
-    font-size: 11px;
-    text-transform: uppercase;
-    letter-spacing: 0.08em;
+  .state-copy span,
+  .state-metrics span,
+  .runtime-kpis span,
+  .resource-row span,
+  .resource-meta,
+  .component-row span,
+  .signal-kpis {
+    font-size: 12px;
     color: var(--color-slate-500);
   }
 
-  .health-card strong {
-    font-size: 20px;
+  .state-copy strong {
+    font-size: 24px;
     color: var(--color-slate-950);
   }
 
-  .health-card p {
+  .state-copy p {
     margin: 0;
     font-size: 13px;
     color: var(--color-slate-600);
   }
 
-  .mini-card {
+  .state-metrics {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 10px;
+  }
+
+  .state-metrics > div,
+  .runtime-kpis > div {
     display: flex;
     flex-direction: column;
-    gap: 6px;
-    justify-content: center;
+    gap: 5px;
+    min-width: 0;
+    border: 1px solid var(--color-slate-200);
+    border-radius: 8px;
+    background: var(--color-slate-50);
+    padding: 10px;
   }
 
-  .mini-card span {
-    font-size: 12px;
-    color: var(--color-slate-500);
-  }
-
-  .mini-card strong {
-    font-size: 20px;
+  .state-metrics strong,
+  .runtime-kpis strong,
+  .resource-row strong {
     color: var(--color-slate-950);
-  }
-
-  .mini-card .trend {
-    font-variant-numeric: tabular-nums;
-  }
-
-  .trend.up {
-    color: #047857;
-  }
-
-  .trend.down {
-    color: var(--color-danger-700);
-  }
-
-  .timeline-card,
-  .heatmap-card,
-  .insights-card,
-  .signal-card-list {
-    border-radius: 14px;
-    border: 1px solid rgba(var(--rgb-slate-950), 0.08);
-    background: var(--color-white);
-    padding: 14px;
-    box-shadow: 0 10px 24px rgba(var(--rgb-slate-950), 0.06);
-  }
-
-  .timeline-header {
-    display: flex;
-    justify-content: space-between;
-    gap: 12px;
-    align-items: flex-start;
-    margin-bottom: 12px;
-    flex-wrap: wrap;
-  }
-
-  .timeline-header h2 {
-    margin: 0;
     font-size: 18px;
-    color: var(--color-slate-950);
-  }
-
-  .timeline-header p {
-    margin: 4px 0 0;
-    font-size: 12px;
-  }
-
-  .timeline-legend {
-    display: flex;
-    gap: 10px;
-    flex-wrap: wrap;
-  }
-
-  .legend-item {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    padding: 4px 8px;
-    border-radius: 999px;
-    font-size: 11px;
-    color: var(--color-slate-700);
-    background: var(--color-slate-50);
-    border: 1px solid var(--color-slate-200);
-  }
-
-  .dot {
-    width: 8px;
-    height: 8px;
-    border-radius: 999px;
-    background: var(--dot);
-  }
-
-  .timeline-chart {
-    position: relative;
-    border: 1px solid var(--color-slate-200);
-    border-radius: 10px;
-    background: linear-gradient(180deg, var(--color-white) 0%, var(--color-slate-50) 100%);
-    padding: 10px 10px 6px;
-  }
-
-  .timeline-chart svg {
-    width: 100%;
-    height: auto;
-    aspect-ratio: 860 / 320;
-    display: block;
-  }
-
-  .timeline-chart .axis {
-    stroke: var(--color-slate-400);
-    stroke-width: 1;
-  }
-
-  .timeline-chart .grid {
-    stroke: var(--color-slate-200);
-    stroke-width: 1;
-    stroke-dasharray: 4 6;
-  }
-
-  .timeline-chart .area {
-    fill: color-mix(in srgb, var(--fill) 28%, transparent);
-    stroke: none;
-  }
-
-  .timeline-chart .line {
-    fill: none;
-    stroke: var(--stroke);
-    stroke-width: 2.4;
-    stroke-linecap: round;
-    stroke-linejoin: round;
-  }
-
-  .timeline-chart .unit-label,
-  .timeline-chart .tick-label {
-    fill: var(--color-slate-500);
-    font-size: 11px;
-    font-family: inherit;
-  }
-
-  .timeline-chart .cursor {
-    stroke: var(--color-slate-600);
-    stroke-width: 1;
-    stroke-dasharray: 4 4;
-    opacity: 0.7;
-  }
-
-  .timeline-chart .cursor-dot {
-    fill: var(--dot);
-    stroke: var(--color-white);
-    stroke-width: 2;
-  }
-
-  .timeline-tooltip {
-    position: absolute;
-    top: 18px;
-    transform: translateX(-50%);
-    min-width: 150px;
-    border: 1px solid var(--color-slate-300);
-    border-radius: 10px;
-    padding: 8px 10px;
-    background: rgba(255, 255, 255, 0.96);
-    box-shadow: 0 10px 22px rgba(var(--rgb-slate-950), 0.14);
-    backdrop-filter: blur(2px);
-    pointer-events: none;
-  }
-
-  .tooltip-time {
-    font-size: 11px;
-    font-weight: 700;
-    color: var(--color-slate-700);
-    margin-bottom: 6px;
-  }
-
-  .tooltip-row {
-    display: grid;
-    grid-template-columns: auto 1fr auto;
-    gap: 6px;
-    align-items: center;
-    font-size: 12px;
-    color: var(--color-slate-700);
-  }
-
-  .tooltip-row strong {
     font-variant-numeric: tabular-nums;
-    color: var(--color-slate-950);
   }
 
-  .tooltip-dot {
-    width: 8px;
-    height: 8px;
-    border-radius: 999px;
-    background: var(--dot);
-  }
-
-  .timeline-labels {
-    margin-top: 4px;
+  .monitor-grid {
     display: grid;
-    grid-template-columns: repeat(7, minmax(0, 1fr));
-    font-size: 11px;
-    color: var(--color-slate-500);
+    grid-template-columns: minmax(0, 1.45fr) minmax(300px, 0.85fr);
+    gap: 16px;
   }
 
-  .heatmap-card header h3,
-  .insights-card header h3,
-  .signal-card-list header h3 {
-    margin: 0;
-    font-size: 15px;
-    color: var(--color-slate-950);
-  }
-
-  .heatmap-card header p,
-  .insights-card header p,
-  .signal-card-list header p {
-    margin: 4px 0 0;
-    font-size: 12px;
-  }
-
-  .heatmap {
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-    margin-top: 10px;
-  }
-
-  .heatmap-row {
+  .runtime-layout {
     display: grid;
-    grid-template-columns: 54px 1fr auto;
-    gap: 8px;
-    align-items: center;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 16px;
   }
 
-  .row-label {
-    font-size: 12px;
-    color: var(--color-slate-950);
-    font-weight: 600;
+  .panel {
+    padding: 14px;
   }
 
-  .cells {
-    display: grid;
-    grid-template-columns: repeat(12, minmax(0, 1fr));
-    gap: 4px;
-  }
-
-  .cell {
-    height: 18px;
-    border-radius: 4px;
-    background: color-mix(in srgb, var(--cell) calc(var(--a) * 100%), var(--color-slate-100));
-    border: 1px solid rgba(148, 163, 184, 0.35);
-  }
-
-  .row-meta {
-    font-size: 11px;
-    color: var(--color-slate-500);
-    white-space: nowrap;
-  }
-
-  .insights-list {
-    margin-top: 10px;
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-  }
-
-  .insight {
-    padding: 10px;
-    border-radius: 10px;
-    border: 1px solid var(--color-slate-200);
-    background: var(--color-slate-50);
-    display: flex;
-    flex-direction: column;
-    gap: 3px;
-  }
-
-  .insight strong {
-    font-size: 12px;
-    color: var(--color-slate-950);
-  }
-
-  .insight span {
-    font-size: 12px;
-    color: var(--color-slate-600);
-  }
-
-  .insight.ok {
-    border-color: #86efac;
-    background: var(--color-success-50);
-  }
-
-  .insight.warn {
-    border-color: #fde68a;
-    background: #fefce8;
-  }
-
-  .insight.error {
-    border-color: var(--color-danger-75);
-    background: var(--color-danger-50);
-  }
-
-  .signal-list {
-    margin-top: 10px;
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-  }
-
-  .signal-row {
-    border-radius: 10px;
-    border: 1px solid var(--color-slate-200);
-    background: var(--color-slate-50);
-    padding: 10px;
+  .panel-header {
     display: flex;
     justify-content: space-between;
-    gap: 10px;
-    flex-wrap: wrap;
+    align-items: flex-start;
+    gap: 12px;
+    margin-bottom: 12px;
   }
 
-  .signal-meta {
+  .panel-header strong {
+    color: var(--color-slate-950);
+    font-size: 18px;
+  }
+
+  .signal-table,
+  .issues,
+  .components-list,
+  .resource-list {
     display: flex;
     flex-direction: column;
-    gap: 2px;
+    gap: 8px;
+  }
+
+  .signal-line {
+    display: grid;
+    grid-template-columns: 110px minmax(220px, 1fr) 150px;
+    gap: 12px;
+    align-items: center;
+    border: 1px solid var(--color-slate-200);
+    border-radius: 8px;
+    background: var(--color-slate-50);
+    padding: 10px;
   }
 
   .signal-name {
-    font-size: 13px;
-    font-weight: 700;
-    color: var(--color-slate-950);
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
   }
 
-  .signal-total {
-    font-size: 12px;
-    color: var(--color-slate-500);
+  .signal-name strong,
+  .issue strong,
+  .component-row strong {
+    color: var(--color-slate-950);
+    font-size: 13px;
   }
 
   .signal-kpis {
-    display: inline-flex;
-    align-items: center;
-    gap: 10px;
+    display: flex;
+    gap: 12px;
     flex-wrap: wrap;
-    font-size: 12px;
-    color: var(--color-slate-700);
     font-variant-numeric: tabular-nums;
   }
 
-  .status-error {
-    font-size: 13px;
+  .negative {
     color: var(--color-danger-700);
-    background: var(--color-danger-50);
-    border: 1px solid var(--color-danger-75);
-    border-radius: 8px;
-    padding: 10px 12px;
   }
 
-  .status-empty {
-    font-size: 13px;
-    color: var(--color-slate-500);
-  }
-
-  .infra-section {
-    margin-top: 2px;
-    display: flex;
-    flex-direction: column;
-    gap: 12px;
-  }
-
-  .infra-header {
-    display: flex;
-    align-items: flex-start;
-    justify-content: space-between;
-    gap: 12px;
-    flex-wrap: wrap;
-  }
-
-  .infra-header h2 {
-    margin: 0;
-    font-size: 18px;
-    color: var(--color-slate-950);
-  }
-
-  .infra-header p {
-    margin: 4px 0 0;
-    font-size: 13px;
-  }
-
-  .infra-badge {
-    font-size: 11px;
-    font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-    padding: 6px 10px;
-    border-radius: 999px;
-    border: 1px solid var(--color-slate-300);
-  }
-
-  .infra-badge.ok {
-    color: #166534;
-    background: #dcfce7;
-    border-color: #86efac;
-  }
-
-  .infra-badge.error {
-    color: #991b1b;
-    background: var(--color-danger-100);
-    border-color: var(--color-danger-75);
-  }
-
-  .infra-grid {
+  .spark {
     display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: 12px;
+    grid-template-columns: repeat(12, minmax(0, 1fr));
+    align-items: end;
+    gap: 3px;
+    height: 32px;
   }
 
-  .infra-card {
-    border-radius: 14px;
-    border: 1px solid rgba(var(--rgb-slate-950), 0.08);
-    background: var(--color-white);
-    padding: 14px;
-    box-shadow: 0 10px 24px rgba(var(--rgb-slate-950), 0.06);
+  .spark span {
+    display: block;
+    border-radius: 3px 3px 0 0;
+    background: var(--color-primary-500);
+    opacity: 0.72;
   }
 
-  .infra-card h3 {
-    margin: 0 0 10px;
-    font-size: 15px;
-    color: var(--color-slate-950);
+  .signal-line.warn .spark span {
+    background: #f59e0b;
   }
 
-  .components-list {
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
+  .signal-line.error .spark span {
+    background: var(--color-danger-500);
   }
 
-  .component-row {
-    border-radius: 10px;
+  .issue {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 10px;
+    align-items: flex-start;
     border: 1px solid var(--color-slate-200);
+    border-radius: 8px;
     background: var(--color-slate-50);
     padding: 10px;
-    display: flex;
-    justify-content: space-between;
-    gap: 8px;
-    align-items: flex-start;
   }
 
-  .component-row strong {
-    text-transform: capitalize;
-    font-size: 13px;
-    color: var(--color-slate-950);
+  .issue.ok {
+    border-color: #86efac;
+    background: #f0fdf4;
   }
 
-  .component-row p {
+  .issue.warn {
+    border-color: #fde68a;
+    background: #fffbeb;
+  }
+
+  .issue.error {
+    border-color: var(--color-danger-75);
+    background: var(--color-danger-50);
+  }
+
+  .issue p {
     margin: 3px 0 0;
     font-size: 12px;
-    color: var(--color-slate-500);
   }
 
-  .chip {
-    font-size: 11px;
-    font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: 0.04em;
+  .status-dot {
+    width: 9px;
+    height: 9px;
+    margin-top: 4px;
+    flex: 0 0 auto;
     border-radius: 999px;
-    padding: 4px 8px;
-    white-space: nowrap;
+    background: var(--color-slate-400);
   }
 
-  .chip.ok {
-    color: #166534;
-    background: #dcfce7;
+  .status-dot.ok {
+    background: #22c55e;
   }
 
-  .chip.warn {
-    color: #854d0e;
-    background: #fef9c3;
+  .status-dot.warn {
+    background: #f59e0b;
   }
 
-  .chip.error {
-    color: #991b1b;
-    background: var(--color-danger-100);
+  .status-dot.error {
+    background: var(--color-danger-500);
   }
 
-  .query-kpis,
-  .resource-kpis {
+  .runtime-kpis {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 8px;
   }
 
-  .query-kpis > div,
-  .resource-kpis > div {
-    border-radius: 10px;
+  .runtime-kpis strong.attention {
+    color: var(--color-danger-700);
+  }
+
+  .resource-row {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
     border: 1px solid var(--color-slate-200);
+    border-radius: 8px;
     background: var(--color-slate-50);
     padding: 10px;
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
   }
 
-  .query-kpis span,
-  .resource-kpis span {
+  .resource-row > div:first-child {
+    display: flex;
+    justify-content: space-between;
+    gap: 10px;
+    align-items: baseline;
+  }
+
+  .meter {
+    height: 8px;
+    overflow: hidden;
+    border-radius: 999px;
+    background: var(--color-slate-200);
+  }
+
+  .meter span {
+    display: block;
+    height: 100%;
+    border-radius: inherit;
+    background: var(--color-primary-500);
+  }
+
+  .resource-meta {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+
+  .component-row {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    align-items: flex-start;
+    border: 1px solid var(--color-slate-200);
+    border-radius: 8px;
+    background: var(--color-slate-50);
+    padding: 10px;
+  }
+
+  .component-row > div {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    min-width: 0;
+  }
+
+  .component-chip {
+    padding: 4px 8px;
+    border-radius: 999px;
     font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    white-space: nowrap;
+  }
+
+  .component-chip.ok {
+    color: #166534;
+    background: #dcfce7;
+  }
+
+  .component-chip.warn {
+    color: #854d0e;
+    background: #fef9c3;
+  }
+
+  .component-chip.error {
+    color: #991b1b;
+    background: var(--color-danger-100);
+  }
+
+  .empty-state {
+    border: 1px dashed var(--color-slate-300);
+    border-radius: 8px;
+    padding: 18px;
     color: var(--color-slate-500);
+    font-size: 13px;
+    text-align: center;
   }
 
-  .query-kpis strong,
-  .resource-kpis strong {
-    font-size: 14px;
-    color: var(--color-slate-950);
-    font-variant-numeric: tabular-nums;
-  }
-
-  .runtime-warnings {
-    border-radius: 10px;
-    border: 1px solid #fde68a;
-    background: #fefce8;
-    padding: 10px 12px;
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
-  }
-
-  .runtime-warnings p {
-    margin: 0;
-    font-size: 12px;
-    color: #713f12;
-  }
-
-  @media (max-width: 1200px) {
-    .health-strip {
-      grid-template-columns: 1fr 1fr;
+  @media (max-width: 1050px) {
+    .state-panel,
+    .monitor-grid,
+    .runtime-layout {
+      grid-template-columns: 1fr;
     }
 
-    .status-grid {
+    .state-metrics {
       grid-template-columns: repeat(2, minmax(0, 1fr));
     }
-
-    .signal-card-list {
-      grid-column: span 2;
-    }
-
-    .infra-grid {
-      grid-template-columns: 1fr 1fr;
-    }
-
-    .resources-card {
-      grid-column: span 2;
-    }
   }
 
-  @media (max-width: 760px) {
-    .health-strip {
+  @media (max-width: 720px) {
+    .state-metrics,
+    .runtime-kpis {
       grid-template-columns: 1fr;
     }
 
-    .status-grid {
-      grid-template-columns: 1fr;
-    }
-
-    .signal-card-list {
-      grid-column: auto;
-    }
-
-    .timeline-chart svg {
-      aspect-ratio: 860 / 360;
-    }
-
-    .heatmap-row {
-      grid-template-columns: 50px 1fr;
-    }
-
-    .row-meta {
-      grid-column: 1 / -1;
-    }
-
-    .infra-grid {
-      grid-template-columns: 1fr;
-    }
-
-    .resources-card {
-      grid-column: auto;
-    }
-
-    .query-kpis,
-    .resource-kpis {
+    .signal-line {
       grid-template-columns: 1fr;
     }
   }

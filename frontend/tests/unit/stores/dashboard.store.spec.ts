@@ -50,6 +50,10 @@ describe('dashboard store', () => {
         volumeSeries: [],
         levels: []
       },
+      health: {
+        status: 'ok',
+        source: 'rollup'
+      },
       warnings: []
     });
 

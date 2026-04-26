@@ -26,6 +26,11 @@ type Config struct {
 	DashboardRequestTimeoutSec   int
 	DashboardQueryParallelism    int
 	DashboardHalveOnOOM          bool
+	DashboardRawFallback         bool
+	DashboardPressureCooldownSec int
+	DashboardLastGoodTTLSec      int
+	DashboardRollupBackfill      bool
+	DashboardRollupBackfillHours int
 	CollectorHealthURL           string
 	ListenAddr                   string
 	AuthMode                     string
@@ -58,6 +63,11 @@ func Load() (*Config, error) {
 		DashboardRequestTimeoutSec:   getEnvInt("DASHBOARD_REQUEST_TIMEOUT_SECONDS", 15),
 		DashboardQueryParallelism:    getEnvInt("DASHBOARD_QUERY_PARALLELISM", 1),
 		DashboardHalveOnOOM:          getEnvBool("DASHBOARD_HALVE_ON_OOM", true),
+		DashboardRawFallback:         getEnvBool("DASHBOARD_RAW_FALLBACK_ENABLED", false),
+		DashboardPressureCooldownSec: getEnvInt("DASHBOARD_PRESSURE_COOLDOWN_SECONDS", 60),
+		DashboardLastGoodTTLSec:      getEnvInt("DASHBOARD_LAST_GOOD_TTL_SECONDS", 1800),
+		DashboardRollupBackfill:      getEnvBool("DASHBOARD_ROLLUP_BACKFILL_ENABLED", true),
+		DashboardRollupBackfillHours: getEnvInt("DASHBOARD_ROLLUP_BACKFILL_HOURS", 48),
 		CollectorHealthURL:           os.Getenv("COLLECTOR_HEALTH_URL"),
 		ListenAddr:                   os.Getenv("API_LISTEN_ADDR"),
 		AuthMode:                     os.Getenv("AUTH_MODE"),

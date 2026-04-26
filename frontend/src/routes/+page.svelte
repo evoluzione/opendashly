@@ -53,6 +53,7 @@
   import TopEndpointsThroughputTable from "../components/dashboard/TopEndpointsThroughputTable.svelte";
   import SlowestEndpointsTable from "../components/dashboard/SlowestEndpointsTable.svelte";
   import ErrorHotspotsTable from "../components/dashboard/ErrorHotspotsTable.svelte";
+  import type { DashboardHealth } from "../services/dashboard";
 
   const DASHBOARD_REFRESH_MIN_SPIN_MS = 700;
   const QUERY_REFRESH_MIN_SPIN_MS = 700;
@@ -215,6 +216,31 @@
       pageSize = selected;
     }
     await handlePageSizeChange();
+  }
+
+  function getDashboardWarningMessage(
+    health: DashboardHealth | null | undefined,
+    warnings: string[],
+  ): string | null {
+    if (health?.source === "stale_cache" && health.reason === "backend_pressure") {
+      return t($locale, "dashboard.health.stalePressure");
+    }
+    if (health?.status === "degraded" && health.reason === "backend_pressure") {
+      return t($locale, "dashboard.health.degradedPressure");
+    }
+    if (health?.source === "stale_cache") {
+      return t($locale, "dashboard.health.stale");
+    }
+    if (health?.status === "degraded" && health.source === "empty") {
+      return t($locale, "dashboard.health.rollupWarming");
+    }
+    if (health?.status === "partial") {
+      return t($locale, "dashboard.health.partial");
+    }
+    if (warnings.length > 0) {
+      return warnings.join(" · ");
+    }
+    return null;
   }
 
   function handleTabSelect(tab: "logs" | "metriche" | "tracce") {
@@ -554,8 +580,9 @@
     <div class="results" class:dashboard-results={activeTab === "metriche"}>
       {#if activeTab === "metriche"}
         {#if $dashboardState.data}
-          {#if $dashboardState.warnings.length > 0}
-            <div class="inline-warning">{$dashboardState.warnings.join(" · ")}</div>
+          {@const dashboardWarning = getDashboardWarningMessage($dashboardState.data.health, $dashboardState.warnings)}
+          {#if dashboardWarning}
+            <div class="inline-warning">{dashboardWarning}</div>
           {/if}
           {#if $dashboardState.error}
             <div class="inline-warning">{$dashboardState.error}</div>

@@ -50,6 +50,10 @@ describe('dashboard service', () => {
         volumeSeries: [],
         levels: []
       },
+      health: {
+        status: 'ok',
+        source: 'rollup'
+      },
       warnings: []
     };
 
@@ -85,6 +89,7 @@ describe('dashboard service', () => {
         volumeSeries: null,
         levels: null
       },
+      health: null,
       warnings: null
     } as any);
 
@@ -100,6 +105,29 @@ describe('dashboard service', () => {
     expect(result.satisfaction.errorRateSeries).toEqual([]);
     expect(result.logs.volumeSeries).toEqual([]);
     expect(result.logs.levels).toEqual([]);
+    expect(result.health).toEqual({ status: 'ok', source: 'rollup', reason: undefined });
     expect(result.warnings).toEqual([]);
+  });
+
+  it('compatta warning tecnici di pressione ClickHouse', async () => {
+    vi.mocked(apiRequest).mockResolvedValue({
+      hotspots: {},
+      satisfaction: {},
+      logs: {},
+      health: {
+        status: 'degraded',
+        source: 'empty',
+        reason: 'backend_pressure'
+      },
+      warnings: [
+        'latency distribution unavailable: iterate: code: 241, message: memory limit exceeded: OvercommitTracker'
+      ]
+    } as any);
+
+    const result = await fetchDashboardMetrics({});
+
+    expect(result.warnings).toEqual([
+      'Metriche temporaneamente non disponibili: backend sotto pressione.'
+    ]);
   });
 });
