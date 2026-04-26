@@ -9,6 +9,13 @@ type DashboardRequest struct {
 	ServiceName string    `json:"serviceName,omitempty"`
 }
 
+// DashboardHealth describes how fresh and complete a dashboard response is.
+type DashboardHealth struct {
+	Status string `json:"status"`           // ok, partial, degraded
+	Source string `json:"source"`           // rollup, stale_cache, empty
+	Reason string `json:"reason,omitempty"` // backend_pressure, rollup_warming, partial_failure
+}
+
 // LatencyBucket represents a histogram bucket for latency distribution.
 type LatencyBucket struct {
 	RangeStart int     `json:"rangeStart"`
@@ -138,5 +145,6 @@ type DashboardResponse struct {
 	Hotspots     HotspotsData     `json:"hotspots"`
 	Satisfaction SatisfactionData `json:"satisfaction"`
 	Logs         LogsData         `json:"logs"`
+	Health       DashboardHealth  `json:"health"`
 	Warnings     []string         `json:"warnings,omitempty"`
 }

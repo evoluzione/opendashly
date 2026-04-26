@@ -133,7 +133,7 @@ func TestGetDashboard_AllRecoverableFailuresReturnStaleSnapshot(t *testing.T) {
 
 	containsStaleWarning := false
 	for _, warning := range result.Warnings {
-		if strings.Contains(warning, "stale dashboard snapshot") {
+		if strings.Contains(warning, "servite da cache") {
 			containsStaleWarning = true
 			break
 		}
@@ -172,7 +172,7 @@ func TestGetDashboard_NonRecoverableErrorDegradesToWarning(t *testing.T) {
 
 	found := false
 	for _, w := range result.Warnings {
-		if strings.Contains(w, "slowest endpoints") && strings.Contains(w, "syntax error") {
+		if strings.Contains(w, "slowest endpoints") && strings.Contains(w, "non disponibile") {
 			found = true
 			break
 		}
@@ -184,10 +184,10 @@ func TestGetDashboard_NonRecoverableErrorDegradesToWarning(t *testing.T) {
 }
 
 func TestGetDashboard_HalveOnOOMRetriesAndSucceeds(t *testing.T) {
-	// When a fetcher fails with a recoverable (memory) error, HalveOnOOM
+	// When a fetcher fails with a recoverable non-pressure error, HalveOnOOM
 	// retries once over the last half of the window and returns a partial
 	// result instead of surfacing an error.
-	recoverableErr := errors.New("memory limit exceeded")
+	recoverableErr := errors.New("timeout")
 	req := DashboardRequest{
 		From: time.Date(2026, 4, 15, 10, 0, 0, 0, time.UTC),
 		To:   time.Date(2026, 4, 15, 11, 0, 0, 0, time.UTC),
@@ -235,6 +235,116 @@ func TestGetDashboard_HalveOnOOMRetriesAndSucceeds(t *testing.T) {
 		t.Fatalf("expected partial-window hint in warnings, got %v", result.Warnings)
 	}
 	assertDashboardSlicesInitialized(t, result)
+}
+
+func TestGetDashboard_PressureErrorOpensCircuitBreakerWithoutRetry(t *testing.T) {
+	pressureErr := errors.New("memory limit exceeded: OvercommitTracker")
+	req := DashboardRequest{
+		From: time.Date(2026, 4, 15, 10, 0, 0, 0, time.UTC),
+		To:   time.Date(2026, 4, 15, 11, 0, 0, 0, time.UTC),
+	}
+
+	calls := 0
+	fetchers := testSuccessFetchers()
+	fetchers.slowestEndpoints = func(context.Context, DashboardRequest) ([]EndpointLatency, error) {
+		calls++
+		return nil, pressureErr
+	}
+
+	svc := &Service{
+		Storage:          &storage.Client{},
+		QueryParallelism: 1,
+		HalveOnOOM:       true,
+		PressureCooldown: time.Minute,
+		fetchers:         &fetchers,
+	}
+
+	result, err := svc.GetDashboard(context.Background(), req)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if calls != 1 {
+		t.Fatalf("pressure errors must not be retried, got %d calls", calls)
+	}
+	if result.Health.Status != "partial" && result.Health.Status != "degraded" {
+		t.Fatalf("expected partial/degraded health, got %#v", result.Health)
+	}
+
+	_, active := svc.dashboardPressureActive()
+	if !active {
+		t.Fatal("expected pressure circuit breaker to be active")
+	}
+}
+
+func TestGetDashboard_UsesLastGoodForRollingWindowUnderPressure(t *testing.T) {
+	req1 := DashboardRequest{
+		From: time.Date(2026, 4, 15, 10, 0, 0, 0, time.UTC),
+		To:   time.Date(2026, 4, 15, 11, 0, 0, 0, time.UTC),
+	}
+	req2 := DashboardRequest{
+		From: time.Date(2026, 4, 15, 10, 1, 0, 0, time.UTC),
+		To:   time.Date(2026, 4, 15, 11, 1, 0, 0, time.UTC),
+	}
+
+	stale := &DashboardResponse{
+		Hotspots: HotspotsData{
+			SlowestEndpoints: []EndpointLatency{{Endpoint: "GET /last-good", Service: "api", P95: 321}},
+		},
+		Satisfaction: SatisfactionData{
+			Apdex: ApdexScore{Threshold: ApdexThresholdMs, Score: 0.95},
+		},
+		Logs:   LogsData{},
+		Health: DashboardHealth{Status: "ok", Source: "rollup"},
+	}
+
+	fetchers := dashboardFetchers{
+		latencyDistribution: func(context.Context, DashboardRequest) ([]LatencyBucket, error) {
+			return nil, errors.New("timeout")
+		},
+		slowestEndpoints: func(context.Context, DashboardRequest) ([]EndpointLatency, error) { return nil, errors.New("timeout") },
+		errorHotspots:    func(context.Context, DashboardRequest) ([]ErrorHotspot, error) { return nil, errors.New("timeout") },
+		latencyPercentiles: func(context.Context, DashboardRequest) ([]LatencyPercentilePoint, error) {
+			return nil, errors.New("timeout")
+		},
+		errorRateSeries: func(context.Context, DashboardRequest) ([]ErrorRatePoint, error) { return nil, errors.New("timeout") },
+		statusCodeBreakdown: func(context.Context, DashboardRequest) ([]StatusCodeBreakdown, error) {
+			return nil, errors.New("timeout")
+		},
+		topEndpoints: func(context.Context, DashboardRequest) ([]EndpointThroughput, error) {
+			return nil, errors.New("timeout")
+		},
+		apdexScore: func(context.Context, DashboardRequest) (ApdexScore, error) {
+			return ApdexScore{}, errors.New("timeout")
+		},
+		throughput: func(context.Context, DashboardRequest) (ThroughputSummary, []ThroughputPoint, error) {
+			return ThroughputSummary{}, nil, errors.New("timeout")
+		},
+		logVolume: func(context.Context, DashboardRequest) ([]LogVolumePoint, error) { return nil, errors.New("timeout") },
+		logLevels: func(context.Context, DashboardRequest) ([]LogLevelCount, error) { return nil, errors.New("timeout") },
+		errorRate: func(context.Context, DashboardRequest) (float64, error) { return 0, errors.New("timeout") },
+	}
+
+	svc := &Service{
+		Storage:          &storage.Client{},
+		FreshCacheTTL:    5 * time.Millisecond,
+		StaleCacheTTL:    20 * time.Millisecond,
+		LastGoodCacheTTL: time.Minute,
+		QueryParallelism: 1,
+		fetchers:         &fetchers,
+	}
+	svc.getCache().set(req1, stale)
+	time.Sleep(30 * time.Millisecond)
+
+	result, err := svc.GetDashboard(context.Background(), req2)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(result.Hotspots.SlowestEndpoints) != 1 || result.Hotspots.SlowestEndpoints[0].Endpoint != "GET /last-good" {
+		t.Fatalf("expected last-good fallback, got %#v", result.Hotspots.SlowestEndpoints)
+	}
+	if result.Health.Source != "stale_cache" {
+		t.Fatalf("expected stale_cache source, got %#v", result.Health)
+	}
 }
 
 func assertDashboardSlicesInitialized(t *testing.T, result *DashboardResponse) {

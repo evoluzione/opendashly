@@ -60,8 +60,14 @@ func Build(ctx context.Context) (*App, error) {
 	dashboardService := &metrics.Service{Storage: client}
 	dashboardService.FreshCacheTTL = time.Duration(cfg.DashboardFreshCacheTTLSec) * time.Second
 	dashboardService.StaleCacheTTL = time.Duration(cfg.DashboardStaleCacheTTLSec) * time.Second
+	dashboardService.LastGoodCacheTTL = time.Duration(cfg.DashboardLastGoodTTLSec) * time.Second
 	dashboardService.QueryParallelism = cfg.DashboardQueryParallelism
 	dashboardService.HalveOnOOM = cfg.DashboardHalveOnOOM
+	dashboardService.RawFallback = cfg.DashboardRawFallback
+	dashboardService.PressureCooldown = time.Duration(cfg.DashboardPressureCooldownSec) * time.Second
+	if cfg.DashboardRollupBackfill {
+		dashboardService.StartRollupBackfill(context.Background(), cfg.DashboardRollupBackfillHours)
+	}
 	savedRepo := query.NewSavedQueryRepo()
 	authRepo := &auth.Repo{Conn: client.Conn}
 	if err := seedDefaultAdmin(ctx, authRepo); err != nil {

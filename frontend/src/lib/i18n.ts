@@ -263,6 +263,11 @@ const translations: Record<Locale, TranslationMap> = {
     'dashboard.table.errorRate': 'Error rate',
     'dashboard.table.requests': 'Requests',
     'dashboard.table.count': 'Count',
+    'dashboard.health.stalePressure': 'Metrics temporarily served from cache: backend under pressure.',
+    'dashboard.health.degradedPressure': 'Metrics temporarily unavailable: backend under pressure.',
+    'dashboard.health.stale': 'Metrics temporarily served from cache.',
+    'dashboard.health.rollupWarming': 'Metric rollups are warming up.',
+    'dashboard.health.partial': 'Some metric widgets are temporarily unavailable.',
 
     'dashboard.availability.subtitle': 'Latest time windows',
     'dashboard.availability.title': 'Availability Over Time',
@@ -794,6 +799,11 @@ const translations: Record<Locale, TranslationMap> = {
     'dashboard.table.errorRate': 'Error rate',
     'dashboard.table.requests': 'Richieste',
     'dashboard.table.count': 'Count',
+    'dashboard.health.stalePressure': 'Metriche temporaneamente servite da cache: backend sotto pressione.',
+    'dashboard.health.degradedPressure': 'Metriche temporaneamente non disponibili: backend sotto pressione.',
+    'dashboard.health.stale': 'Metriche temporaneamente servite da cache.',
+    'dashboard.health.rollupWarming': 'Rollup metriche in preparazione.',
+    'dashboard.health.partial': 'Alcuni widget metriche sono temporaneamente non disponibili.',
 
     'dashboard.availability.subtitle': 'Ultime finestre temporali',
     'dashboard.availability.title': 'Disponibilita nel tempo',

@@ -181,7 +181,7 @@ The production stack uses prebuilt images from GHCR — no repository clone need
 | Standard | 2 vCPU / 4 GB RAM | Small production baseline |
 | Big | 4 vCPU / 8 GB RAM | Higher telemetry throughput |
 
-Each block is a complete drop-in `.env` — no extra defaults to merge. All three assume the new resilience layer (`quantileTDigest`, per-query `SETTINGS`, halved-window retry, never-5xx widgets) so the dashboard keeps serving even when ClickHouse is memory-pressured.
+Each block is a complete drop-in `.env` — no extra defaults to merge. All three assume the resilience layer (minute rollups, `quantilesTDigest`, per-query `SETTINGS`, pressure cooldown, last-good cache, never-5xx widgets) so the dashboard keeps serving even when ClickHouse is memory-pressured.
 
 <details>
 <summary><b>Small — 1 vCPU / 2 GB</b></summary>
@@ -212,6 +212,11 @@ DASHBOARD_STALE_CACHE_TTL_SECONDS=900
 DASHBOARD_REQUEST_TIMEOUT_SECONDS=25
 DASHBOARD_QUERY_PARALLELISM=1
 DASHBOARD_HALVE_ON_OOM=true
+DASHBOARD_RAW_FALLBACK_ENABLED=false
+DASHBOARD_PRESSURE_COOLDOWN_SECONDS=60
+DASHBOARD_LAST_GOOD_TTL_SECONDS=1800
+DASHBOARD_ROLLUP_BACKFILL_ENABLED=true
+DASHBOARD_ROLLUP_BACKFILL_HOURS=48
 
 # --- OpenTelemetry Collector -------------------------------------------------
 OTEL_FILE_STORAGE_DIR=/var/lib/otelcol/queue
@@ -271,6 +276,11 @@ DASHBOARD_STALE_CACHE_TTL_SECONDS=900
 DASHBOARD_REQUEST_TIMEOUT_SECONDS=20
 DASHBOARD_QUERY_PARALLELISM=1
 DASHBOARD_HALVE_ON_OOM=true
+DASHBOARD_RAW_FALLBACK_ENABLED=false
+DASHBOARD_PRESSURE_COOLDOWN_SECONDS=60
+DASHBOARD_LAST_GOOD_TTL_SECONDS=1800
+DASHBOARD_ROLLUP_BACKFILL_ENABLED=true
+DASHBOARD_ROLLUP_BACKFILL_HOURS=48
 
 # --- OpenTelemetry Collector -------------------------------------------------
 OTEL_FILE_STORAGE_DIR=/var/lib/otelcol/queue
@@ -328,8 +338,13 @@ CLICKHOUSE_READ_TIMEOUT_SECONDS=20
 DASHBOARD_FRESH_CACHE_TTL_SECONDS=30
 DASHBOARD_STALE_CACHE_TTL_SECONDS=900
 DASHBOARD_REQUEST_TIMEOUT_SECONDS=15
-DASHBOARD_QUERY_PARALLELISM=2
+DASHBOARD_QUERY_PARALLELISM=1
 DASHBOARD_HALVE_ON_OOM=true
+DASHBOARD_RAW_FALLBACK_ENABLED=false
+DASHBOARD_PRESSURE_COOLDOWN_SECONDS=60
+DASHBOARD_LAST_GOOD_TTL_SECONDS=1800
+DASHBOARD_ROLLUP_BACKFILL_ENABLED=true
+DASHBOARD_ROLLUP_BACKFILL_HOURS=48
 
 # --- OpenTelemetry Collector -------------------------------------------------
 OTEL_FILE_STORAGE_DIR=/var/lib/otelcol/queue
@@ -366,8 +381,9 @@ CLICKHOUSE_TCP_PORT=9000
 
 - ad-hoc query execution returns `status: "partial"` with per-signal failures in `signalErrors`
 - dashboard metrics always return a response: any failing widget (recoverable or not) is reported via `warnings`, never a 5xx
-- on a `memory limit exceeded` error each widget retries once over the last half of the requested window (warning: `partial window (last half) due to backend pressure`)
-- dashboard queries use `quantileTDigest` and inline `SETTINGS` so a single hot widget can't exhaust ClickHouse on small VMs
+- dashboard metrics read bounded minute rollups; raw telemetry fallback is disabled by default
+- on `memory limit exceeded` / `OvercommitTracker`, the dashboard opens a short pressure cooldown and serves the last good snapshot instead of retrying expensive widgets
+- dashboard rollups use `quantilesTDigest` and inline `SETTINGS` so a single hot widget can't exhaust ClickHouse on small VMs
 - `otel-collector` uses persistent queue storage (`file_storage`) and `blocking: true`, so under pressure it applies backpressure instead of dropping data aggressively. If backlog stays high for a long period, tune queue size first, then collector/ClickHouse resources.
 
 **3. Start:**

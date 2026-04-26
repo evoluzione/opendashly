@@ -2,6 +2,7 @@ package metrics
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log"
 	"strings"
@@ -13,21 +14,28 @@ import (
 	"opendashly/backend/internal/infrastructure/storage"
 )
 
+var errDashboardPressure = errors.New("dashboard backend pressure")
+
 // Service handles dashboard metrics calculations.
 type Service struct {
 	Storage          *storage.Client
 	FreshCacheTTL    time.Duration
 	StaleCacheTTL    time.Duration
+	LastGoodCacheTTL time.Duration
 	QueryParallelism int
-	// HalveOnOOM retries a failing fetcher once over the most recent half of
-	// the requested window when ClickHouse reports memory pressure. The widget
-	// is annotated with a "partial window" warning but never blocks the
-	// dashboard response.
+	PressureCooldown time.Duration
+	RawFallback      bool
+	// HalveOnOOM retries non-pressure recoverable failures once over the most
+	// recent half of the requested window. Memory/overcommit errors open the
+	// pressure circuit instead of retrying.
 	HalveOnOOM bool
 
-	fetchers  *dashboardFetchers
-	cache     *dashboardCache
-	cacheOnce sync.Once
+	fetchers      *dashboardFetchers
+	cache         *dashboardCache
+	cacheOnce     sync.Once
+	pressureMu    sync.Mutex
+	pressureUntil time.Time
+	pressureCause string
 }
 
 type dashboardFetchers struct {
@@ -47,14 +55,44 @@ type dashboardFetchers struct {
 
 func (s *Service) getCache() *dashboardCache {
 	s.cacheOnce.Do(func() {
-		s.cache = newDashboardCache(s.FreshCacheTTL, s.StaleCacheTTL)
+		s.cache = newDashboardCache(s.FreshCacheTTL, s.StaleCacheTTL, s.LastGoodCacheTTL)
 	})
 	return s.cache
 }
 
+func (s *Service) getPressureCooldown() time.Duration {
+	if s.PressureCooldown <= 0 {
+		return time.Minute
+	}
+	return s.PressureCooldown
+}
+
+func (s *Service) dashboardPressureActive() (string, bool) {
+	s.pressureMu.Lock()
+	defer s.pressureMu.Unlock()
+
+	if time.Now().Before(s.pressureUntil) {
+		if s.pressureCause == "" {
+			return "backend_pressure", true
+		}
+		return s.pressureCause, true
+	}
+	return "", false
+}
+
+func (s *Service) openDashboardPressure(err error) {
+	if !isDashboardPressureError(err) {
+		return
+	}
+	s.pressureMu.Lock()
+	s.pressureUntil = time.Now().Add(s.getPressureCooldown())
+	s.pressureCause = "backend_pressure"
+	s.pressureMu.Unlock()
+}
+
 func (s *Service) getQueryParallelism() int {
 	if s.QueryParallelism <= 0 {
-		return 2
+		return 1
 	}
 	return s.QueryParallelism
 }
@@ -109,7 +147,10 @@ func toInt(v any) int {
 func (s *Service) GetDashboard(ctx context.Context, req DashboardRequest) (*DashboardResponse, error) {
 	if s.Storage == nil {
 		log.Printf("metrics.service: storage not configured")
-		return emptyResponse(), nil
+		resp := emptyResponse()
+		resp.Health = DashboardHealth{Status: "degraded", Source: "empty", Reason: "storage_unavailable"}
+		resp.Warnings = []string{"Metriche temporaneamente non disponibili."}
+		return resp, nil
 	}
 
 	cache := s.getCache()
@@ -118,6 +159,20 @@ func (s *Service) GetDashboard(ctx context.Context, req DashboardRequest) (*Dash
 		return cached, nil
 	}
 	staleSnapshot, hasStale := cache.getStale(req)
+
+	if reason, ok := s.dashboardPressureActive(); ok {
+		warning := dashboardPressureWarning()
+		if hasStale {
+			staleResult := cloneDashboardResponse(staleSnapshot)
+			staleResult.Health = DashboardHealth{Status: "degraded", Source: "stale_cache", Reason: reason}
+			appendDashboardWarningValue(&staleResult.Warnings, warning)
+			return staleResult, nil
+		}
+		resp := emptyResponse()
+		resp.Health = DashboardHealth{Status: "degraded", Source: "empty", Reason: reason}
+		resp.Warnings = []string{warning}
+		return resp, nil
+	}
 
 	log.Printf("metrics.service.GetDashboard: from=%s to=%s service=%s",
 		req.From.Format(time.RFC3339), req.To.Format(time.RFC3339), req.ServiceName)
@@ -144,6 +199,8 @@ func (s *Service) GetDashboard(ctx context.Context, req DashboardRequest) (*Dash
 	var warningsMu sync.Mutex
 	successfulSections := 0
 	var successMu sync.Mutex
+	pressureSeen := false
+	var pressureSeenMu sync.Mutex
 
 	markSuccess := func() {
 		successMu.Lock()
@@ -151,9 +208,34 @@ func (s *Service) GetDashboard(ctx context.Context, req DashboardRequest) (*Dash
 		successMu.Unlock()
 	}
 
+	markPressure := func(err error) {
+		if !isDashboardPressureError(err) {
+			return
+		}
+		s.openDashboardPressure(err)
+		pressureSeenMu.Lock()
+		pressureSeen = true
+		pressureSeenMu.Unlock()
+	}
+
+	pressureBlocked := func(section string) bool {
+		if _, ok := s.dashboardPressureActive(); !ok {
+			return false
+		}
+		appendRecoverableDashboardWarning(&warningsMu, &warnings, section, errDashboardPressure)
+		pressureSeenMu.Lock()
+		pressureSeen = true
+		pressureSeenMu.Unlock()
+		return true
+	}
+
 	g.Go(func() error {
+		if pressureBlocked("latency distribution") {
+			return nil
+		}
 		section, hint, err := runWithHalving(gctx, req, s.HalveOnOOM, fetchers.latencyDistribution)
 		if err != nil {
+			markPressure(err)
 			log.Printf("metrics.service: latency distribution error: %v", err)
 			if hasStale && isRecoverableDashboardError(err) {
 				latencyDist = cloneOrEmptySlice(staleSnapshot.Hotspots.LatencyDistribution)
@@ -168,8 +250,12 @@ func (s *Service) GetDashboard(ctx context.Context, req DashboardRequest) (*Dash
 	})
 
 	g.Go(func() error {
+		if pressureBlocked("slowest endpoints") {
+			return nil
+		}
 		section, hint, err := runWithHalving(gctx, req, s.HalveOnOOM, fetchers.slowestEndpoints)
 		if err != nil {
+			markPressure(err)
 			log.Printf("metrics.service: slowest endpoints error: %v", err)
 			if hasStale && isRecoverableDashboardError(err) {
 				slowest = cloneOrEmptySlice(staleSnapshot.Hotspots.SlowestEndpoints)
@@ -184,8 +270,12 @@ func (s *Service) GetDashboard(ctx context.Context, req DashboardRequest) (*Dash
 	})
 
 	g.Go(func() error {
+		if pressureBlocked("error hotspots") {
+			return nil
+		}
 		section, hint, err := runWithHalving(gctx, req, s.HalveOnOOM, fetchers.errorHotspots)
 		if err != nil {
+			markPressure(err)
 			log.Printf("metrics.service: error hotspots error: %v", err)
 			if hasStale && isRecoverableDashboardError(err) {
 				errorHotspots = cloneOrEmptySlice(staleSnapshot.Hotspots.ErrorHotspots)
@@ -200,8 +290,12 @@ func (s *Service) GetDashboard(ctx context.Context, req DashboardRequest) (*Dash
 	})
 
 	g.Go(func() error {
+		if pressureBlocked("latency percentiles") {
+			return nil
+		}
 		section, hint, err := runWithHalving(gctx, req, s.HalveOnOOM, fetchers.latencyPercentiles)
 		if err != nil {
+			markPressure(err)
 			log.Printf("metrics.service: latency percentiles error: %v", err)
 			if hasStale && isRecoverableDashboardError(err) {
 				latencySeries = cloneOrEmptySlice(staleSnapshot.Satisfaction.LatencySeries)
@@ -216,8 +310,12 @@ func (s *Service) GetDashboard(ctx context.Context, req DashboardRequest) (*Dash
 	})
 
 	g.Go(func() error {
+		if pressureBlocked("error rate series") {
+			return nil
+		}
 		section, hint, err := runWithHalving(gctx, req, s.HalveOnOOM, fetchers.errorRateSeries)
 		if err != nil {
+			markPressure(err)
 			log.Printf("metrics.service: error rate series error: %v", err)
 			if hasStale && isRecoverableDashboardError(err) {
 				errorRateSeries = cloneOrEmptySlice(staleSnapshot.Satisfaction.ErrorRateSeries)
@@ -232,8 +330,12 @@ func (s *Service) GetDashboard(ctx context.Context, req DashboardRequest) (*Dash
 	})
 
 	g.Go(func() error {
+		if pressureBlocked("status code breakdown") {
+			return nil
+		}
 		section, hint, err := runWithHalving(gctx, req, s.HalveOnOOM, fetchers.statusCodeBreakdown)
 		if err != nil {
+			markPressure(err)
 			log.Printf("metrics.service: status code breakdown error: %v", err)
 			if hasStale && isRecoverableDashboardError(err) {
 				statusCodes = cloneOrEmptySlice(staleSnapshot.Hotspots.StatusCodes)
@@ -248,8 +350,12 @@ func (s *Service) GetDashboard(ctx context.Context, req DashboardRequest) (*Dash
 	})
 
 	g.Go(func() error {
+		if pressureBlocked("top endpoints") {
+			return nil
+		}
 		section, hint, err := runWithHalving(gctx, req, s.HalveOnOOM, fetchers.topEndpoints)
 		if err != nil {
+			markPressure(err)
 			log.Printf("metrics.service: top endpoints error: %v", err)
 			if hasStale && isRecoverableDashboardError(err) {
 				topEndpoints = cloneOrEmptySlice(staleSnapshot.Hotspots.TopEndpoints)
@@ -264,8 +370,12 @@ func (s *Service) GetDashboard(ctx context.Context, req DashboardRequest) (*Dash
 	})
 
 	g.Go(func() error {
+		if pressureBlocked("apdex score") {
+			return nil
+		}
 		section, hint, err := runWithHalving(gctx, req, s.HalveOnOOM, fetchers.apdexScore)
 		if err != nil {
+			markPressure(err)
 			log.Printf("metrics.service: apdex score error: %v", err)
 			if hasStale && isRecoverableDashboardError(err) {
 				apdex = staleSnapshot.Satisfaction.Apdex
@@ -280,9 +390,12 @@ func (s *Service) GetDashboard(ctx context.Context, req DashboardRequest) (*Dash
 	})
 
 	g.Go(func() error {
+		if pressureBlocked("throughput") {
+			return nil
+		}
 		throughputSection, timeSeriesSection, err := fetchers.throughput(gctx, req)
 		hint := ""
-		if err != nil && s.HalveOnOOM && isRecoverableDashboardError(err) {
+		if err != nil && s.HalveOnOOM && isRecoverableDashboardError(err) && !isDashboardPressureError(err) {
 			retryReq := halvedWindow(req)
 			if retryReq.From.Before(req.To) {
 				if t2, p2, err2 := fetchers.throughput(gctx, retryReq); err2 == nil {
@@ -294,6 +407,7 @@ func (s *Service) GetDashboard(ctx context.Context, req DashboardRequest) (*Dash
 			}
 		}
 		if err != nil {
+			markPressure(err)
 			log.Printf("metrics.service: throughput error: %v", err)
 			if hasStale && isRecoverableDashboardError(err) {
 				throughput = staleSnapshot.Satisfaction.Throughput
@@ -310,8 +424,12 @@ func (s *Service) GetDashboard(ctx context.Context, req DashboardRequest) (*Dash
 	})
 
 	g.Go(func() error {
+		if pressureBlocked("log volume") {
+			return nil
+		}
 		section, hint, err := runWithHalving(gctx, req, s.HalveOnOOM, fetchers.logVolume)
 		if err != nil {
+			markPressure(err)
 			log.Printf("metrics.service: log volume error: %v", err)
 			if hasStale && isRecoverableDashboardError(err) {
 				logVolume = cloneOrEmptySlice(staleSnapshot.Logs.VolumeSeries)
@@ -326,8 +444,12 @@ func (s *Service) GetDashboard(ctx context.Context, req DashboardRequest) (*Dash
 	})
 
 	g.Go(func() error {
+		if pressureBlocked("log levels") {
+			return nil
+		}
 		section, hint, err := runWithHalving(gctx, req, s.HalveOnOOM, fetchers.logLevels)
 		if err != nil {
+			markPressure(err)
 			log.Printf("metrics.service: log levels error: %v", err)
 			if hasStale && isRecoverableDashboardError(err) {
 				logLevels = cloneOrEmptySlice(staleSnapshot.Logs.Levels)
@@ -342,8 +464,12 @@ func (s *Service) GetDashboard(ctx context.Context, req DashboardRequest) (*Dash
 	})
 
 	g.Go(func() error {
+		if pressureBlocked("error rate") {
+			return nil
+		}
 		section, hint, err := runWithHalving(gctx, req, s.HalveOnOOM, fetchers.errorRate)
 		if err != nil {
+			markPressure(err)
 			log.Printf("metrics.service: error rate error: %v", err)
 			if hasStale && isRecoverableDashboardError(err) {
 				errorRate = staleSnapshot.Satisfaction.ErrorRate
@@ -359,6 +485,23 @@ func (s *Service) GetDashboard(ctx context.Context, req DashboardRequest) (*Dash
 
 	if err := g.Wait(); err != nil {
 		return nil, err
+	}
+
+	reason := ""
+	if pressureSeen {
+		reason = "backend_pressure"
+	} else if len(warnings) > 0 {
+		reason = "partial_failure"
+	}
+	health := DashboardHealth{Status: "ok", Source: "rollup"}
+	if len(warnings) > 0 {
+		health.Status = "partial"
+		health.Reason = reason
+	}
+	if successfulSections == 0 && len(warnings) > 0 {
+		health.Status = "degraded"
+		health.Source = "empty"
+		health.Reason = reason
 	}
 
 	result := &DashboardResponse{
@@ -381,17 +524,33 @@ func (s *Service) GetDashboard(ctx context.Context, req DashboardRequest) (*Dash
 			VolumeSeries: cloneOrEmptySlice(logVolume),
 			Levels:       cloneOrEmptySlice(logLevels),
 		},
+		Health:   health,
 		Warnings: cloneOrEmptySlice(warnings),
+	}
+
+	if pressureSeen && hasStale {
+		staleResult := cloneDashboardResponse(staleSnapshot)
+		staleResult.Health = DashboardHealth{Status: "degraded", Source: "stale_cache", Reason: "backend_pressure"}
+		staleResult.Warnings = []string{dashboardStaleWarning("backend_pressure")}
+		for _, warning := range warnings {
+			appendDashboardWarningValue(&staleResult.Warnings, warning)
+		}
+		return staleResult, nil
 	}
 
 	if successfulSections == 0 && len(warnings) > 0 && hasStale {
 		staleResult := cloneDashboardResponse(staleSnapshot)
-		staleResult.Warnings = append(staleResult.Warnings, "serving stale dashboard snapshot due to temporary backend pressure")
-		staleResult.Warnings = append(staleResult.Warnings, warnings...)
+		staleResult.Health = DashboardHealth{Status: "degraded", Source: "stale_cache", Reason: reason}
+		staleResult.Warnings = []string{dashboardStaleWarning(reason)}
+		for _, warning := range warnings {
+			appendDashboardWarningValue(&staleResult.Warnings, warning)
+		}
 		return staleResult, nil
 	}
 
-	cache.set(req, result)
+	if successfulSections > 0 {
+		cache.set(req, result)
+	}
 	return result, nil
 }
 
@@ -400,7 +559,7 @@ func appendRecoverableDashboardWarning(mu *sync.Mutex, warnings *[]string, secti
 		return
 	}
 	mu.Lock()
-	*warnings = append(*warnings, fmt.Sprintf("%s unavailable: %v", section, err))
+	appendDashboardWarningValue(warnings, dashboardWarning(section, err))
 	mu.Unlock()
 }
 
@@ -409,8 +568,41 @@ func appendDashboardHint(mu *sync.Mutex, warnings *[]string, section, hint strin
 		return
 	}
 	mu.Lock()
-	*warnings = append(*warnings, fmt.Sprintf("%s: %s", section, hint))
+	appendDashboardWarningValue(warnings, fmt.Sprintf("%s: %s", section, hint))
 	mu.Unlock()
+}
+
+func appendDashboardWarningValue(warnings *[]string, warning string) {
+	if warning == "" {
+		return
+	}
+	for _, existing := range *warnings {
+		if existing == warning {
+			return
+		}
+	}
+	*warnings = append(*warnings, warning)
+}
+
+func dashboardWarning(section string, err error) string {
+	if isDashboardPressureError(err) || errors.Is(err, errDashboardPressure) {
+		return fmt.Sprintf("%s temporaneamente non disponibile: backend sotto pressione.", section)
+	}
+	if isRecoverableDashboardError(err) {
+		return fmt.Sprintf("%s temporaneamente non disponibile.", section)
+	}
+	return fmt.Sprintf("%s non disponibile.", section)
+}
+
+func dashboardPressureWarning() string {
+	return "Metriche temporaneamente servite da cache: backend sotto pressione."
+}
+
+func dashboardStaleWarning(reason string) string {
+	if reason == "backend_pressure" {
+		return dashboardPressureWarning()
+	}
+	return "Metriche temporaneamente servite da cache."
 }
 
 // halvedWindow returns the second half of req's time window.
@@ -434,6 +626,10 @@ func runWithHalving[T any](
 		return result, "", nil
 	}
 	if !halve || !isRecoverableDashboardError(err) {
+		var zero T
+		return zero, "", err
+	}
+	if isDashboardPressureError(err) {
 		var zero T
 		return zero, "", err
 	}
@@ -462,6 +658,29 @@ func isRecoverableDashboardError(err error) bool {
 		"deadline exceeded",
 		"temporarily unavailable",
 		"context canceled",
+	}
+	for _, pattern := range patterns {
+		if strings.Contains(lower, pattern) {
+			return true
+		}
+	}
+	return false
+}
+
+func isDashboardPressureError(err error) bool {
+	if err == nil {
+		return false
+	}
+	if errors.Is(err, errDashboardPressure) {
+		return true
+	}
+	lower := strings.ToLower(err.Error())
+	patterns := []string{
+		"memory limit exceeded",
+		"overcommittracker",
+		"total memory",
+		"would use",
+		"maximum:",
 	}
 	for _, pattern := range patterns {
 		if strings.Contains(lower, pattern) {
@@ -924,6 +1143,7 @@ func emptyResponse() *DashboardResponse {
 			VolumeSeries: []LogVolumePoint{},
 			Levels:       []LogLevelCount{},
 		},
+		Health:   DashboardHealth{Status: "ok", Source: "empty"},
 		Warnings: []string{},
 	}
 }
