@@ -182,7 +182,7 @@ Decision policy:
 Strict output contract:
 - Output JSON only, no markdown, no prose outside JSON.
 - Follow exactly this schema:
-{"plan":"short plan","response_style":"operational|conversational","action":{"type":"answer|run_query","reason":"short reason","request":{"signals":["logs","traces","metrics"],"timeRange":{"from":"RFC3339","to":"RFC3339"},"filters":{},"filterList":[],"page":1,"limit":100}},"answer":"text only when type=answer"}
+{"plan":"short plan","response_style":"operational|conversational","action":{"type":"answer|run_query","reason":"short reason","request":{"signals":["logs","traces"],"timeRange":{"from":"RFC3339","to":"RFC3339"},"filters":{},"filterList":[],"page":1,"limit":100}},"answer":"text only when type=answer"}
 - If action.type="answer", provide a direct user-facing answer in "answer".
 - If action.type="run_query", keep "answer" empty and produce a valid request.
 
@@ -244,7 +244,6 @@ func summarizeAssistantResult(
 		"summary":            result.Summary,
 		"logs":               trimAnyList(result.Results.Logs, 12),
 		"traces":             trimAnyList(result.Results.Traces, 12),
-		"metrics":            trimAnyList(result.Results.Metrics, 8),
 		"endpointCandidates": extractEndpointCandidates(result, 30),
 	}
 	rawPayload, _ := json.Marshal(payload)
@@ -347,7 +346,7 @@ Reply in the user's language context but OUTPUT JSON ONLY.
 
 Rules:
 - Produce only this JSON object shape:
-{"signals":["logs","traces","metrics"],"timeRange":{"from":"RFC3339","to":"RFC3339"},"filters":{},"filterList":[{"connector":"AND|OR","key":"...","operator":"=|!=|>|<|>=|<=|contains","value":"..."}],"page":1,"limit":100}
+{"signals":["logs","traces"],"timeRange":{"from":"RFC3339","to":"RFC3339"},"filters":{},"filterList":[{"connector":"AND|OR","key":"...","operator":"=|!=|>|<|>=|<=|contains","value":"..."}],"page":1,"limit":100}
 - If the user asks for error/failure/incident analysis, include focused filterList entries.
   Useful keys include: severity, trace_error_scope (with_errors), service.name, trace_id.
 - If the user asks for endpoint/API list or HTTP routes:
@@ -518,7 +517,7 @@ func sanitizeAssistantRequest(req QueryRequest, now time.Time) QueryRequest {
 		safe.Limit = 100
 	}
 	if len(safe.Signals) == 0 {
-		safe.Signals = []string{"logs", "traces", "metrics"}
+		safe.Signals = []string{"logs", "traces"}
 	}
 
 	// Se l'utente non ha specificato un range, cerca su tutti i dati storici
@@ -544,7 +543,7 @@ func sanitizeAssistantRequest(req QueryRequest, now time.Time) QueryRequest {
 }
 
 func sanitizeSignals(signals []string) []string {
-	allowed := map[string]struct{}{"logs": {}, "traces": {}, "metrics": {}}
+	allowed := map[string]struct{}{"logs": {}, "traces": {}}
 	out := make([]string, 0, len(signals))
 	seen := map[string]struct{}{}
 	for _, s := range signals {
@@ -638,10 +637,9 @@ func trimAnyList(items []any, limit int) []any {
 
 func fallbackAssistantAnswer(result *QueryRunResult) string {
 	return fmt.Sprintf(
-		"Analisi completata. Trovati %d log, %d tracce, %d serie metriche. Se vuoi, posso approfondire con un filtro più specifico (servizio, traceId, intervallo).",
+		"Analisi completata. Trovati %d log e %d tracce. Se vuoi, posso approfondire con un filtro più specifico (servizio, traceId, intervallo).",
 		result.Summary.LogCount,
 		result.Summary.TraceCount,
-		result.Summary.MetricCount,
 	)
 }
 

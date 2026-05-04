@@ -9,6 +9,9 @@ import (
 type Service struct {
 	Storage *storage.Client
 	Debug   bool
+	PressureObserver interface {
+		ObserveQueryError(msg string)
+	}
 
 	cacheInit    sync.Once
 	cache        *cacheManager

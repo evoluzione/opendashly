@@ -21,14 +21,3 @@ type TraceEntry struct {
 	LastSeen   time.Time `json:"lastSeen,omitempty"`
 	DurationMs float64   `json:"durationMs,omitempty"`
 }
-
-type MetricPoint struct {
-	Timestamp time.Time `json:"timestamp"`
-	Value     float64   `json:"value"`
-}
-
-type MetricSeries struct {
-	Name   string        `json:"name"`
-	Unit   string        `json:"unit,omitempty"`
-	Points []MetricPoint `json:"points"`
-}

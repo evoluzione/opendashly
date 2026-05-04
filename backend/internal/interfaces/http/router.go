@@ -158,6 +158,8 @@ func registerOptionalRoutes(r *chi.Mux, cfg RouterConfig) {
 		r.Put("/api/admin/retention/settings", cfg.RetentionHandler.UpdateSettings)
 		r.Post("/api/admin/retention/cleanup", cfg.RetentionHandler.ManualCleanup)
 		r.Get("/api/admin/retention/jobs", cfg.RetentionHandler.ListJobs)
+		r.Get("/api/admin/retention/emergency", cfg.RetentionHandler.GetEmergencyState)
+		r.Put("/api/admin/retention/emergency", cfg.RetentionHandler.UpdateEmergencyState)
 	}
 }
 

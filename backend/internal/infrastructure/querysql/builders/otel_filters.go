@@ -16,7 +16,7 @@ type FilterItem struct {
 }
 
 // filterListForSignal removes filters that are irrelevant for a specific signal.
-// This avoids expensive scans caused by applying log-only filters to traces/metrics.
+// This avoids expensive scans caused by applying log-only filters to traces.
 func filterListForSignal(signal string, filterList []FilterItem) []FilterItem {
 	if len(filterList) == 0 {
 		return filterList
@@ -31,8 +31,6 @@ func filterListForSignal(signal string, filterList []FilterItem) []FilterItem {
 			skip = isTraceOnlyFilterKey(key)
 		case "traces":
 			skip = isLogOnlyFilterKey(key)
-		case "metrics":
-			skip = isLogOnlyFilterKey(key) || isTraceOnlyFilterKey(key)
 		}
 
 		if !skip {
@@ -169,7 +167,7 @@ func buildSingleClause(k, v, op string, serviceColumn, traceColumn, severityColu
 		}
 	case "span_name":
 		// Heuristic: Only applies to Traces (traceColumn is set, severityColumn is empty).
-		// Logs have traceColumn set but severityColumn set. Metrics have neither.
+		// Logs have traceColumn set but severityColumn set.
 		if traceColumn != "" && severityColumn == "" {
 			if op == "contains" || op == "" {
 				return fmt.Sprintf("SpanName ILIKE '%%%s%%'", escapedValue)

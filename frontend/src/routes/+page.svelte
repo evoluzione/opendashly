@@ -167,7 +167,7 @@
   }
 
   async function handlePageChange(
-    signal: "logs" | "traces" | "metrics",
+    signal: "logs" | "traces",
     nextPage: number,
   ) {
     if (!lastRequest) return;

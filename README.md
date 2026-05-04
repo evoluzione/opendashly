@@ -173,7 +173,7 @@ The production stack uses prebuilt images from GHCR — no repository clone need
 
 ### Deploy
 
-**1. Pick a VM profile.** Copy the matching `.env` block below next to `docker-compose.prod.yml` and fill in the three secrets on top.
+**1. Pick machine sizing input.** Create a `.env` next to `docker-compose.prod.yml` and set only secrets, CORS, plus machine sizing.
 
 | Profile | VM size | Use when |
 |---|---|---|
@@ -181,201 +181,57 @@ The production stack uses prebuilt images from GHCR — no repository clone need
 | Standard | 2 vCPU / 4 GB RAM | Small production baseline |
 | Big | 4 vCPU / 8 GB RAM | Higher telemetry throughput |
 
-Each block is a complete drop-in `.env` — no extra defaults to merge. All three assume the resilience layer (minute rollups, `quantilesTDigest`, per-query `SETTINGS`, pressure cooldown, last-good cache, never-5xx widgets) so the dashboard keeps serving even when ClickHouse is memory-pressured.
-
-<details>
-<summary><b>Small — 1 vCPU / 2 GB</b></summary>
+Use one of these minimal `.env` patterns:
 
 ```bash
-# --- Secrets (fill in) -------------------------------------------------------
+# Required secrets
 AUTH_SECRET=replace-with-32-plus-random-chars
 CLICKHOUSE_PASSWORD=replace-with-strong-password
 CORS_ALLOWED_ORIGINS=http://your-host:5173
 
-# --- Backend & dashboard -----------------------------------------------------
-SERVICE_LIST_TIMEOUT_SECONDS=25
-CLEANUP_INTERVAL_MINUTES=1440
-RETENTION_COUNT_PRECHECK_ENABLED=false
+# Option A: preset profile
+MACHINE_PROFILE=standard
 
-CLICKHOUSE_MAX_MEMORY_MIB=96
-CLICKHOUSE_MAX_BYTES_BEFORE_EXTERNAL_GROUP_BY_MIB=24
-CLICKHOUSE_MAX_BYTES_BEFORE_EXTERNAL_SORT_MIB=24
-CLICKHOUSE_MAX_TEMP_DATA_ON_DISK_MIB=512
-CLICKHOUSE_MAX_EXECUTION_TIME_SECONDS=25
-CLICKHOUSE_MAX_OPEN_CONNS=2
-CLICKHOUSE_MAX_IDLE_CONNS=1
-CLICKHOUSE_DIAL_TIMEOUT_SECONDS=5
-CLICKHOUSE_READ_TIMEOUT_SECONDS=40
-
-DASHBOARD_FRESH_CACHE_TTL_SECONDS=30
-DASHBOARD_STALE_CACHE_TTL_SECONDS=900
-DASHBOARD_REQUEST_TIMEOUT_SECONDS=25
-DASHBOARD_QUERY_PARALLELISM=1
-DASHBOARD_HALVE_ON_OOM=true
-DASHBOARD_RAW_FALLBACK_ENABLED=false
-DASHBOARD_PRESSURE_COOLDOWN_SECONDS=60
-DASHBOARD_LAST_GOOD_TTL_SECONDS=1800
-DASHBOARD_ROLLUP_BACKFILL_ENABLED=true
-DASHBOARD_ROLLUP_BACKFILL_HOURS=48
-
-# --- OpenTelemetry Collector -------------------------------------------------
-OTEL_FILE_STORAGE_DIR=/var/lib/otelcol/queue
-OTEL_MEMORY_LIMITER_CHECK_INTERVAL=1s
-OTEL_MEMORY_LIMIT_MIB=96
-OTEL_MEMORY_SPIKE_LIMIT_MIB=20
-OTEL_BATCH_SEND_SIZE=500
-OTEL_BATCH_TIMEOUT=2s
-OTEL_EXPORTER_TIMEOUT=10s
-OTEL_SENDING_QUEUE_SIZE=5000
-OTEL_SENDING_QUEUE_CONSUMERS=1
-OTEL_RETRY_INITIAL_INTERVAL=1s
-OTEL_RETRY_MAX_INTERVAL=30s
-OTEL_RETRY_MAX_ELAPSED_TIME=0
-
-# --- Container memory caps ---------------------------------------------------
-APP_MEM_LIMIT=320m
-APP_MEMSWAP_LIMIT=320m
-OTEL_COLLECTOR_MEM_LIMIT=192m
-OTEL_COLLECTOR_MEMSWAP_LIMIT=192m
-CLICKHOUSE_MEM_LIMIT=896m
-CLICKHOUSE_MEMSWAP_LIMIT=896m
-
-# --- ClickHouse port bindings (localhost only on prod compose) ---------------
+# Optional ports
 CLICKHOUSE_HTTP_PORT=8123
 CLICKHOUSE_TCP_PORT=9000
 ```
 
-</details>
-
-<details>
-<summary><b>Standard — 2 vCPU / 4 GB</b></summary>
-
 ```bash
-# --- Secrets (fill in) -------------------------------------------------------
+# Required secrets
 AUTH_SECRET=replace-with-32-plus-random-chars
 CLICKHOUSE_PASSWORD=replace-with-strong-password
 CORS_ALLOWED_ORIGINS=http://your-host:5173
 
-# --- Backend & dashboard -----------------------------------------------------
-SERVICE_LIST_TIMEOUT_SECONDS=20
-CLEANUP_INTERVAL_MINUTES=720
-RETENTION_COUNT_PRECHECK_ENABLED=false
+# Option B: explicit machine hints
+MACHINE_RAM_GB=4
+MACHINE_CPU_CORES=2
 
-CLICKHOUSE_MAX_MEMORY_MIB=160
-CLICKHOUSE_MAX_BYTES_BEFORE_EXTERNAL_GROUP_BY_MIB=48
-CLICKHOUSE_MAX_BYTES_BEFORE_EXTERNAL_SORT_MIB=48
-CLICKHOUSE_MAX_TEMP_DATA_ON_DISK_MIB=768
-CLICKHOUSE_MAX_EXECUTION_TIME_SECONDS=20
-CLICKHOUSE_MAX_OPEN_CONNS=4
-CLICKHOUSE_MAX_IDLE_CONNS=2
-CLICKHOUSE_DIAL_TIMEOUT_SECONDS=5
-CLICKHOUSE_READ_TIMEOUT_SECONDS=30
-
-DASHBOARD_FRESH_CACHE_TTL_SECONDS=30
-DASHBOARD_STALE_CACHE_TTL_SECONDS=900
-DASHBOARD_REQUEST_TIMEOUT_SECONDS=20
-DASHBOARD_QUERY_PARALLELISM=1
-DASHBOARD_HALVE_ON_OOM=true
-DASHBOARD_RAW_FALLBACK_ENABLED=false
-DASHBOARD_PRESSURE_COOLDOWN_SECONDS=60
-DASHBOARD_LAST_GOOD_TTL_SECONDS=1800
-DASHBOARD_ROLLUP_BACKFILL_ENABLED=true
-DASHBOARD_ROLLUP_BACKFILL_HOURS=48
-
-# --- OpenTelemetry Collector -------------------------------------------------
-OTEL_FILE_STORAGE_DIR=/var/lib/otelcol/queue
-OTEL_MEMORY_LIMITER_CHECK_INTERVAL=1s
-OTEL_MEMORY_LIMIT_MIB=170
-OTEL_MEMORY_SPIKE_LIMIT_MIB=35
-OTEL_BATCH_SEND_SIZE=500
-OTEL_BATCH_TIMEOUT=2s
-OTEL_EXPORTER_TIMEOUT=10s
-OTEL_SENDING_QUEUE_SIZE=5000
-OTEL_SENDING_QUEUE_CONSUMERS=1
-OTEL_RETRY_INITIAL_INTERVAL=1s
-OTEL_RETRY_MAX_INTERVAL=30s
-OTEL_RETRY_MAX_ELAPSED_TIME=0
-
-# --- Container memory caps ---------------------------------------------------
-APP_MEM_LIMIT=512m
-APP_MEMSWAP_LIMIT=512m
-OTEL_COLLECTOR_MEM_LIMIT=320m
-OTEL_COLLECTOR_MEMSWAP_LIMIT=320m
-CLICKHOUSE_MEM_LIMIT=2048m
-CLICKHOUSE_MEMSWAP_LIMIT=2048m
-
-# --- ClickHouse port bindings (localhost only on prod compose) ---------------
+# Optional ports
 CLICKHOUSE_HTTP_PORT=8123
 CLICKHOUSE_TCP_PORT=9000
 ```
 
-</details>
+Opendashly always applies automatic backend and collector tuning from machine sizing. Manual low-level tuning overrides are not supported.
 
-<details>
-<summary><b>Big — 4 vCPU / 8 GB</b></summary>
+Derived profile mapping:
 
-```bash
-# --- Secrets (fill in) -------------------------------------------------------
-AUTH_SECRET=replace-with-32-plus-random-chars
-CLICKHOUSE_PASSWORD=replace-with-strong-password
-CORS_ALLOWED_ORIGINS=http://your-host:5173
+| Input | Resolved profile |
+|---|---|
+| `MACHINE_PROFILE=small` | Small |
+| `MACHINE_PROFILE=standard` | Standard |
+| `MACHINE_PROFILE=big` | Big |
+| `MACHINE_RAM_GB<=2` or `MACHINE_CPU_CORES<=1` | Small |
+| `MACHINE_RAM_GB<=4` or `MACHINE_CPU_CORES<=2` | Standard |
+| Higher resources | Big |
 
-# --- Backend & dashboard -----------------------------------------------------
-SERVICE_LIST_TIMEOUT_SECONDS=15
-CLEANUP_INTERVAL_MINUTES=360
-RETENTION_COUNT_PRECHECK_ENABLED=false
+Auto-tuned baseline (selected values):
 
-CLICKHOUSE_MAX_MEMORY_MIB=256
-CLICKHOUSE_MAX_BYTES_BEFORE_EXTERNAL_GROUP_BY_MIB=64
-CLICKHOUSE_MAX_BYTES_BEFORE_EXTERNAL_SORT_MIB=64
-CLICKHOUSE_MAX_TEMP_DATA_ON_DISK_MIB=1024
-CLICKHOUSE_MAX_EXECUTION_TIME_SECONDS=15
-CLICKHOUSE_MAX_OPEN_CONNS=8
-CLICKHOUSE_MAX_IDLE_CONNS=4
-CLICKHOUSE_DIAL_TIMEOUT_SECONDS=5
-CLICKHOUSE_READ_TIMEOUT_SECONDS=20
-
-DASHBOARD_FRESH_CACHE_TTL_SECONDS=30
-DASHBOARD_STALE_CACHE_TTL_SECONDS=900
-DASHBOARD_REQUEST_TIMEOUT_SECONDS=15
-DASHBOARD_QUERY_PARALLELISM=1
-DASHBOARD_HALVE_ON_OOM=true
-DASHBOARD_RAW_FALLBACK_ENABLED=false
-DASHBOARD_PRESSURE_COOLDOWN_SECONDS=60
-DASHBOARD_LAST_GOOD_TTL_SECONDS=1800
-DASHBOARD_ROLLUP_BACKFILL_ENABLED=true
-DASHBOARD_ROLLUP_BACKFILL_HOURS=48
-
-# --- OpenTelemetry Collector -------------------------------------------------
-OTEL_FILE_STORAGE_DIR=/var/lib/otelcol/queue
-OTEL_MEMORY_LIMITER_CHECK_INTERVAL=1s
-OTEL_MEMORY_LIMIT_MIB=300
-OTEL_MEMORY_SPIKE_LIMIT_MIB=60
-OTEL_BATCH_SEND_SIZE=500
-OTEL_BATCH_TIMEOUT=2s
-OTEL_EXPORTER_TIMEOUT=10s
-OTEL_SENDING_QUEUE_SIZE=5000
-OTEL_SENDING_QUEUE_CONSUMERS=1
-OTEL_RETRY_INITIAL_INTERVAL=1s
-OTEL_RETRY_MAX_INTERVAL=30s
-OTEL_RETRY_MAX_ELAPSED_TIME=0
-
-# --- Container memory caps ---------------------------------------------------
-APP_MEM_LIMIT=768m
-APP_MEMSWAP_LIMIT=768m
-OTEL_COLLECTOR_MEM_LIMIT=512m
-OTEL_COLLECTOR_MEMSWAP_LIMIT=512m
-CLICKHOUSE_MEM_LIMIT=4096m
-CLICKHOUSE_MEMSWAP_LIMIT=4096m
-
-# --- ClickHouse port bindings (localhost only on prod compose) ---------------
-CLICKHOUSE_HTTP_PORT=8123
-CLICKHOUSE_TCP_PORT=9000
-```
-
-</details>
-
-<br/>
+| Profile | Service timeout | CH max memory | Dashboard timeout | OTEL memory limit |
+|---|---:|---:|---:|---:|
+| Small | 25s | 96 MiB | 25s | 96 MiB |
+| Standard | 20s | 160 MiB | 20s | 170 MiB |
+| Big | 15s | 256 MiB | 15s | 300 MiB |
 
 **2. Resilience behavior** — shared across all profiles:
 

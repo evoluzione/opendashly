@@ -23,11 +23,27 @@ type Repo struct {
 	Conn driver.Conn
 }
 
+func (r *Repo) EnsureSetting(ctx context.Context, signalType string, retentionDays uint32, updatedBy string) error {
+	if signalType != "logs" && signalType != "traces" {
+		return fmt.Errorf("unsupported signal type: %s", signalType)
+	}
+	query := `INSERT INTO telemetry.retention_settings (id, signal_type, retention_days, updated_at, updated_by)
+	          SELECT generateUUIDv4(), ?, ?, now(), ?
+	          WHERE NOT EXISTS (
+	            SELECT 1 FROM telemetry.retention_settings WHERE signal_type = ?
+	          )`
+	if err := r.Conn.Exec(ctx, query, signalType, retentionDays, updatedBy, signalType); err != nil {
+		return fmt.Errorf("ensure retention setting for %s: %w", signalType, err)
+	}
+	return nil
+}
+
 func (r *Repo) GetSettings(ctx context.Context) ([]RetentionSetting, error) {
 	query := `SELECT id, signal_type, retention_days, updated_at, updated_by
 	          FROM (
 	            SELECT id, signal_type, retention_days, updated_at, updated_by
 	            FROM telemetry.retention_settings
+	            WHERE signal_type IN ('logs', 'traces')
 	            ORDER BY updated_at DESC
 	            LIMIT 1 BY signal_type
 	          )
@@ -55,6 +71,7 @@ func (r *Repo) GetSettingBySignal(ctx context.Context, signalType string) (*Rete
 	query := `SELECT id, signal_type, retention_days, updated_at, updated_by
 	          FROM telemetry.retention_settings
 	          WHERE signal_type = ?
+	            AND signal_type IN ('logs', 'traces')
 	          ORDER BY updated_at DESC
 	          LIMIT 1`
 

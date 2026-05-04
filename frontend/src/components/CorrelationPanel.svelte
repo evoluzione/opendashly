@@ -2,11 +2,10 @@
   import { onMount } from "svelte";
   import { fetchRelated } from "../services/traces";
   import LogResultsTable from "./LogResultsTable.svelte";
-  import MetricChart from "./MetricChart.svelte";
   import { locale, t } from "../lib/i18n";
 
   export let traceId: string;
-  let related: { logs: any[]; metrics: any[] } | null = null;
+  let related: { logs: any[] } | null = null;
   let error: string | null = null;
 
   onMount(async () => {

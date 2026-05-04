@@ -33,21 +33,17 @@
   const signalLabels: Record<SignalType, string> = {
     logs: "Log",
     traces: "Trace",
-    metrics: "Metrics",
   };
   const statusLabels: Record<string, string> = {
     completed: "retention.statusCompleted",
     running: "retention.statusRunning",
     failed: "retention.statusFailed",
   };
-  const MAX_RETENTION_DAYS = 365;
-  const MAX_TRACES_RETENTION_DAYS = 15;
 
   function labelForSignal(signal: SignalType) {
     const base = signalLabels[signal] ?? signal;
     if (base === "Log") return t($locale, "sidebar.logs");
     if (base === "Trace") return t($locale, "sidebar.traces");
-    if (base === "Metrics") return t($locale, "sidebar.metrics");
     return base;
   }
 
@@ -61,7 +57,11 @@
   }
 
   function maxRetentionForSignal(signal: SignalType) {
-    return signal === "traces" ? MAX_TRACES_RETENTION_DAYS : MAX_RETENTION_DAYS;
+    const found = settings.find((s) => s.signalType === signal);
+    if (found?.maxRetentionDays && found.maxRetentionDays > 0) {
+      return found.maxRetentionDays;
+    }
+    return 0;
   }
 
   async function loadSettings() {
@@ -110,6 +110,10 @@
     if (!editingSignal) return;
 
     const maxRetentionDays = maxRetentionForSignal(editingSignal);
+    if (maxRetentionDays <= 0) {
+      error = t($locale, "retention.loadError");
+      return;
+    }
     if (editRetentionDays < 1 || editRetentionDays > maxRetentionDays) {
       error = t($locale, "retention.rangeError", {
         signal: labelForSignal(editingSignal),
@@ -231,9 +235,6 @@
   <div class="panels">
     <div class="panel">
       <h3>{t($locale, "retention.settingsTitle")}</h3>
-      <p class="help-text">
-        {t($locale, "retention.settingsHelp")}
-      </p>
 
       {#if loading && settings.length === 0}
         <div class="status">{t($locale, "common.loading")}</div>
@@ -248,20 +249,36 @@
           </thead>
           <tbody>
             {#each settings as setting}
+              {@const settingMax = maxRetentionForSignal(setting.signalType)}
               <tr>
                 <td class="signal-type">{labelForSignal(setting.signalType)}</td
                 >
                 <td>
                   {#if editingSignal === setting.signalType}
-                    <input
-                      type="number"
-                      bind:value={editRetentionDays}
-                      min="1"
-                      max={maxRetentionForSignal(setting.signalType)}
-                      class="edit-input"
-                    />
+                    <div class="retention-cell">
+                      <input
+                        type="number"
+                        bind:value={editRetentionDays}
+                        min="1"
+                        max={settingMax > 0 ? settingMax : undefined}
+                        class="edit-input"
+                        disabled={settingMax <= 0}
+                      />
+                      {#if settingMax > 0}
+                        <div class="max-hint">
+                          {t($locale, "retention.maxDays", { max: settingMax })}
+                        </div>
+                      {/if}
+                    </div>
                   {:else}
-                    {t($locale, "retention.daysSuffix", { days: setting.retentionDays })}
+                    <div class="retention-cell">
+                      <div>{t($locale, "retention.daysSuffix", { days: setting.retentionDays })}</div>
+                      {#if settingMax > 0}
+                        <div class="max-hint">
+                          {t($locale, "retention.maxDays", { max: settingMax })}
+                        </div>
+                      {/if}
+                    </div>
                   {/if}
                 </td>
                 <td>
@@ -277,6 +294,7 @@
                   {:else}
                     <button
                       class="btn-small"
+                      disabled={settingMax <= 0}
                       on:click={() => startEdit(setting)}>{t($locale, "retention.edit")}</button
                     >
                   {/if}
@@ -313,14 +331,6 @@
                 on:change={() => toggleSignal("traces")}
               />
               {labelForSignal("traces")}
-            </label>
-            <label>
-              <input
-                type="checkbox"
-                checked={selectedSignals.includes("metrics")}
-                on:change={() => toggleSignal("metrics")}
-              />
-              {labelForSignal("metrics")}
             </label>
           </div>
         </fieldset>
@@ -450,6 +460,16 @@
     color: var(--color-slate-500);
     font-size: 14px;
     margin: 0 0 16px 0;
+  }
+
+  .retention-cell {
+    display: grid;
+    gap: 4px;
+  }
+
+  .max-hint {
+    font-size: 12px;
+    color: var(--color-slate-500);
   }
 
   .alert {

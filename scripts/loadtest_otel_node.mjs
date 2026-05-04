@@ -12,12 +12,6 @@ import { BatchSpanProcessor } from "@opentelemetry/sdk-trace-base";
 import { OTLPTraceExporter } from "@opentelemetry/exporter-trace-otlp-http";
 import { LoggerProvider, BatchLogRecordProcessor } from "@opentelemetry/sdk-logs";
 import { OTLPLogExporter } from "@opentelemetry/exporter-logs-otlp-http";
-import {
-  MeterProvider,
-  PeriodicExportingMetricReader,
-  AggregationTemporality
-} from "@opentelemetry/sdk-metrics";
-import { OTLPMetricExporter } from "@opentelemetry/exporter-metrics-otlp-http";
 
 const ALL_SERVICES = [
   "api-gateway",
@@ -136,14 +130,12 @@ const DEFAULTS = {
   errorRate: 0.035,
   hotRate: 0.2,
   maxInFlight: 500,
-  metricsExportIntervalMs: 5000,
   collectorBase: "http://localhost:4318",
   tenant: "tenant-demo",
   environment: "loadtest",
   seed: null,
   traces: true,
   logs: true,
-  metrics: true,
   quiet: false
 };
 
@@ -158,7 +150,6 @@ function parseArgs(argv) {
     "error-rate": "errorRate",
     "hot-rate": "hotRate",
     "max-in-flight": "maxInFlight",
-    "metrics-export-interval-ms": "metricsExportIntervalMs",
     "collector": "collectorBase",
     "tenant": "tenant",
     "env": "environment",
@@ -166,7 +157,6 @@ function parseArgs(argv) {
     "seed": "seed",
     "traces": "traces",
     "logs": "logs",
-    "metrics": "metrics",
     "quiet": "quiet"
   };
 
@@ -211,8 +201,7 @@ function parseArgs(argv) {
     switch (mapped) {
       case "durationSec":
       case "services":
-      case "maxInFlight":
-      case "metricsExportIntervalMs": {
+      case "maxInFlight": {
         args[mapped] = parseInt(value, 10);
         break;
       }
@@ -266,11 +255,8 @@ function validateArgs(args) {
   if (!Number.isFinite(args.maxInFlight) || args.maxInFlight < 1) {
     throw new Error("maxInFlight must be >= 1");
   }
-  if (!Number.isFinite(args.metricsExportIntervalMs) || args.metricsExportIntervalMs < 1000) {
-    throw new Error("metricsExportIntervalMs must be >= 1000");
-  }
-  if (!args.traces && !args.logs && !args.metrics) {
-    throw new Error("At least one signal must be enabled: traces/logs/metrics");
+  if (!args.traces && !args.logs) {
+    throw new Error("At least one signal must be enabled: traces/logs");
   }
 }
 
@@ -289,20 +275,18 @@ Options:
   --hot-rate <0..1>                        Extra traffic share for checkout hotspot (default: ${DEFAULTS.hotRate})
   --max-in-flight <n>                      In-flight request cap (default: ${DEFAULTS.maxInFlight})
   --collector <url>                        OTLP HTTP base endpoint (default: ${DEFAULTS.collectorBase})
-  --metrics-export-interval-ms <ms>        Metrics export interval (default: ${DEFAULTS.metricsExportIntervalMs})
   --tenant <id>                            Tenant tag (default: ${DEFAULTS.tenant})
   --environment <name>                     Environment tag (default: ${DEFAULTS.environment})
   --seed <n>                               Deterministic seed
   --traces | --no-traces                   Enable/disable traces (default: ON)
   --logs | --no-logs                       Enable/disable logs (default: ON)
-  --metrics | --no-metrics                 Enable/disable metrics (default: ON)
   --quiet | --no-quiet                     Compact output
   --help                                   Show this help
 
 Examples:
   node scripts/loadtest_otel_node.mjs --duration 180 --rps 120
   node scripts/loadtest_otel_node.mjs --duration 300 --rps 250 --error-rate 0.06 --hot-rate 0.35
-  node scripts/loadtest_otel_node.mjs --duration 120 --rps 80 --services 6 --no-metrics
+  node scripts/loadtest_otel_node.mjs --duration 120 --rps 80 --services 6 --no-logs
 `);
 }
 
@@ -346,18 +330,16 @@ function clamp(value, min, max) {
 
 function buildCollectorUrls(base) {
   const normalized = base.endsWith("/") ? base.slice(0, -1) : base;
-  const alreadySignalPath = /\/v1\/(traces|logs|metrics)$/.test(normalized);
+  const alreadySignalPath = /\/v1\/(traces|logs)$/.test(normalized);
   if (alreadySignalPath) {
     return {
-      traces: normalized.replace(/\/v1\/(logs|metrics)$/, "/v1/traces"),
-      logs: normalized.replace(/\/v1\/(traces|metrics)$/, "/v1/logs"),
-      metrics: normalized.replace(/\/v1\/(traces|logs)$/, "/v1/metrics")
+      traces: normalized.replace(/\/v1\/logs$/, "/v1/traces"),
+      logs: normalized.replace(/\/v1\/traces$/, "/v1/logs")
     };
   }
   return {
     traces: `${normalized}/v1/traces`,
-    logs: `${normalized}/v1/logs`,
-    metrics: `${normalized}/v1/metrics`
+    logs: `${normalized}/v1/logs`
   };
 }
 
@@ -376,10 +358,6 @@ function createServiceTelemetry(serviceName, cfg, urls) {
     tracer: null,
     loggerProvider: null,
     logger: null,
-    meterProvider: null,
-    meter: null,
-    metricReader: null,
-    metrics: null,
     runtime: {
       cpuUsage: 0.12,
       memoryUsageBytes: 300_000_000 + Math.floor(Math.random() * 400_000_000)
@@ -398,65 +376,6 @@ function createServiceTelemetry(serviceName, cfg, urls) {
     service.loggerProvider = new LoggerProvider({ resource });
     service.loggerProvider.addLogRecordProcessor(new BatchLogRecordProcessor(logExporter));
     service.logger = service.loggerProvider.getLogger("opendashly-loadtest", "1.0.0");
-  }
-
-  if (cfg.metrics) {
-    const metricExporter = new OTLPMetricExporter({
-      url: urls.metrics,
-      temporalityPreference: AggregationTemporality.DELTA
-    });
-
-    service.metricReader = new PeriodicExportingMetricReader({
-      exporter: metricExporter,
-      exportIntervalMillis: cfg.metricsExportIntervalMs
-    });
-
-    service.meterProvider = new MeterProvider({
-      resource,
-      readers: [service.metricReader]
-    });
-
-    service.meter = service.meterProvider.getMeter("opendashly-loadtest", "1.0.0");
-
-    const requestCounter = service.meter.createCounter("http.server.requests", {
-      description: "Number of incoming ecommerce requests",
-      unit: "count"
-    });
-    const errorCounter = service.meter.createCounter("http.server.errors", {
-      description: "Number of incoming ecommerce failed requests",
-      unit: "count"
-    });
-    const durationHistogram = service.meter.createHistogram("http.server.duration", {
-      description: "Server-side request duration",
-      unit: "ms"
-    });
-    const businessCounter = service.meter.createCounter("ecommerce.business.events", {
-      description: "Business counters for checkout/cart flow",
-      unit: "count"
-    });
-
-    const cpuGauge = service.meter.createObservableGauge("service.cpu.usage", {
-      description: "Synthetic CPU usage",
-      unit: "1"
-    });
-    cpuGauge.addCallback((observableResult) => {
-      observableResult.observe(clamp(service.runtime.cpuUsage, 0.01, 0.95), { service: serviceName });
-    });
-
-    const memGauge = service.meter.createObservableGauge("service.memory.usage", {
-      description: "Synthetic memory usage",
-      unit: "By"
-    });
-    memGauge.addCallback((observableResult) => {
-      observableResult.observe(Math.max(120_000_000, service.runtime.memoryUsageBytes), { service: serviceName });
-    });
-
-    service.metrics = {
-      requestCounter,
-      errorCounter,
-      durationHistogram,
-      businessCounter
-    };
   }
 
   return service;
@@ -634,40 +553,6 @@ function emitLog(service, ctx, severity, body, attributes) {
   });
 }
 
-function recordServerMetric(service, payload) {
-  if (!service.metrics) {
-    return;
-  }
-
-  const baseAttrs = {
-    "http.method": payload.method,
-    "http.route": payload.route,
-    "http.status_code": String(payload.httpStatus),
-    "ecommerce.journey": payload.journey,
-    "ecommerce.tenant": payload.tenant
-  };
-
-  service.metrics.requestCounter.add(1, baseAttrs);
-  service.metrics.durationHistogram.record(payload.durationMs, baseAttrs);
-  if (payload.isError) {
-    service.metrics.errorCounter.add(1, baseAttrs);
-  }
-
-  if (payload.journey === "checkout") {
-    service.metrics.businessCounter.add(1, {
-      event: payload.isError ? "orders_failed" : "orders_created",
-      "ecommerce.tenant": payload.tenant
-    });
-  }
-
-  if (payload.journey === "add-to-cart" && payload.isError) {
-    service.metrics.businessCounter.add(1, {
-      event: "cart_abandonment",
-      "ecommerce.tenant": payload.tenant
-    });
-  }
-}
-
 async function simulateRequest(runtime, reqNo) {
   const { cfg, rng, servicesByName, activeServices } = runtime;
   const data = makeDataset(rng);
@@ -832,16 +717,6 @@ async function simulateRequest(runtime, reqNo) {
       status_code: String(httpStatus)
     });
 
-    recordServerMetric(callee, {
-      method: call.method,
-      route,
-      httpStatus,
-      durationMs: serverDuration,
-      isError: isErrorCall,
-      journey: journey.id,
-      tenant: cfg.tenant
-    });
-
     callee.runtime.cpuUsage += (rng.next() - 0.5) * 0.03;
     callee.runtime.memoryUsageBytes += Math.floor((rng.next() - 0.45) * 4_000_000);
 
@@ -870,16 +745,6 @@ async function simulateRequest(runtime, reqNo) {
     service: journey.rootService,
     status_code: String(rootHttpStatus),
     latency_ms: String(rootDuration)
-  });
-
-  recordServerMetric(gateway, {
-    method: journey.method,
-    route: rootRoute,
-    httpStatus: rootHttpStatus,
-    durationMs: rootDuration,
-    isError: shouldFail,
-    journey: journey.id,
-    tenant: cfg.tenant
   });
 
   gateway.runtime.cpuUsage += (rng.next() - 0.45) * 0.04;
@@ -919,10 +784,6 @@ async function flushAndShutdown(servicesByName, cfg) {
       tasks.push(service.loggerProvider.forceFlush().catch(() => {}));
       tasks.push(service.loggerProvider.shutdown().catch(() => {}));
     }
-    if (cfg.metrics && service.meterProvider) {
-      tasks.push(service.meterProvider.forceFlush().catch(() => {}));
-      tasks.push(service.meterProvider.shutdown().catch(() => {}));
-    }
   }
 
   await Promise.all(tasks);
@@ -931,8 +792,8 @@ async function flushAndShutdown(servicesByName, cfg) {
 function printHeader(cfg, activeServices, urls) {
   console.log("== OpenDashly OTLP ecommerce load test ==");
   console.log(`durationSec=${cfg.durationSec} rps=${cfg.rps} services=${activeServices.size} maxInFlight=${cfg.maxInFlight}`);
-  console.log(`signals traces=${cfg.traces} logs=${cfg.logs} metrics=${cfg.metrics}`);
-  console.log(`collector traces=${urls.traces} logs=${urls.logs} metrics=${urls.metrics}`);
+  console.log(`signals traces=${cfg.traces} logs=${cfg.logs}`);
+  console.log(`collector traces=${urls.traces} logs=${urls.logs}`);
   console.log(`errorRate=${cfg.errorRate} hotRate=${cfg.hotRate} tenant=${cfg.tenant} env=${cfg.environment}`);
   console.log("");
 }
@@ -1046,7 +907,7 @@ async function run() {
   }
 
   await Promise.all(inFlight);
-  await sleep(Math.max(1000, cfg.metricsExportIntervalMs + 250));
+  await sleep(1000);
   await flushAndShutdown(servicesByName, cfg);
 
   printSummary(stats, startedAt);

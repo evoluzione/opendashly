@@ -3,17 +3,9 @@ package query
 import (
 	"context"
 	"fmt"
-	"time"
 
 	"github.com/ClickHouse/clickhouse-go/v2/lib/driver"
 )
-
-type metricRow struct {
-	Name      string
-	Unit      string
-	Timestamp time.Time
-	Value     float64
-}
 
 func fetchLogs(ctx context.Context, conn driver.Conn, query string) ([]LogEntry, error) {
 	rows, err := conn.Query(ctx, query)
@@ -56,26 +48,6 @@ func fetchTraces(ctx context.Context, conn driver.Conn, query string) ([]TraceEn
 		return nil, fmt.Errorf("iterate traces: %w", err)
 	}
 	return results, nil
-}
-
-func fetchMetrics(ctx context.Context, conn driver.Conn, query string) ([]MetricSeries, error) {
-	rows, err := conn.Query(ctx, query)
-	if err != nil {
-		return nil, fmt.Errorf("query metrics: %w", err)
-	}
-	defer rows.Close()
-	metricRows := []metricRow{}
-	for rows.Next() {
-		var row metricRow
-		if err := rows.Scan(&row.Name, &row.Unit, &row.Timestamp, &row.Value); err != nil {
-			return nil, fmt.Errorf("scan metrics: %w", err)
-		}
-		metricRows = append(metricRows, row)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("iterate metrics: %w", err)
-	}
-	return buildMetricSeries(metricRows), nil
 }
 
 func trimToPage[T any](items []T, limit int) ([]T, bool) {

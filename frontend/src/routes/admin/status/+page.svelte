@@ -11,7 +11,7 @@
   import { getLocaleTag, locale, t } from "../../../lib/i18n";
 
   type Tone = "ok" | "warn" | "error" | "muted";
-  type SignalKey = "logs" | "traces" | "metrics";
+  type SignalKey = "logs" | "traces";
 
   type SignalRow = {
     key: SignalKey;
@@ -123,12 +123,10 @@
     const labels: Record<SignalKey, string> = {
       logs: t($locale, "sidebar.logs"),
       traces: t($locale, "sidebar.traces"),
-      metrics: t($locale, "sidebar.metrics"),
     };
     const entries: Array<{ key: SignalKey; data: TelemetryCounts }> = [
       { key: "logs", data: value.counts.logs },
       { key: "traces", data: value.counts.traces },
-      { key: "metrics", data: value.counts.metrics },
     ];
 
     return entries.map(({ key, data }) => {

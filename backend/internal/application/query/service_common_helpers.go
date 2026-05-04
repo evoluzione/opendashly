@@ -54,14 +54,12 @@ func emptyResult(page, limit int) *QueryRunResult {
 		RunID:  fmt.Sprintf("run-%d", time.Now().UnixNano()),
 		Status: "complete",
 		Pagination: PaginationSet{
-			Logs:    buildPagination(page, limit, false, ""),
-			Traces:  buildPagination(page, limit, false, ""),
-			Metrics: buildPagination(page, limit, false, ""),
+			Logs:   buildPagination(page, limit, false, ""),
+			Traces: buildPagination(page, limit, false, ""),
 		},
 		Results: Results{
-			Logs:    []any{},
-			Traces:  []any{},
-			Metrics: []any{},
+			Logs:   []any{},
+			Traces: []any{},
 		},
 	}
 	result.Summary = QueryRunSummary{}
@@ -70,7 +68,7 @@ func emptyResult(page, limit int) *QueryRunResult {
 
 func requestedSignals(signals []string) map[string]bool {
 	if len(signals) == 0 {
-		return map[string]bool{"logs": true, "traces": true, "metrics": true}
+		return map[string]bool{"logs": true, "traces": true}
 	}
 	set := map[string]bool{}
 	for _, signal := range signals {
