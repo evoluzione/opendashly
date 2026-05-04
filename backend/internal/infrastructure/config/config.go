@@ -9,6 +9,11 @@ import (
 
 // Config holds runtime configuration for the API.
 type Config struct {
+	MachineProfile               string
+	MachineRAMGB                 int
+	MachineCPUCores              int
+	MachineAutoTuning            bool
+	ResolvedMachineProfile       string
 	ClickHouseAddr               string
 	ClickHouseUser               string
 	ClickHousePassword           string
@@ -43,42 +48,128 @@ type Config struct {
 	DebugQuery                   bool
 }
 
+type machinePreset struct {
+	ServiceListTimeoutSec        int
+	CleanupIntervalMinutes       int
+	RetentionPreCount            bool
+	ClickHouseMaxMemoryMiB       int
+	ClickHouseExternalGroupByMiB int
+	ClickHouseExternalSortMiB    int
+	ClickHouseTempDiskMiB        int
+	ClickHouseMaxExecSec         int
+	ClickHouseMaxOpenConns       int
+	ClickHouseMaxIdleConns       int
+	ClickHouseDialTimeout        int
+	ClickHouseReadTimeout        int
+	DashboardFreshCacheTTLSec    int
+	DashboardStaleCacheTTLSec    int
+	DashboardRequestTimeoutSec   int
+	DashboardQueryParallelism    int
+	DashboardHalveOnOOM          bool
+	DashboardRawFallback         bool
+	DashboardPressureCooldownSec int
+	DashboardLastGoodTTLSec      int
+	DashboardRollupBackfill      bool
+	DashboardRollupBackfillHours int
+}
+
+var machinePresets = map[string]machinePreset{
+	"small": {
+		ServiceListTimeoutSec:        25,
+		CleanupIntervalMinutes:       1440,
+		RetentionPreCount:            false,
+		ClickHouseMaxMemoryMiB:       96,
+		ClickHouseExternalGroupByMiB: 24,
+		ClickHouseExternalSortMiB:    24,
+		ClickHouseTempDiskMiB:        512,
+		ClickHouseMaxExecSec:         25,
+		ClickHouseMaxOpenConns:       2,
+		ClickHouseMaxIdleConns:       1,
+		ClickHouseDialTimeout:        5,
+		ClickHouseReadTimeout:        40,
+		DashboardFreshCacheTTLSec:    30,
+		DashboardStaleCacheTTLSec:    900,
+		DashboardRequestTimeoutSec:   25,
+		DashboardQueryParallelism:    1,
+		DashboardHalveOnOOM:          true,
+		DashboardRawFallback:         false,
+		DashboardPressureCooldownSec: 60,
+		DashboardLastGoodTTLSec:      1800,
+		DashboardRollupBackfill:      true,
+		DashboardRollupBackfillHours: 48,
+	},
+	"standard": {
+		ServiceListTimeoutSec:        20,
+		CleanupIntervalMinutes:       720,
+		RetentionPreCount:            false,
+		ClickHouseMaxMemoryMiB:       160,
+		ClickHouseExternalGroupByMiB: 48,
+		ClickHouseExternalSortMiB:    48,
+		ClickHouseTempDiskMiB:        768,
+		ClickHouseMaxExecSec:         20,
+		ClickHouseMaxOpenConns:       4,
+		ClickHouseMaxIdleConns:       2,
+		ClickHouseDialTimeout:        5,
+		ClickHouseReadTimeout:        30,
+		DashboardFreshCacheTTLSec:    30,
+		DashboardStaleCacheTTLSec:    900,
+		DashboardRequestTimeoutSec:   20,
+		DashboardQueryParallelism:    1,
+		DashboardHalveOnOOM:          true,
+		DashboardRawFallback:         false,
+		DashboardPressureCooldownSec: 60,
+		DashboardLastGoodTTLSec:      1800,
+		DashboardRollupBackfill:      true,
+		DashboardRollupBackfillHours: 48,
+	},
+	"big": {
+		ServiceListTimeoutSec:        15,
+		CleanupIntervalMinutes:       360,
+		RetentionPreCount:            false,
+		ClickHouseMaxMemoryMiB:       256,
+		ClickHouseExternalGroupByMiB: 64,
+		ClickHouseExternalSortMiB:    64,
+		ClickHouseTempDiskMiB:        1024,
+		ClickHouseMaxExecSec:         15,
+		ClickHouseMaxOpenConns:       8,
+		ClickHouseMaxIdleConns:       4,
+		ClickHouseDialTimeout:        5,
+		ClickHouseReadTimeout:        20,
+		DashboardFreshCacheTTLSec:    30,
+		DashboardStaleCacheTTLSec:    900,
+		DashboardRequestTimeoutSec:   15,
+		DashboardQueryParallelism:    2,
+		DashboardHalveOnOOM:          true,
+		DashboardRawFallback:         false,
+		DashboardPressureCooldownSec: 60,
+		DashboardLastGoodTTLSec:      1800,
+		DashboardRollupBackfill:      true,
+		DashboardRollupBackfillHours: 48,
+	},
+}
+
 // Load reads configuration from environment variables.
 func Load() (*Config, error) {
 	cfg := &Config{
-		ClickHouseAddr:               os.Getenv("CLICKHOUSE_ADDR"),
-		ClickHouseUser:               os.Getenv("CLICKHOUSE_USER"),
-		ClickHousePassword:           os.Getenv("CLICKHOUSE_PASSWORD"),
-		ClickHouseMaxMemoryMiB:       getEnvInt("CLICKHOUSE_MAX_MEMORY_MIB", 200),
-		ClickHouseExternalGroupByMiB: getEnvInt("CLICKHOUSE_MAX_BYTES_BEFORE_EXTERNAL_GROUP_BY_MIB", 64),
-		ClickHouseExternalSortMiB:    getEnvInt("CLICKHOUSE_MAX_BYTES_BEFORE_EXTERNAL_SORT_MIB", 64),
-		ClickHouseTempDiskMiB:        getEnvInt("CLICKHOUSE_MAX_TEMP_DATA_ON_DISK_MIB", 1024),
-		ClickHouseMaxExecSec:         getEnvInt("CLICKHOUSE_MAX_EXECUTION_TIME_SECONDS", 8),
-		ClickHouseMaxOpenConns:       getEnvInt("CLICKHOUSE_MAX_OPEN_CONNS", 5),
-		ClickHouseMaxIdleConns:       getEnvInt("CLICKHOUSE_MAX_IDLE_CONNS", 3),
-		ClickHouseDialTimeout:        getEnvInt("CLICKHOUSE_DIAL_TIMEOUT_SECONDS", 5),
-		ClickHouseReadTimeout:        getEnvInt("CLICKHOUSE_READ_TIMEOUT_SECONDS", 10),
-		DashboardFreshCacheTTLSec:    getEnvInt("DASHBOARD_FRESH_CACHE_TTL_SECONDS", 30),
-		DashboardStaleCacheTTLSec:    getEnvInt("DASHBOARD_STALE_CACHE_TTL_SECONDS", 900),
-		DashboardRequestTimeoutSec:   getEnvInt("DASHBOARD_REQUEST_TIMEOUT_SECONDS", 15),
-		DashboardQueryParallelism:    getEnvInt("DASHBOARD_QUERY_PARALLELISM", 1),
-		DashboardHalveOnOOM:          getEnvBool("DASHBOARD_HALVE_ON_OOM", true),
-		DashboardRawFallback:         getEnvBool("DASHBOARD_RAW_FALLBACK_ENABLED", false),
-		DashboardPressureCooldownSec: getEnvInt("DASHBOARD_PRESSURE_COOLDOWN_SECONDS", 60),
-		DashboardLastGoodTTLSec:      getEnvInt("DASHBOARD_LAST_GOOD_TTL_SECONDS", 1800),
-		DashboardRollupBackfill:      getEnvBool("DASHBOARD_ROLLUP_BACKFILL_ENABLED", true),
-		DashboardRollupBackfillHours: getEnvInt("DASHBOARD_ROLLUP_BACKFILL_HOURS", 48),
-		CollectorHealthURL:           os.Getenv("COLLECTOR_HEALTH_URL"),
-		ListenAddr:                   os.Getenv("API_LISTEN_ADDR"),
-		AuthMode:                     os.Getenv("AUTH_MODE"),
-		AuthSecret:                   os.Getenv("AUTH_SECRET"),
-		AuthCookieName:               os.Getenv("AUTH_COOKIE_NAME"),
-		CleanupIntervalMinutes:       getEnvInt("CLEANUP_INTERVAL_MINUTES", 1440),
-		ServiceListTimeoutSec:        getEnvInt("SERVICE_LIST_TIMEOUT_SECONDS", 15),
-		RetentionPreCount:            getEnvBool("RETENTION_COUNT_PRECHECK_ENABLED", false),
-		CORSAllowedOrigins:           getEnvCSV("CORS_ALLOWED_ORIGINS", []string{"http://localhost:5173"}),
-		DebugQuery:                   os.Getenv("VITE_DEBUG_QUERY") == "true",
+		MachineProfile:          strings.ToLower(strings.TrimSpace(os.Getenv("MACHINE_PROFILE"))),
+		MachineRAMGB:            getEnvInt("MACHINE_RAM_GB", 0),
+		MachineCPUCores:         getEnvInt("MACHINE_CPU_CORES", 0),
+		ClickHouseAddr:          os.Getenv("CLICKHOUSE_ADDR"),
+		ClickHouseUser:          os.Getenv("CLICKHOUSE_USER"),
+		ClickHousePassword:      os.Getenv("CLICKHOUSE_PASSWORD"),
+		ClickHouseDialTimeout:   5,
+		DashboardHalveOnOOM:     true,
+		DashboardRollupBackfill: true,
+		CollectorHealthURL:      os.Getenv("COLLECTOR_HEALTH_URL"),
+		ListenAddr:              os.Getenv("API_LISTEN_ADDR"),
+		AuthMode:                os.Getenv("AUTH_MODE"),
+		AuthSecret:              os.Getenv("AUTH_SECRET"),
+		AuthCookieName:          os.Getenv("AUTH_COOKIE_NAME"),
+		RetentionPreCount:       false,
+		CORSAllowedOrigins:      getEnvCSV("CORS_ALLOWED_ORIGINS", []string{"http://localhost:5173"}),
+		DebugQuery:              os.Getenv("VITE_DEBUG_QUERY") == "true",
 	}
+	cfg.applyMachineTuning()
 	if cfg.ClickHouseAddr == "" {
 		return nil, fmt.Errorf("CLICKHOUSE_ADDR is required")
 	}
@@ -98,6 +189,105 @@ func Load() (*Config, error) {
 		cfg.AuthCookieName = "oteldash_session"
 	}
 	return cfg, nil
+}
+
+func (cfg *Config) applyMachineTuning() {
+	profile := resolveMachineProfile(cfg.MachineProfile, cfg.MachineRAMGB, cfg.MachineCPUCores)
+
+	preset, ok := machinePresets[profile]
+	if !ok {
+		preset = machinePresets["standard"]
+		profile = "standard"
+	}
+
+	cfg.MachineAutoTuning = true
+	cfg.ResolvedMachineProfile = profile
+
+	// Auto-tuning intentionally overrides low-level manual knobs when active.
+	cfg.ServiceListTimeoutSec = preset.ServiceListTimeoutSec
+	cfg.CleanupIntervalMinutes = preset.CleanupIntervalMinutes
+	cfg.RetentionPreCount = preset.RetentionPreCount
+	cfg.ClickHouseMaxMemoryMiB = preset.ClickHouseMaxMemoryMiB
+	cfg.ClickHouseExternalGroupByMiB = preset.ClickHouseExternalGroupByMiB
+	cfg.ClickHouseExternalSortMiB = preset.ClickHouseExternalSortMiB
+	cfg.ClickHouseTempDiskMiB = preset.ClickHouseTempDiskMiB
+	cfg.ClickHouseMaxExecSec = preset.ClickHouseMaxExecSec
+	cfg.ClickHouseMaxOpenConns = preset.ClickHouseMaxOpenConns
+	cfg.ClickHouseMaxIdleConns = preset.ClickHouseMaxIdleConns
+	cfg.ClickHouseDialTimeout = preset.ClickHouseDialTimeout
+	cfg.ClickHouseReadTimeout = preset.ClickHouseReadTimeout
+	cfg.DashboardFreshCacheTTLSec = preset.DashboardFreshCacheTTLSec
+	cfg.DashboardStaleCacheTTLSec = preset.DashboardStaleCacheTTLSec
+	cfg.DashboardRequestTimeoutSec = preset.DashboardRequestTimeoutSec
+	cfg.DashboardQueryParallelism = preset.DashboardQueryParallelism
+	cfg.DashboardHalveOnOOM = preset.DashboardHalveOnOOM
+	cfg.DashboardRawFallback = preset.DashboardRawFallback
+	cfg.DashboardPressureCooldownSec = preset.DashboardPressureCooldownSec
+	cfg.DashboardLastGoodTTLSec = preset.DashboardLastGoodTTLSec
+	cfg.DashboardRollupBackfill = preset.DashboardRollupBackfill
+	cfg.DashboardRollupBackfillHours = preset.DashboardRollupBackfillHours
+}
+
+func resolveMachineProfile(profile string, ramGB int, cpuCores int) string {
+	if _, ok := machinePresets[profile]; ok {
+		return profile
+	}
+
+	if ramGB <= 0 && cpuCores <= 0 {
+		return "standard"
+	}
+
+	classByRAM := resourceClassFromRAM(ramGB)
+	classByCPU := resourceClassFromCPU(cpuCores)
+	class := minPositiveClass(classByRAM, classByCPU)
+
+	switch class {
+	case 1:
+		return "small"
+	case 2:
+		return "standard"
+	default:
+		return "big"
+	}
+}
+
+func resourceClassFromRAM(ramGB int) int {
+	if ramGB <= 0 {
+		return 0
+	}
+	if ramGB <= 2 {
+		return 1
+	}
+	if ramGB <= 4 {
+		return 2
+	}
+	return 3
+}
+
+func resourceClassFromCPU(cpuCores int) int {
+	if cpuCores <= 0 {
+		return 0
+	}
+	if cpuCores <= 1 {
+		return 1
+	}
+	if cpuCores <= 2 {
+		return 2
+	}
+	return 3
+}
+
+func minPositiveClass(a int, b int) int {
+	if a == 0 {
+		return b
+	}
+	if b == 0 {
+		return a
+	}
+	if a < b {
+		return a
+	}
+	return b
 }
 
 func getEnvInt(key string, defaultVal int) int {
