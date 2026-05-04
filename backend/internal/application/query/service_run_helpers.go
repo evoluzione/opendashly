@@ -60,14 +60,6 @@ func buildSignalQueries(req QueryRequest, pagination runPagination) (signalQueri
 			pagination.offset,
 			tracesCursor,
 		),
-		metrics: querysql.BuildMetricsQuery(
-			req.Filters,
-			req.FilterList,
-			req.TimeRange.From,
-			req.TimeRange.To,
-			pagination.readLimit,
-			pagination.offset,
-		),
 	}, nil
 }
 
@@ -76,14 +68,12 @@ func assembleQueryRunResult(pagination runPagination, status string, signalResul
 		RunID:  fmt.Sprintf("run-%d", time.Now().UnixNano()),
 		Status: status,
 		Pagination: PaginationSet{
-			Logs:    buildPagination(pagination.page, pagination.limit, signalResult.logsHasNext, signalResult.logsNextCursor),
-			Traces:  buildPagination(pagination.page, pagination.limit, signalResult.tracesHasNext, signalResult.tracesNextCursor),
-			Metrics: buildPagination(pagination.page, pagination.limit, signalResult.metricsHasNext, ""),
+			Logs:   buildPagination(pagination.page, pagination.limit, signalResult.logsHasNext, signalResult.logsNextCursor),
+			Traces: buildPagination(pagination.page, pagination.limit, signalResult.tracesHasNext, signalResult.tracesNextCursor),
 		},
 		Results: Results{
-			Logs:    wrapAny(signalResult.logs),
-			Traces:  wrapAny(signalResult.traces),
-			Metrics: wrapAny(signalResult.metrics),
+			Logs:   wrapAny(signalResult.logs),
+			Traces: wrapAny(signalResult.traces),
 		},
 	}
 	if len(signalResult.signalErrors) > 0 {
@@ -92,7 +82,6 @@ func assembleQueryRunResult(pagination runPagination, status string, signalResul
 	result.Summary = QueryRunSummary{
 		LogCount:    len(signalResult.logs),
 		TraceCount:  len(signalResult.traces),
-		MetricCount: len(signalResult.metrics),
 	}
 	return result
 }

@@ -96,7 +96,7 @@ func (h *RetentionHandler) UpdateSettings(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	if req.SignalType != "logs" && req.SignalType != "traces" && req.SignalType != "metrics" {
+	if req.SignalType != "logs" && req.SignalType != "traces" {
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
@@ -133,6 +133,12 @@ func (h *RetentionHandler) ManualCleanup(w http.ResponseWriter, r *http.Request)
 	if len(req.SignalTypes) == 0 {
 		w.WriteHeader(http.StatusBadRequest)
 		return
+	}
+	for _, signalType := range req.SignalTypes {
+		if signalType != "logs" && signalType != "traces" {
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
 	}
 
 	var results []retention.CleanupResult

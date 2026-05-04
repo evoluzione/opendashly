@@ -1,6 +1,6 @@
 import { apiRequest } from './api';
 
-export type SignalType = 'logs' | 'traces' | 'metrics';
+export type SignalType = 'logs' | 'traces';
 
 export type RetentionSetting = {
   signalType: SignalType;

@@ -1,6 +1,6 @@
 import type { QueryRequest, QueryRunResult } from '../../services/query';
 
-type QuerySignal = 'logs' | 'traces' | 'metrics';
+type QuerySignal = 'logs' | 'traces';
 
 export type QueryRefreshSnapshot = {
   lastRequest: QueryRequest | null;
@@ -107,12 +107,6 @@ export function mergeSingleSignalResult(
     merged.summary.traceCount = latest.summary?.traceCount ?? merged.results.traces.length;
     return merged;
   }
-
-  merged.results.metrics = latest.results.metrics ?? [];
-  if (latest.pagination?.metrics) {
-    merged.pagination = { ...merged.pagination, metrics: latest.pagination.metrics };
-  }
-  merged.summary.metricCount = latest.summary?.metricCount ?? merged.results.metrics.length;
   return merged;
 }
 

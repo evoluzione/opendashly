@@ -120,7 +120,7 @@ export async function executeQuery(
     const isRetained = !!options.retainResult || !!options.isBackground;
     const singleSignal =
       request.signals && request.signals.length === 1
-        ? (request.signals[0] as 'logs' | 'traces' | 'metrics')
+        ? (request.signals[0] as 'logs' | 'traces')
         : null;
 
     let result = response;

@@ -43,14 +43,12 @@ func generateSQLWithAI(prompt, contextType string, settings *ai.Settings, now ti
 
 	var schemaDesc string
 	switch contextType {
-	case "metrics":
-		schemaDesc = MetricsSchemaDescription
 	case "logs":
 		schemaDesc = LogsSchemaDescription
 	case "traces":
 		schemaDesc = TracesSchemaDescription
 	default: // "auto" or empty
-		schemaDesc = fmt.Sprintf("LOGS SCHEMA:\n%s\n\nMETRICS SCHEMA:\n%s\n\nTRACES SCHEMA:\n%s", LogsSchemaDescription, MetricsSchemaDescription, TracesSchemaDescription)
+		schemaDesc = fmt.Sprintf("LOGS SCHEMA:\n%s\n\nTRACES SCHEMA:\n%s", LogsSchemaDescription, TracesSchemaDescription)
 	}
 
 	systemPrompt := fmt.Sprintf(`You are a ClickHouse SQL expert for OpenTelemetry data.
@@ -67,7 +65,7 @@ Rules:
 2. For specific time ranges, use appropriate WHERE clauses with now() or specific timestamps.
 3. If no time range is specified, default to the last 15 minutes.
 4. Text comparisons should be case-insensitive if appropriate (ilike).
-5. Determine if the user is asking for logs, metrics, or traces and use the appropriate table.
+5. Determine if the user is asking for logs or traces and use the appropriate table.
 6. Return ONLY SQL.
 `, now.Format(time.RFC3339), schemaDesc)
 
@@ -151,8 +149,6 @@ func buildPreviewSQL(signal string, filters map[string]string, from, to time.Tim
 	switch signal {
 	case "traces":
 		return querysql.BuildTracesQuery(filters, nil, from, to, limit, 0, nil)
-	case "metrics":
-		return querysql.BuildMetricsQuery(filters, nil, from, to, limit, 0)
 	default:
 		return querysql.BuildLogsQuery(filters, nil, from, to, limit, 0, nil)
 	}
@@ -170,9 +166,6 @@ func detectPrimarySignal(prompt string) string {
 	lower := strings.ToLower(prompt)
 	if strings.Contains(lower, "traccia") || strings.Contains(lower, "tracce") || strings.Contains(lower, "trace") || strings.Contains(lower, "span") {
 		return "traces"
-	}
-	if strings.Contains(lower, "metrica") || strings.Contains(lower, "metriche") || strings.Contains(lower, "metric") {
-		return "metrics"
 	}
 	return "logs"
 }

@@ -21,7 +21,6 @@ export type StatusSummary = {
   counts: {
     logs: TelemetryCounts;
     traces: TelemetryCounts;
-    metrics: TelemetryCounts;
   };
 };
 

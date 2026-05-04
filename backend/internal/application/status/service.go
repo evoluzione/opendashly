@@ -36,7 +36,6 @@ type Summary struct {
 type SummaryCounts struct {
 	Logs    TelemetryCounts `json:"logs"`
 	Traces  TelemetryCounts `json:"traces"`
-	Metrics TelemetryCounts `json:"metrics"`
 }
 
 type Service struct {
@@ -75,12 +74,6 @@ func (s *Service) Summary(ctx context.Context) Summary {
 		summary.Error = fmt.Sprintf("traces counts failed: %v", err)
 		return summary
 	}
-	metrics, err := fetchCounts(ctx, s.Storage, metricsCountsQuery)
-	if err != nil {
-		summary.Error = fmt.Sprintf("metrics counts failed: %v", err)
-		return summary
-	}
-
 	anchor := summary.GeneratedAt.UTC().Truncate(time.Duration(seriesBucketMinutes) * time.Minute)
 	logs.Series, err = fetchSeries(ctx, s.Storage, logsSeriesQuery, anchor, seriesBucketMinutes, seriesPointCount)
 	if err != nil {
@@ -92,16 +85,9 @@ func (s *Service) Summary(ctx context.Context) Summary {
 		summary.Error = fmt.Sprintf("traces series failed: %v", err)
 		return summary
 	}
-	metrics.Series, err = fetchSeries(ctx, s.Storage, metricsSeriesQuery, anchor, seriesBucketMinutes, seriesPointCount)
-	if err != nil {
-		summary.Error = fmt.Sprintf("metrics series failed: %v", err)
-		return summary
-	}
-
 	summary.Counts = SummaryCounts{
-		Logs:    logs,
-		Traces:  traces,
-		Metrics: metrics,
+		Logs:   logs,
+		Traces: traces,
 	}
 	summary.Ok = summary.Checks.Database
 	return summary
@@ -181,35 +167,6 @@ const tracesCountsQuery = `
 	WHERE Timestamp >= now() - INTERVAL 60 MINUTE
 `
 
-const metricsCountsQuery = `
-	WITH (
-		SELECT toUInt64(ifNull(sum(rows), 0))
-		FROM system.parts
-		WHERE active AND database = 'telemetry'
-		  AND table IN ('otel_metrics_sum', 'otel_metrics_gauge')
-	) AS total_rows
-	SELECT
-		total_rows AS total,
-		sum(last5m) AS last5m,
-		sum(last10m) AS last10m,
-		sum(last60m) AS last60m
-	FROM (
-		SELECT
-			countIf(TimeUnix >= now() - INTERVAL 5 MINUTE) AS last5m,
-			countIf(TimeUnix >= now() - INTERVAL 10 MINUTE) AS last10m,
-			count() AS last60m
-		FROM telemetry.otel_metrics_sum
-		WHERE TimeUnix >= now() - INTERVAL 60 MINUTE
-		UNION ALL
-		SELECT
-			countIf(TimeUnix >= now() - INTERVAL 5 MINUTE) AS last5m,
-			countIf(TimeUnix >= now() - INTERVAL 10 MINUTE) AS last10m,
-			count() AS last60m
-		FROM telemetry.otel_metrics_gauge
-		WHERE TimeUnix >= now() - INTERVAL 60 MINUTE
-	)
-`
-
 const logsSeriesQuery = `
 	SELECT
 		toStartOfInterval(Timestamp, INTERVAL 5 MINUTE) AS bucket,
@@ -230,25 +187,3 @@ const tracesSeriesQuery = `
 	ORDER BY bucket
 `
 
-const metricsSeriesQuery = `
-	SELECT
-		bucket,
-		sum(count) AS count
-	FROM (
-		SELECT
-			toStartOfInterval(TimeUnix, INTERVAL 5 MINUTE) AS bucket,
-			count() AS count
-		FROM telemetry.otel_metrics_sum
-		WHERE TimeUnix >= now() - INTERVAL 60 MINUTE
-		GROUP BY bucket
-		UNION ALL
-		SELECT
-			toStartOfInterval(TimeUnix, INTERVAL 5 MINUTE) AS bucket,
-			count() AS count
-		FROM telemetry.otel_metrics_gauge
-		WHERE TimeUnix >= now() - INTERVAL 60 MINUTE
-		GROUP BY bucket
-	)
-	GROUP BY bucket
-	ORDER BY bucket
-`

@@ -572,7 +572,7 @@
 
     dispatch("run", {
       request: {
-        signals: ["logs", "traces", "metrics"],
+        signals: ["logs", "traces"],
         timeRange,
         filters: manualFilters,
         filterList: finalFilterList,

@@ -13,8 +13,6 @@ import (
 var serviceSourceTables = []string{
 	"telemetry.otel_logs",
 	"telemetry.otel_traces",
-	"telemetry.otel_metrics_sum",
-	"telemetry.otel_metrics_gauge",
 }
 
 // ListServices returns a sorted list of distinct service names.

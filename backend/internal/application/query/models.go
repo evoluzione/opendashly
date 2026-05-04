@@ -41,7 +41,6 @@ type SavedQuery struct {
 type QueryRunSummary struct {
 	LogCount    int `json:"logCount"`
 	TraceCount  int `json:"traceCount"`
-	MetricCount int `json:"metricCount"`
 }
 
 // QueryRunResult holds query results.
@@ -58,7 +57,6 @@ type QueryRunResult struct {
 type Results struct {
 	Logs    []any `json:"logs"`
 	Traces  []any `json:"traces"`
-	Metrics []any `json:"metrics"`
 }
 
 // Pagination captures paging metadata for a signal.
@@ -75,5 +73,4 @@ type Pagination struct {
 type PaginationSet struct {
 	Logs    Pagination `json:"logs"`
 	Traces  Pagination `json:"traces"`
-	Metrics Pagination `json:"metrics"`
 }

@@ -33,7 +33,6 @@
   const signalLabels: Record<SignalType, string> = {
     logs: "Log",
     traces: "Trace",
-    metrics: "Metrics",
   };
   const statusLabels: Record<string, string> = {
     completed: "retention.statusCompleted",
@@ -47,7 +46,6 @@
     const base = signalLabels[signal] ?? signal;
     if (base === "Log") return t($locale, "sidebar.logs");
     if (base === "Trace") return t($locale, "sidebar.traces");
-    if (base === "Metrics") return t($locale, "sidebar.metrics");
     return base;
   }
 
@@ -313,14 +311,6 @@
                 on:change={() => toggleSignal("traces")}
               />
               {labelForSignal("traces")}
-            </label>
-            <label>
-              <input
-                type="checkbox"
-                checked={selectedSignals.includes("metrics")}
-                on:change={() => toggleSignal("metrics")}
-              />
-              {labelForSignal("metrics")}
             </label>
           </div>
         </fieldset>

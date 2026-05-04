@@ -155,7 +155,7 @@ export function createInitialRunRequest(request: QueryRequest): QueryRequest {
 
 export function createPageChangeRequest(args: {
   lastRequest: QueryRequest;
-  signal: 'logs' | 'traces' | 'metrics';
+  signal: 'logs' | 'traces';
   nextPage: number;
   logsCursorByPage: Map<number, string>;
   tracesCursorByPage: Map<number, string>;
@@ -178,7 +178,7 @@ export function createPageSizeRequest(lastRequest: QueryRequest, pageSize: strin
   const limit = Number(pageSize) || 100;
   return {
     ...lastRequest,
-    signals: ['logs', 'traces', 'metrics'],
+    signals: ['logs', 'traces'],
     limit,
     page: 1,
     logsCursor: undefined,

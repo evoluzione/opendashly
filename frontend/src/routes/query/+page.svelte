@@ -7,7 +7,6 @@
   import QueryForm from "../../components/QueryForm.svelte";
   import LogResultsTable from "../../components/LogResultsTable.svelte";
   import TraceResultsList from "../../components/TraceResultsList.svelte";
-  import MetricChart from "../../components/MetricChart.svelte";
   import {
     queryState,
     executeQuery,
@@ -50,7 +49,7 @@
   }
 
   async function handlePageChange(
-    signal: "logs" | "traces" | "metrics",
+    signal: "logs" | "traces",
     nextPage: number,
   ) {
     if (!lastRequest) return;
@@ -80,7 +79,7 @@
     tracesCursorByPage.clear();
     lastRequest = {
       ...lastRequest,
-      signals: ["logs", "traces", "metrics"],
+      signals: ["logs", "traces"],
       limit,
       page: 1,
       logsCursor: undefined,
@@ -179,14 +178,6 @@
       pagination={$queryState.result.pagination?.traces ?? null}
       lastUpdatedLabel={formatLastRefresh(lastQueryRefresh)}
       on:pageChange={(event) => handlePageChange("traces", event.detail.page)}
-    />
-  </section>
-  <section>
-    <h2>{t($locale, "queryPage.metrics")}</h2>
-    <MetricChart
-      series={$queryState.result.results.metrics}
-      pagination={$queryState.result.pagination?.metrics ?? null}
-      on:pageChange={(event) => handlePageChange("metrics", event.detail.page)}
     />
   </section>
   <div class="save">

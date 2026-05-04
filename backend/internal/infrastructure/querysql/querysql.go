@@ -28,14 +28,6 @@ func BuildTracesCountQuery(filters map[string]string, filterList []FilterItem, f
 	return builders.BuildTracesCountQuery(filters, filterList, from, to)
 }
 
-func BuildMetricsQuery(filters map[string]string, filterList []FilterItem, from, to time.Time, limit, offset int) string {
-	return builders.BuildMetricsQuery(filters, filterList, from, to, limit, offset)
-}
-
-func BuildMetricsCountQuery(filters map[string]string, filterList []FilterItem, from, to time.Time) string {
-	return builders.BuildMetricsCountQuery(filters, filterList, from, to)
-}
-
 func EscapeLiteral(value string) string {
 	return builders.EscapeLiteral(value)
 }

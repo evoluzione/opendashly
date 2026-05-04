@@ -37,18 +37,16 @@ func TestAssembleQueryRunResult_PopulatesSummaryPaginationAndErrors(t *testing.T
 	result := assembleQueryRunResult(p, "partial", signalExecutionResult{
 		logs:           []LogEntry{{Timestamp: time.Now()}},
 		traces:         []TraceEntry{{TraceID: "tr-1"}, {TraceID: "tr-2"}},
-		metrics:        []MetricSeries{{Name: "cpu"}},
 		logsHasNext:    true,
 		logsNextCursor: "abc",
 		tracesHasNext:  false,
-		metricsHasNext: true,
-		signalErrors:   map[string]string{"metrics": "timeout"},
+		signalErrors:   map[string]string{"traces": "timeout"},
 	})
 
 	if result.Status != "partial" {
 		t.Fatalf("unexpected status %q", result.Status)
 	}
-	if result.Summary.LogCount != 1 || result.Summary.TraceCount != 2 || result.Summary.MetricCount != 1 {
+	if result.Summary.LogCount != 1 || result.Summary.TraceCount != 2 {
 		t.Fatalf("unexpected summary %#v", result.Summary)
 	}
 	if !result.Pagination.Logs.HasNext || result.Pagination.Logs.NextCursor != "abc" {
@@ -57,7 +55,7 @@ func TestAssembleQueryRunResult_PopulatesSummaryPaginationAndErrors(t *testing.T
 	if result.Pagination.Traces.NextCursor != "" {
 		t.Fatalf("expected empty traces cursor when hasNext is false, got %q", result.Pagination.Traces.NextCursor)
 	}
-	if result.SignalErrors["metrics"] != "timeout" {
+	if result.SignalErrors["traces"] != "timeout" {
 		t.Fatalf("unexpected signal errors %#v", result.SignalErrors)
 	}
 }

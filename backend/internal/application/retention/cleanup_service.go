@@ -149,8 +149,6 @@ func (s *CleanupService) deleteOldRecords(ctx context.Context, signalType string
 		return s.deleteLogsRecords(ctx, &cutoffTime, serviceName)
 	case "traces":
 		return s.deleteTracesRecords(ctx, &cutoffTime, serviceName)
-	case "metrics":
-		return s.deleteMetricsRecords(ctx, &cutoffTime, serviceName)
 	default:
 		return 0, fmt.Errorf("unknown signal type: %s", signalType)
 	}
@@ -162,8 +160,6 @@ func (s *CleanupService) deleteAllRecords(ctx context.Context, signalType string
 		return s.deleteLogsRecords(ctx, nil, serviceName)
 	case "traces":
 		return s.deleteTracesRecords(ctx, nil, serviceName)
-	case "metrics":
-		return s.deleteMetricsRecords(ctx, nil, serviceName)
 	default:
 		return 0, fmt.Errorf("unknown signal type: %s", signalType)
 	}
@@ -238,58 +234,6 @@ func (s *CleanupService) deleteTracesRecords(ctx context.Context, cutoffTime *ti
 	// Execute delete
 	if err := s.Conn.Exec(ctx, deleteQuery, args...); err != nil {
 		return 0, fmt.Errorf("delete traces: %w", err)
-	}
-
-	return count, nil
-}
-
-func (s *CleanupService) deleteMetricsRecords(ctx context.Context, cutoffTime *time.Time, serviceName string) (uint64, error) {
-	// Delete from both metrics tables
-	countSum, err := s.deleteMetricsTable(ctx, "telemetry.otel_metrics_sum", cutoffTime, serviceName)
-	if err != nil {
-		return 0, err
-	}
-
-	countGauge, err := s.deleteMetricsTable(ctx, "telemetry.otel_metrics_gauge", cutoffTime, serviceName)
-	if err != nil {
-		return 0, err
-	}
-
-	return countSum + countGauge, nil
-}
-
-func (s *CleanupService) deleteMetricsTable(ctx context.Context, tableName string, cutoffTime *time.Time, serviceName string) (uint64, error) {
-	var countQuery string
-	var deleteQuery string
-
-	if serviceName != "" {
-		countQuery = fmt.Sprintf("SELECT count() FROM %s WHERE ServiceName = ?", tableName)
-		deleteQuery = fmt.Sprintf("ALTER TABLE %s DELETE WHERE ServiceName = ?", tableName)
-		if cutoffTime != nil {
-			countQuery = fmt.Sprintf("SELECT count() FROM %s WHERE TimeUnix < ? AND ServiceName = ?", tableName)
-			deleteQuery = fmt.Sprintf("ALTER TABLE %s DELETE WHERE TimeUnix < ? AND ServiceName = ?", tableName)
-		}
-	} else {
-		countQuery = fmt.Sprintf("SELECT count() FROM %s", tableName)
-		deleteQuery = fmt.Sprintf("ALTER TABLE %s DELETE WHERE 1=1", tableName)
-		if cutoffTime != nil {
-			countQuery = fmt.Sprintf("SELECT count() FROM %s WHERE TimeUnix < ?", tableName)
-			deleteQuery = fmt.Sprintf("ALTER TABLE %s DELETE WHERE TimeUnix < ?", tableName)
-		}
-	}
-
-	var count uint64
-	args := buildDeleteArgs(cutoffTime, serviceName)
-	if s.EnableCountBefore {
-		row := s.Conn.QueryRow(ctx, countQuery, args...)
-		if err := row.Scan(&count); err != nil {
-			return 0, fmt.Errorf("count %s: %w", tableName, err)
-		}
-	}
-
-	// Execute delete
-	if err := s.Conn.Exec(ctx, deleteQuery, args...); err != nil {
-		return 0, fmt.Errorf("delete %s: %w", tableName, err)
 	}
 
 	return count, nil

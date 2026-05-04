@@ -25,13 +25,13 @@ func TestRun_UsesInjectedSignalRunnerAndReturnsPartial(t *testing.T) {
 	fake := &fakeSignalRunner{
 		result: signalExecutionResult{
 			logs:         []LogEntry{{Timestamp: time.Now(), Body: "ok"}},
-			signalErrors: map[string]string{"metrics": "timeout"},
+			signalErrors: map[string]string{"traces": "timeout"},
 		},
 	}
 
 	svc := &Service{Storage: &storage.Client{}, signalRunner: fake}
 	res, err := svc.Run(context.Background(), QueryRequest{
-		Signals:   []string{"logs", "metrics"},
+		Signals:   []string{"logs", "traces"},
 		TimeRange: TimeRange{From: time.Now().Add(-time.Hour), To: time.Now()},
 		Page:      1,
 		Limit:     10,
@@ -45,7 +45,7 @@ func TestRun_UsesInjectedSignalRunnerAndReturnsPartial(t *testing.T) {
 	if res.Status != "partial" {
 		t.Fatalf("expected partial status, got %q", res.Status)
 	}
-	if got := res.SignalErrors["metrics"]; got != "timeout" {
+	if got := res.SignalErrors["traces"]; got != "timeout" {
 		t.Fatalf("unexpected signal error: %q", got)
 	}
 	if res.Summary.LogCount != 1 {
@@ -57,15 +57,15 @@ func TestRun_AllRequestedSignalsFailedReturnsError(t *testing.T) {
 	fake := &fakeSignalRunner{
 		result: signalExecutionResult{
 			signalErrors: map[string]string{
-				"logs":    "downstream failure",
-				"metrics": "timeout",
+				"logs":   "downstream failure",
+				"traces": "timeout",
 			},
 		},
 	}
 
 	svc := &Service{Storage: &storage.Client{}, signalRunner: fake}
 	_, err := svc.Run(context.Background(), QueryRequest{
-		Signals:   []string{"logs", "metrics"},
+		Signals:   []string{"logs", "traces"},
 		TimeRange: TimeRange{From: time.Now().Add(-time.Hour), To: time.Now()},
 		Page:      1,
 		Limit:     10,
@@ -91,7 +91,7 @@ func TestRun_StorageNilReturnsEmptyResultWithDefaults(t *testing.T) {
 	if res.Pagination.Logs.Page != 1 || res.Pagination.Logs.Limit != 100 {
 		t.Fatalf("unexpected default pagination: %#v", res.Pagination.Logs)
 	}
-	if res.Summary.LogCount != 0 || res.Summary.TraceCount != 0 || res.Summary.MetricCount != 0 {
+	if res.Summary.LogCount != 0 || res.Summary.TraceCount != 0 {
 		t.Fatalf("expected empty summary, got %#v", res.Summary)
 	}
 }

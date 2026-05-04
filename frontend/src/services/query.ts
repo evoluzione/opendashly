@@ -32,9 +32,9 @@ export type Pagination = {
 export type QueryRunResult = {
   runId: string;
   status: string;
-  summary: { logCount: number; traceCount: number; metricCount: number };
-  pagination?: { logs: Pagination; traces: Pagination; metrics: Pagination };
-  results: { logs: any[]; traces: any[]; metrics: any[] };
+  summary: { logCount: number; traceCount: number };
+  pagination?: { logs: Pagination; traces: Pagination };
+  results: { logs: any[]; traces: any[] };
   signalErrors?: Record<string, string>;
 };
 
@@ -51,7 +51,7 @@ export function runQuery(request: QueryRequest): Promise<QueryRunResult> {
   });
 }
 
-export function generateSmartQuery(payload: { prompt: string; contextType: 'logs' | 'metrics' | 'traces' | 'auto' }): Promise<SmartQueryResponse> {
+export function generateSmartQuery(payload: { prompt: string; contextType: 'logs' | 'traces' | 'auto' }): Promise<SmartQueryResponse> {
   return apiRequest<SmartQueryResponse>('/api/query/smart', {
     method: 'POST',
     body: JSON.stringify(payload)

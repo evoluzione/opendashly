@@ -24,7 +24,7 @@ func (s *Service) Run(ctx context.Context, req QueryRequest) (*QueryRunResult, e
 	}
 	if s.Debug {
 		log.Printf("DEBUG: executing logsQuery: %s", queries.logs)
-		log.Printf("query.service.run built queries: logs=%q traces=%q metrics=%q", queries.logs, queries.traces, queries.metrics)
+		log.Printf("query.service.run built queries: logs=%q traces=%q", queries.logs, queries.traces)
 	}
 	signalResult := s.getSignalRunner().run(ctx, s.Storage.Conn, queries, signals, pagination.limit)
 	signalErrors := signalResult.signalErrors
@@ -38,7 +38,7 @@ func (s *Service) Run(ctx context.Context, req QueryRequest) (*QueryRunResult, e
 
 	result := assembleQueryRunResult(pagination, status, signalResult)
 	if s.Debug {
-		log.Printf("query.service.run complete: runId=%s logs=%d traces=%d metrics=%d", result.RunID, result.Summary.LogCount, result.Summary.TraceCount, result.Summary.MetricCount)
+		log.Printf("query.service.run complete: runId=%s logs=%d traces=%d", result.RunID, result.Summary.LogCount, result.Summary.TraceCount)
 	}
 	return result, nil
 }

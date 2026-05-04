@@ -15,23 +15,6 @@ Columns:
 - LogAttributes (Map(String, String)): Key-value pairs describing structured log fields.
 `
 
-// MetricsSchemaDescription defines the structure of the metrics tables for AI context.
-const MetricsSchemaDescription = `
-Tables: telemetry.otel_metrics_sum, telemetry.otel_metrics_gauge
-Description: Contains metric data points.
-Columns:
-- MetricName (String): Name of the metric (e.g., http.server.duration, cpu.usage).
-- MetricUnit (String): Unit of the metric (e.g., ms, bytes, %).
-- TimeUnix (DateTime): Time of the data point.
-- Value (Float64): The actual value of the metric.
-- ServiceName (String): Name of the service.
-- ResourceAttributes (Map(String, String)): Key-value pairs describing resource.
-- Attributes (Map(String, String)): specific metric dimensions (e.g., http.method, http.status_code).
-
-Both tables 'telemetry.otel_metrics_sum' and 'telemetry.otel_metrics_gauge' share this structure.
-Union them or select from the specific one if known.
-`
-
 // TracesSchemaDescription defines the structure of the traces table for AI context.
 const TracesSchemaDescription = `
 Table: telemetry.otel_traces

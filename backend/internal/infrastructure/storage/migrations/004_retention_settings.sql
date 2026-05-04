@@ -8,12 +8,11 @@ CREATE TABLE IF NOT EXISTS telemetry.retention_settings (
 ) ENGINE = MergeTree()
 ORDER BY (signal_type);
 
--- Default 7-day retention for all signals
+-- Default 7-day retention for supported signals
 INSERT INTO telemetry.retention_settings (id, signal_type, retention_days, updated_at, updated_by)
 VALUES
   (generateUUIDv4(), 'logs', 7, now(), 'system'),
-  (generateUUIDv4(), 'traces', 7, now(), 'system'),
-  (generateUUIDv4(), 'metrics', 7, now(), 'system');
+  (generateUUIDv4(), 'traces', 7, now(), 'system');
 
 -- Cleanup jobs audit table
 CREATE TABLE IF NOT EXISTS telemetry.cleanup_jobs (

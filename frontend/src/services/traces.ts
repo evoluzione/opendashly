@@ -2,7 +2,6 @@ import { apiRequest } from './api';
 
 export type RelatedTelemetry = {
   logs: any[];
-  metrics: any[];
 };
 
 export type TraceSpan = {

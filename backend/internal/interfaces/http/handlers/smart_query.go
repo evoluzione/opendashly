@@ -15,7 +15,7 @@ type SmartQueryHandler struct {
 
 type smartQueryRequest struct {
 	Prompt      string `json:"prompt"`
-	ContextType string `json:"contextType"` // "logs" or "metrics"
+	ContextType string `json:"contextType"` // "logs", "traces" or "auto"
 }
 
 func (h *SmartQueryHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {

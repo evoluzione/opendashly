@@ -10,21 +10,17 @@ import (
 
 type logsFetcher func(context.Context, driver.Conn, string) ([]LogEntry, error)
 type tracesFetcher func(context.Context, driver.Conn, string) ([]TraceEntry, error)
-type metricsFetcher func(context.Context, driver.Conn, string) ([]MetricSeries, error)
 
 type signalQueries struct {
 	logs    string
 	traces  string
-	metrics string
 }
 
 type signalExecutionResult struct {
 	logs             []LogEntry
 	traces           []TraceEntry
-	metrics          []MetricSeries
 	logsHasNext      bool
 	tracesHasNext    bool
-	metricsHasNext   bool
 	logsNextCursor   string
 	tracesNextCursor string
 	signalErrors     map[string]string
@@ -37,19 +33,17 @@ type signalRunner interface {
 type signalOrchestrator struct {
 	fetchLogs    logsFetcher
 	fetchTraces  tracesFetcher
-	fetchMetrics metricsFetcher
 }
 
-func newSignalOrchestrator(fetchLogs logsFetcher, fetchTraces tracesFetcher, fetchMetrics metricsFetcher) *signalOrchestrator {
+func newSignalOrchestrator(fetchLogs logsFetcher, fetchTraces tracesFetcher) *signalOrchestrator {
 	return &signalOrchestrator{
 		fetchLogs:    fetchLogs,
 		fetchTraces:  fetchTraces,
-		fetchMetrics: fetchMetrics,
 	}
 }
 
 func defaultSignalOrchestrator() *signalOrchestrator {
-	return newSignalOrchestrator(fetchLogs, fetchTraces, fetchMetrics)
+	return newSignalOrchestrator(fetchLogs, fetchTraces)
 }
 
 func (o *signalOrchestrator) run(ctx context.Context, conn driver.Conn, queries signalQueries, signals map[string]bool, limit int) signalExecutionResult {
@@ -77,14 +71,6 @@ func (o *signalOrchestrator) run(ctx context.Context, conn driver.Conn, queries 
 		go func() {
 			defer wg.Done()
 			o.executeTraces(ctx, conn, queries.traces, limit, &mu, &result)
-		}()
-	}
-
-	if signals["metrics"] {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			o.executeMetrics(ctx, conn, queries.metrics, limit, &mu, &result)
 		}()
 	}
 
@@ -135,20 +121,6 @@ func (o *signalOrchestrator) executeTraces(ctx context.Context, conn driver.Conn
 	result.traces = signalTraces
 	result.tracesHasNext = signalTracesHasNext
 	result.tracesNextCursor = signalTracesNextCursor
-	mu.Unlock()
-}
-
-func (o *signalOrchestrator) executeMetrics(ctx context.Context, conn driver.Conn, query string, limit int, mu *sync.Mutex, result *signalExecutionResult) {
-	signalMetrics, err := o.fetchMetrics(ctx, conn, query)
-	if err != nil {
-		setSignalError(mu, result, "metrics", err)
-		return
-	}
-	signalMetrics, signalMetricsHasNext := trimToPage(signalMetrics, limit)
-
-	mu.Lock()
-	result.metrics = signalMetrics
-	result.metricsHasNext = signalMetricsHasNext
 	mu.Unlock()
 }
 
