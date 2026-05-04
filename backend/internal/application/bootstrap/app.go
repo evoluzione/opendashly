@@ -76,6 +76,20 @@ func Build(ctx context.Context) (*App, error) {
 	}
 
 	retentionRepo := &retention.Repo{Conn: client.Conn}
+	defaultLogsRetention := boundedDefaultRetentionDays(7, uint32(cfg.MaxLogRetentionDays))
+	defaultTracesRetention := boundedDefaultRetentionDays(7, uint32(cfg.MaxTraceRetentionDays))
+	if err := retentionRepo.EnsureSetting(ctx, "logs", defaultLogsRetention, "system"); err != nil {
+		return nil, err
+	}
+	if err := retentionRepo.EnsureSetting(ctx, "traces", defaultTracesRetention, "system"); err != nil {
+		return nil, err
+	}
+	if err := clampRetentionSetting(ctx, retentionRepo, "logs", uint32(cfg.MaxLogRetentionDays)); err != nil {
+		return nil, err
+	}
+	if err := clampRetentionSetting(ctx, retentionRepo, "traces", uint32(cfg.MaxTraceRetentionDays)); err != nil {
+		return nil, err
+	}
 	adaptiveOptions := retention.AdaptiveRetentionOptions{
 		Enabled:                             cfg.RetentionAdaptiveEnabled,
 		StepDownDays:                        uint32(cfg.RetentionStepDownDays),
@@ -185,4 +199,28 @@ func hoursToDaysCeil(hours int) uint32 {
 		return 1
 	}
 	return uint32(math.Ceil(float64(hours) / 24.0))
+}
+
+func boundedDefaultRetentionDays(defaultDays uint32, maxDays uint32) uint32 {
+	if maxDays == 0 {
+		return defaultDays
+	}
+	if defaultDays > maxDays {
+		return maxDays
+	}
+	return defaultDays
+}
+
+func clampRetentionSetting(ctx context.Context, repo *retention.Repo, signalType string, maxDays uint32) error {
+	if maxDays == 0 {
+		return nil
+	}
+	setting, err := repo.GetSettingBySignal(ctx, signalType)
+	if err != nil {
+		return err
+	}
+	if setting.RetentionDays <= maxDays {
+		return nil
+	}
+	return repo.UpdateSetting(ctx, signalType, maxDays, "system")
 }
