@@ -157,15 +157,22 @@ func BuildSlowestEndpointsQuery(from, to time.Time, serviceName string, limit in
 func BuildErrorHotspotsQuery(from, to time.Time, serviceName string, limit int) string {
 	return fmt.Sprintf(`
 		SELECT
-			Endpoint AS endpoint,
-			ServiceName AS service,
-			toUInt64(sum(error_count)) AS error_count,
-			toUInt64(sum(request_count)) AS total_count,
-			if(sum(request_count) > 0, (sum(error_count) / sum(request_count)) * 100, 0) AS error_rate
-		FROM %s
-		WHERE time_bucket >= '%s' AND time_bucket <= '%s'
-				%s
-		GROUP BY endpoint, service
+			endpoint,
+			service,
+			toUInt64(errors) AS error_count,
+			toUInt64(total) AS total_count,
+			if(total > 0, (toFloat64(errors) / toFloat64(total)) * 100, 0) AS error_rate
+		FROM (
+			SELECT
+				Endpoint AS endpoint,
+				ServiceName AS service,
+				sum(error_count) AS errors,
+				sum(request_count) AS total
+			FROM %s
+			WHERE time_bucket >= '%s' AND time_bucket <= '%s'
+					%s
+			GROUP BY endpoint, service
+		)
 		HAVING total_count >= 5 AND error_count > 0
 		ORDER BY error_rate DESC, error_count DESC
 		LIMIT %d
@@ -210,12 +217,17 @@ func BuildThroughputQuery(from, to time.Time, serviceName string) string {
 func BuildErrorRateQuery(from, to time.Time, serviceName string) string {
 	return fmt.Sprintf(`
 		SELECT
-			toUInt64(sum(error_count)) AS error_count,
-			toUInt64(sum(request_count)) AS total_count,
-			if(sum(request_count) > 0, (sum(error_count) / sum(request_count)) * 100, 0) AS error_rate
-		FROM %s
-		WHERE time_bucket >= '%s' AND time_bucket <= '%s'
-				%s
+			toUInt64(errors) AS error_count,
+			toUInt64(total) AS total_count,
+			if(total > 0, (toFloat64(errors) / toFloat64(total)) * 100, 0) AS error_rate
+		FROM (
+			SELECT
+				sum(error_count) AS errors,
+				sum(request_count) AS total
+			FROM %s
+			WHERE time_bucket >= '%s' AND time_bucket <= '%s'
+					%s
+		)
 		%s
 		`, traceServiceRollupTable, formatTime(from), formatTime(to), serviceFilter(serviceName), querySettings)
 }
@@ -248,14 +260,20 @@ func BuildErrorRateTimeSeriesQuery(from, to time.Time, serviceName string) strin
 	interval := timeBucketInterval(from, to)
 	return fmt.Sprintf(`
 		SELECT
-			toStartOfInterval(time_bucket, INTERVAL %s) AS bucket,
-			toUInt64(sum(error_count)) AS error_count,
-			toUInt64(sum(request_count)) AS total_count,
-			if(sum(request_count) > 0, (sum(error_count) / sum(request_count)) * 100, 0) AS error_rate
-		FROM %s
-		WHERE time_bucket >= '%s' AND time_bucket <= '%s'
-			%s
-		GROUP BY bucket
+			bucket,
+			toUInt64(errors) AS error_count,
+			toUInt64(total) AS total_count,
+			if(total > 0, (toFloat64(errors) / toFloat64(total)) * 100, 0) AS error_rate
+		FROM (
+			SELECT
+				toStartOfInterval(time_bucket, INTERVAL %s) AS bucket,
+				sum(error_count) AS errors,
+				sum(request_count) AS total
+			FROM %s
+			WHERE time_bucket >= '%s' AND time_bucket <= '%s'
+				%s
+			GROUP BY bucket
+		)
 		ORDER BY bucket
 		%s
 	`, interval, traceServiceRollupTable, formatTime(from), formatTime(to), serviceFilter(serviceName), querySettings)
@@ -290,15 +308,22 @@ func BuildStatusCodeBreakdownQuery(from, to time.Time, serviceName string) strin
 func BuildTopEndpointsThroughputQuery(from, to time.Time, serviceName string, limit int) string {
 	return fmt.Sprintf(`
 		SELECT
-			Endpoint AS endpoint,
-			ServiceName AS service,
-			toUInt64(sum(request_count)) AS request_count,
-			toUInt64(sum(error_count)) AS error_count,
-			if(sum(request_count) > 0, (sum(error_count) / sum(request_count)) * 100, 0) AS error_rate
-		FROM %s
-		WHERE time_bucket >= '%s' AND time_bucket <= '%s'
-			%s
-		GROUP BY endpoint, service
+			endpoint,
+			service,
+			toUInt64(requests) AS request_count,
+			toUInt64(errors) AS error_count,
+			if(requests > 0, (toFloat64(errors) / toFloat64(requests)) * 100, 0) AS error_rate
+		FROM (
+			SELECT
+				Endpoint AS endpoint,
+				ServiceName AS service,
+				sum(request_count) AS requests,
+				sum(error_count) AS errors
+			FROM %s
+			WHERE time_bucket >= '%s' AND time_bucket <= '%s'
+				%s
+			GROUP BY endpoint, service
+		)
 		ORDER BY request_count DESC
 		LIMIT %d
 		%s

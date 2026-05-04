@@ -63,3 +63,62 @@ func TestBackfillQueryBuilders_ReadRawTelemetryTables(t *testing.T) {
 		t.Fatalf("expected normalized SpanKind filter, got: %s", query)
 	}
 }
+
+func TestDashboardRateQueries_UseTwoStepAggregation(t *testing.T) {
+	from := time.Unix(0, 0)
+	to := time.Unix(3600, 0)
+
+	tests := []struct {
+		name          string
+		query         string
+		expectOuter   string
+		expectInner   string
+		forbidPattern string
+	}{
+		{
+			name:          "error hotspots",
+			query:         BuildErrorHotspotsQuery(from, to, "", 10),
+			expectOuter:   "if(total > 0, (toFloat64(errors) / toFloat64(total)) * 100, 0) AS error_rate",
+			expectInner:   "sum(error_count) AS errors",
+			forbidPattern: "if(sum(request_count) > 0, (sum(error_count) / sum(request_count)) * 100, 0) AS error_rate",
+		},
+		{
+			name:          "error rate",
+			query:         BuildErrorRateQuery(from, to, ""),
+			expectOuter:   "if(total > 0, (toFloat64(errors) / toFloat64(total)) * 100, 0) AS error_rate",
+			expectInner:   "sum(error_count) AS errors",
+			forbidPattern: "if(sum(request_count) > 0, (sum(error_count) / sum(request_count)) * 100, 0) AS error_rate",
+		},
+		{
+			name:          "error rate time series",
+			query:         BuildErrorRateTimeSeriesQuery(from, to, ""),
+			expectOuter:   "if(total > 0, (toFloat64(errors) / toFloat64(total)) * 100, 0) AS error_rate",
+			expectInner:   "sum(error_count) AS errors",
+			forbidPattern: "if(sum(request_count) > 0, (sum(error_count) / sum(request_count)) * 100, 0) AS error_rate",
+		},
+		{
+			name:          "top endpoints throughput",
+			query:         BuildTopEndpointsThroughputQuery(from, to, "", 10),
+			expectOuter:   "if(requests > 0, (toFloat64(errors) / toFloat64(requests)) * 100, 0) AS error_rate",
+			expectInner:   "sum(request_count) AS requests",
+			forbidPattern: "if(sum(request_count) > 0, (sum(error_count) / sum(request_count)) * 100, 0) AS error_rate",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if !strings.Contains(tt.query, "FROM (") {
+				t.Fatalf("expected nested subquery for two-step aggregation, got: %s", tt.query)
+			}
+			if !strings.Contains(tt.query, tt.expectInner) {
+				t.Fatalf("expected inner aggregation %q, got: %s", tt.expectInner, tt.query)
+			}
+			if !strings.Contains(tt.query, tt.expectOuter) {
+				t.Fatalf("expected outer rate expression %q, got: %s", tt.expectOuter, tt.query)
+			}
+			if strings.Contains(tt.query, tt.forbidPattern) {
+				t.Fatalf("unexpected legacy nested-aggregate expression found: %s", tt.query)
+			}
+		})
+	}
+}
