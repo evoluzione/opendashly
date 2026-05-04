@@ -28,6 +28,7 @@ func (r *Repo) GetSettings(ctx context.Context) ([]RetentionSetting, error) {
 	          FROM (
 	            SELECT id, signal_type, retention_days, updated_at, updated_by
 	            FROM telemetry.retention_settings
+	            WHERE signal_type IN ('logs', 'traces')
 	            ORDER BY updated_at DESC
 	            LIMIT 1 BY signal_type
 	          )
@@ -55,6 +56,7 @@ func (r *Repo) GetSettingBySignal(ctx context.Context, signalType string) (*Rete
 	query := `SELECT id, signal_type, retention_days, updated_at, updated_by
 	          FROM telemetry.retention_settings
 	          WHERE signal_type = ?
+	            AND signal_type IN ('logs', 'traces')
 	          ORDER BY updated_at DESC
 	          LIMIT 1`
 

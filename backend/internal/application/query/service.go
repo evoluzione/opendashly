@@ -28,6 +28,11 @@ func (s *Service) Run(ctx context.Context, req QueryRequest) (*QueryRunResult, e
 	}
 	signalResult := s.getSignalRunner().run(ctx, s.Storage.Conn, queries, signals, pagination.limit)
 	signalErrors := signalResult.signalErrors
+	if s.PressureObserver != nil {
+		for _, msg := range signalErrors {
+			s.PressureObserver.ObserveQueryError(msg)
+		}
+	}
 	status, err := determineQueryRunStatus(signals, signalErrors)
 	if err != nil {
 		return nil, err

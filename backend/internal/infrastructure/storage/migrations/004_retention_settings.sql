@@ -4,7 +4,8 @@ CREATE TABLE IF NOT EXISTS telemetry.retention_settings (
   signal_type String,
   retention_days UInt32,
   updated_at DateTime,
-  updated_by String
+  updated_by String,
+  CONSTRAINT retention_supported_signals CHECK signal_type IN ('logs', 'traces')
 ) ENGINE = MergeTree()
 ORDER BY (signal_type);
 
@@ -24,6 +25,7 @@ CREATE TABLE IF NOT EXISTS telemetry.cleanup_jobs (
   completed_at Nullable(DateTime),
   status String,
   records_deleted UInt64,
-  error_message String
+  error_message String,
+  CONSTRAINT cleanup_supported_signals CHECK signal_type IN ('logs', 'traces')
 ) ENGINE = MergeTree()
 ORDER BY (started_at);

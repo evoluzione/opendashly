@@ -5,6 +5,7 @@ export type SignalType = 'logs' | 'traces';
 export type RetentionSetting = {
   signalType: SignalType;
   retentionDays: number;
+  maxRetentionDays?: number;
 };
 
 export type RetentionSettings = {

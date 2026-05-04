@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/ClickHouse/clickhouse-go/v2/lib/driver"
@@ -15,9 +16,112 @@ type CleanupService struct {
 	Repo              Repository
 	Conn              driver.Conn
 	EnableCountBefore bool
+	AdaptiveOptions   AdaptiveRetentionOptions
+	PressureMonitor   *PressureMonitor
+
+	mu                sync.Mutex
+	emergencyEnabled  bool
+	emergencyLevel    int
+	lastTransitionAt  time.Time
+	lastPressureAt    *time.Time
+	pressureUntil     *time.Time
+	lastPressureCause []string
+}
+
+func (s *CleanupService) EnsureDefaults() {
+	if s.AdaptiveOptions.StepDownDays == 0 {
+		s.AdaptiveOptions.StepDownDays = 2
+	}
+	if s.AdaptiveOptions.MaxLevel <= 0 {
+		s.AdaptiveOptions.MaxLevel = 2
+	}
+	if s.AdaptiveOptions.MinTraceRetentionDays == 0 {
+		s.AdaptiveOptions.MinTraceRetentionDays = 1
+	}
+	if s.AdaptiveOptions.MinLogRetentionDays == 0 {
+		s.AdaptiveOptions.MinLogRetentionDays = 1
+	}
+	if s.AdaptiveOptions.PressureCooldown <= 0 {
+		s.AdaptiveOptions.PressureCooldown = 5 * time.Minute
+	}
+	if s.AdaptiveOptions.PressureMinActiveSignals <= 0 {
+		s.AdaptiveOptions.PressureMinActiveSignals = 2
+	}
+	if s.AdaptiveOptions.PressureErrorWindow <= 0 {
+		s.AdaptiveOptions.PressureErrorWindow = 5 * time.Minute
+	}
+	if s.AdaptiveOptions.PressureErrorThreshold <= 0 {
+		s.AdaptiveOptions.PressureErrorThreshold = 4
+	}
+	if s.AdaptiveOptions.PressureMemoryThresholdPercent <= 0 {
+		s.AdaptiveOptions.PressureMemoryThresholdPercent = 85
+	}
+	if s.AdaptiveOptions.PressureClickHouseDiskThresholdPerc <= 0 {
+		s.AdaptiveOptions.PressureClickHouseDiskThresholdPerc = 90
+	}
+
+	s.mu.Lock()
+	if s.lastTransitionAt.IsZero() {
+		s.lastTransitionAt = time.Now().UTC()
+	}
+	s.emergencyEnabled = s.AdaptiveOptions.Enabled
+	s.mu.Unlock()
+}
+
+func (s *CleanupService) ObserveQueryError(msg string) {
+	if s.PressureMonitor == nil {
+		return
+	}
+	s.PressureMonitor.ObserveRecoverableError(msg)
+}
+
+func (s *CleanupService) SetEmergencyEnabled(enabled bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.emergencyEnabled = enabled
+	s.lastTransitionAt = time.Now().UTC()
+	if !enabled {
+		s.emergencyLevel = 0
+		s.lastPressureCause = nil
+		s.lastPressureAt = nil
+		s.pressureUntil = nil
+	}
+}
+
+func (s *CleanupService) EmergencyState(ctx context.Context) EmergencyRetentionState {
+	snapshot := PressureSnapshot{}
+	if s.PressureMonitor != nil {
+		snapshot = s.PressureMonitor.Snapshot(ctx)
+	}
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	state := EmergencyRetentionState{
+		Enabled:          s.emergencyEnabled,
+		Mode:             modeForLevel(s.emergencyLevel),
+		Level:            s.emergencyLevel,
+		LastTransitionAt: s.lastTransitionAt,
+		LastReasons:      append([]string(nil), s.lastPressureCause...),
+		Snapshot:         snapshot,
+	}
+	if s.lastPressureAt != nil {
+		t := *s.lastPressureAt
+		state.LastPressureAt = &t
+	}
+	if s.pressureUntil != nil {
+		t := *s.pressureUntil
+		state.PressureCooldownEnds = &t
+	}
+	return state
 }
 
 func (s *CleanupService) CleanupByRetention(ctx context.Context) error {
+	s.EnsureDefaults()
+	effectiveLevel, mode, snapshot := s.currentLevelAndMode(ctx)
+	if mode != RetentionModeNormal {
+		log.Printf("retention cleanup: adaptive mode=%s level=%d reasons=%v", mode, effectiveLevel, snapshot.Reasons)
+	}
+
 	settings, err := s.Repo.GetSettings(ctx)
 	if err != nil {
 		return fmt.Errorf("get retention settings: %w", err)
@@ -26,14 +130,19 @@ func (s *CleanupService) CleanupByRetention(ctx context.Context) error {
 	failures := make([]string, 0)
 
 	for _, setting := range settings {
-		cutoffTime := time.Now().UTC().AddDate(0, 0, -int(setting.RetentionDays))
+		effectiveDays := s.effectiveRetentionDays(setting, effectiveLevel)
+		cutoffTime := time.Now().UTC().AddDate(0, 0, -int(effectiveDays))
 		log.Printf("retention cleanup: processing %s (retention: %d days, cutoff: %s)",
-			setting.SignalType, setting.RetentionDays, cutoffTime.Format(time.RFC3339))
+			setting.SignalType, effectiveDays, cutoffTime.Format(time.RFC3339))
 
 		jobID := uuid.New().String()
+		jobType := "automatic"
+		if mode != RetentionModeNormal {
+			jobType = "automatic_" + mode
+		}
 		job := CleanupJob{
 			JobID:       jobID,
-			JobType:     "automatic",
+			JobType:     jobType,
 			SignalType:  setting.SignalType,
 			ServiceName: "",
 			StartedAt:   time.Now(),
@@ -65,6 +174,98 @@ func (s *CleanupService) CleanupByRetention(ctx context.Context) error {
 	}
 
 	return nil
+}
+
+func (s *CleanupService) effectiveRetentionDays(setting RetentionSetting, level int) uint32 {
+	base := setting.RetentionDays
+	if level <= 0 {
+		return clampMinRetention(base, setting.SignalType, s.AdaptiveOptions)
+	}
+
+	reduction := uint32(level) * s.AdaptiveOptions.StepDownDays
+	if reduction >= base {
+		return minRetentionForSignal(setting.SignalType, s.AdaptiveOptions)
+	}
+	adjusted := base - reduction
+	return clampMinRetention(adjusted, setting.SignalType, s.AdaptiveOptions)
+}
+
+func (s *CleanupService) currentLevelAndMode(ctx context.Context) (int, string, PressureSnapshot) {
+	if s.PressureMonitor == nil {
+		s.mu.Lock()
+		defer s.mu.Unlock()
+		return s.emergencyLevel, modeForLevel(s.emergencyLevel), PressureSnapshot{}
+	}
+
+	snapshot := s.PressureMonitor.Snapshot(ctx)
+	now := snapshot.At
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if !s.emergencyEnabled {
+		s.emergencyLevel = 0
+		s.lastPressureCause = nil
+		return 0, RetentionModeNormal, snapshot
+	}
+
+	if snapshot.Pressure {
+		if s.emergencyLevel < s.AdaptiveOptions.MaxLevel {
+			s.emergencyLevel++
+			s.lastTransitionAt = now
+		}
+		s.lastPressureCause = append([]string(nil), snapshot.Reasons...)
+		s.lastPressureAt = &now
+		cooldownEnd := now.Add(s.AdaptiveOptions.PressureCooldown)
+		s.pressureUntil = &cooldownEnd
+		return s.emergencyLevel, modeForLevel(s.emergencyLevel), snapshot
+	}
+
+	if s.pressureUntil != nil && now.Before(*s.pressureUntil) {
+		return s.emergencyLevel, modeForLevel(s.emergencyLevel), snapshot
+	}
+
+	if s.emergencyLevel > 0 {
+		s.emergencyLevel--
+		s.lastTransitionAt = now
+	}
+	if s.emergencyLevel == 0 {
+		s.lastPressureCause = nil
+		s.lastPressureAt = nil
+		s.pressureUntil = nil
+	}
+	return s.emergencyLevel, modeForLevel(s.emergencyLevel), snapshot
+}
+
+func modeForLevel(level int) string {
+	if level <= 0 {
+		return RetentionModeNormal
+	}
+	if level == 1 {
+		return RetentionModeReduced
+	}
+	return RetentionModeEmergency
+}
+
+func minRetentionForSignal(signalType string, opts AdaptiveRetentionOptions) uint32 {
+	if signalType == "traces" {
+		if opts.MinTraceRetentionDays > 0 {
+			return opts.MinTraceRetentionDays
+		}
+		return 1
+	}
+	if opts.MinLogRetentionDays > 0 {
+		return opts.MinLogRetentionDays
+	}
+	return 1
+}
+
+func clampMinRetention(days uint32, signalType string, opts AdaptiveRetentionOptions) uint32 {
+	minDays := minRetentionForSignal(signalType, opts)
+	if days < minDays {
+		return minDays
+	}
+	return days
 }
 
 func (s *CleanupService) CleanupAll(ctx context.Context, signalTypes []string) ([]CleanupResult, error) {

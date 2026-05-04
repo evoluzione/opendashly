@@ -14,6 +14,20 @@ type Config struct {
 	MachineCPUCores              int
 	MachineAutoTuning            bool
 	ResolvedMachineProfile       string
+	RetentionAdaptiveEnabled     bool
+	MaxLogRetentionDays          int
+	MaxTraceRetentionDays        int
+	RetentionStepDownDays        int
+	RetentionMaxLevel            int
+	RetentionMinTraceHours       int
+	RetentionMinLogHours         int
+	RetentionPressureCooldownSec int
+	RetentionPressureMinSignals  int
+	RetentionPressureWindowSec   int
+	RetentionPressureErrorCount  int
+	RetentionPressureMemPct      int
+	RetentionPressureMemBudgetMB int
+	RetentionPressureDiskPct     int
 	ClickHouseAddr               string
 	ClickHouseUser               string
 	ClickHousePassword           string
@@ -51,6 +65,20 @@ type Config struct {
 type machinePreset struct {
 	ServiceListTimeoutSec        int
 	CleanupIntervalMinutes       int
+	RetentionAdaptiveEnabled     bool
+	MaxLogRetentionDays          int
+	MaxTraceRetentionDays        int
+	RetentionStepDownDays        int
+	RetentionMaxLevel            int
+	RetentionMinTraceHours       int
+	RetentionMinLogHours         int
+	RetentionPressureCooldownSec int
+	RetentionPressureMinSignals  int
+	RetentionPressureWindowSec   int
+	RetentionPressureErrorCount  int
+	RetentionPressureMemPct      int
+	RetentionPressureMemBudgetMB int
+	RetentionPressureDiskPct     int
 	RetentionPreCount            bool
 	ClickHouseMaxMemoryMiB       int
 	ClickHouseExternalGroupByMiB int
@@ -77,6 +105,20 @@ var machinePresets = map[string]machinePreset{
 	"small": {
 		ServiceListTimeoutSec:        25,
 		CleanupIntervalMinutes:       1440,
+		RetentionAdaptiveEnabled:     true,
+		MaxLogRetentionDays:          7,
+		MaxTraceRetentionDays:        3,
+		RetentionStepDownDays:        2,
+		RetentionMaxLevel:            2,
+		RetentionMinTraceHours:       24,
+		RetentionMinLogHours:         24,
+		RetentionPressureCooldownSec: 300,
+		RetentionPressureMinSignals:  2,
+		RetentionPressureWindowSec:   300,
+		RetentionPressureErrorCount:  3,
+		RetentionPressureMemPct:      85,
+		RetentionPressureMemBudgetMB: 160,
+		RetentionPressureDiskPct:     90,
 		RetentionPreCount:            false,
 		ClickHouseMaxMemoryMiB:       96,
 		ClickHouseExternalGroupByMiB: 24,
@@ -101,6 +143,20 @@ var machinePresets = map[string]machinePreset{
 	"standard": {
 		ServiceListTimeoutSec:        20,
 		CleanupIntervalMinutes:       720,
+		RetentionAdaptiveEnabled:     true,
+		MaxLogRetentionDays:          14,
+		MaxTraceRetentionDays:        7,
+		RetentionStepDownDays:        2,
+		RetentionMaxLevel:            2,
+		RetentionMinTraceHours:       24,
+		RetentionMinLogHours:         24,
+		RetentionPressureCooldownSec: 300,
+		RetentionPressureMinSignals:  2,
+		RetentionPressureWindowSec:   300,
+		RetentionPressureErrorCount:  4,
+		RetentionPressureMemPct:      85,
+		RetentionPressureMemBudgetMB: 256,
+		RetentionPressureDiskPct:     90,
 		RetentionPreCount:            false,
 		ClickHouseMaxMemoryMiB:       160,
 		ClickHouseExternalGroupByMiB: 48,
@@ -125,6 +181,20 @@ var machinePresets = map[string]machinePreset{
 	"big": {
 		ServiceListTimeoutSec:        15,
 		CleanupIntervalMinutes:       360,
+		RetentionAdaptiveEnabled:     true,
+		MaxLogRetentionDays:          30,
+		MaxTraceRetentionDays:        15,
+		RetentionStepDownDays:        2,
+		RetentionMaxLevel:            2,
+		RetentionMinTraceHours:       24,
+		RetentionMinLogHours:         24,
+		RetentionPressureCooldownSec: 300,
+		RetentionPressureMinSignals:  2,
+		RetentionPressureWindowSec:   300,
+		RetentionPressureErrorCount:  6,
+		RetentionPressureMemPct:      85,
+		RetentionPressureMemBudgetMB: 384,
+		RetentionPressureDiskPct:     90,
 		RetentionPreCount:            false,
 		ClickHouseMaxMemoryMiB:       256,
 		ClickHouseExternalGroupByMiB: 64,
@@ -206,6 +276,20 @@ func (cfg *Config) applyMachineTuning() {
 	// Auto-tuning intentionally overrides low-level manual knobs when active.
 	cfg.ServiceListTimeoutSec = preset.ServiceListTimeoutSec
 	cfg.CleanupIntervalMinutes = preset.CleanupIntervalMinutes
+	cfg.RetentionAdaptiveEnabled = preset.RetentionAdaptiveEnabled
+	cfg.MaxLogRetentionDays = preset.MaxLogRetentionDays
+	cfg.MaxTraceRetentionDays = preset.MaxTraceRetentionDays
+	cfg.RetentionStepDownDays = preset.RetentionStepDownDays
+	cfg.RetentionMaxLevel = preset.RetentionMaxLevel
+	cfg.RetentionMinTraceHours = preset.RetentionMinTraceHours
+	cfg.RetentionMinLogHours = preset.RetentionMinLogHours
+	cfg.RetentionPressureCooldownSec = preset.RetentionPressureCooldownSec
+	cfg.RetentionPressureMinSignals = preset.RetentionPressureMinSignals
+	cfg.RetentionPressureWindowSec = preset.RetentionPressureWindowSec
+	cfg.RetentionPressureErrorCount = preset.RetentionPressureErrorCount
+	cfg.RetentionPressureMemPct = preset.RetentionPressureMemPct
+	cfg.RetentionPressureMemBudgetMB = preset.RetentionPressureMemBudgetMB
+	cfg.RetentionPressureDiskPct = preset.RetentionPressureDiskPct
 	cfg.RetentionPreCount = preset.RetentionPreCount
 	cfg.ClickHouseMaxMemoryMiB = preset.ClickHouseMaxMemoryMiB
 	cfg.ClickHouseExternalGroupByMiB = preset.ClickHouseExternalGroupByMiB

@@ -40,7 +40,6 @@
     failed: "retention.statusFailed",
   };
   const MAX_RETENTION_DAYS = 365;
-  const MAX_TRACES_RETENTION_DAYS = 15;
 
   function labelForSignal(signal: SignalType) {
     const base = signalLabels[signal] ?? signal;
@@ -59,7 +58,11 @@
   }
 
   function maxRetentionForSignal(signal: SignalType) {
-    return signal === "traces" ? MAX_TRACES_RETENTION_DAYS : MAX_RETENTION_DAYS;
+    const found = settings.find((s) => s.signalType === signal);
+    if (found?.maxRetentionDays && found.maxRetentionDays > 0) {
+      return found.maxRetentionDays;
+    }
+    return MAX_RETENTION_DAYS;
   }
 
   async function loadSettings() {
@@ -230,7 +233,7 @@
     <div class="panel">
       <h3>{t($locale, "retention.settingsTitle")}</h3>
       <p class="help-text">
-        {t($locale, "retention.settingsHelp")}
+        {t($locale, "retention.settingsHelp", { traceMax: maxRetentionForSignal("traces") })}
       </p>
 
       {#if loading && settings.length === 0}

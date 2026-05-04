@@ -2,6 +2,7 @@ package bootstrap
 
 import (
 	"context"
+	"math"
 	"net/http"
 	"time"
 
@@ -75,14 +76,35 @@ func Build(ctx context.Context) (*App, error) {
 	}
 
 	retentionRepo := &retention.Repo{Conn: client.Conn}
+	adaptiveOptions := retention.AdaptiveRetentionOptions{
+		Enabled:                             cfg.RetentionAdaptiveEnabled,
+		StepDownDays:                        uint32(cfg.RetentionStepDownDays),
+		MaxLevel:                            cfg.RetentionMaxLevel,
+		MinTraceRetentionDays:               hoursToDaysCeil(cfg.RetentionMinTraceHours),
+		MinLogRetentionDays:                 hoursToDaysCeil(cfg.RetentionMinLogHours),
+		PressureCooldown:                    time.Duration(cfg.RetentionPressureCooldownSec) * time.Second,
+		PressureMinActiveSignals:            cfg.RetentionPressureMinSignals,
+		PressureErrorWindow:                 time.Duration(cfg.RetentionPressureWindowSec) * time.Second,
+		PressureErrorThreshold:              cfg.RetentionPressureErrorCount,
+		PressureMemoryThresholdPercent:      cfg.RetentionPressureMemPct,
+		PressureMemoryBudgetMiB:             cfg.RetentionPressureMemBudgetMB,
+		PressureClickHouseDiskThresholdPerc: cfg.RetentionPressureDiskPct,
+	}
+	pressureMonitor := retention.NewPressureMonitor(client.Conn, adaptiveOptions)
 	cleanupService := &retention.CleanupService{
 		Repo:              retentionRepo,
 		Conn:              client.Conn,
 		EnableCountBefore: cfg.RetentionPreCount,
+		AdaptiveOptions:   adaptiveOptions,
+		PressureMonitor:   pressureMonitor,
 	}
+	cleanupService.EnsureDefaults()
+	queryService.PressureObserver = cleanupService
 	retentionHandler := &handlers.RetentionHandler{
-		Repo:    retentionRepo,
-		Service: cleanupService,
+		Repo:                  retentionRepo,
+		Service:               cleanupService,
+		MaxLogRetentionDays:   uint32(cfg.MaxLogRetentionDays),
+		MaxTraceRetentionDays: uint32(cfg.MaxTraceRetentionDays),
 	}
 
 	aiRepo := &ai.Repo{Conn: client.Conn}
@@ -156,4 +178,11 @@ func seedDefaultAdmin(ctx context.Context, repo *auth.Repo) error {
 		IsDisabled:         false,
 	})
 	return err
+}
+
+func hoursToDaysCeil(hours int) uint32 {
+	if hours <= 0 {
+		return 1
+	}
+	return uint32(math.Ceil(float64(hours) / 24.0))
 }

@@ -58,6 +58,12 @@ func TestApplyMachineTuningOverridesLegacyValues(t *testing.T) {
 	if cfg.CleanupIntervalMinutes != 360 {
 		t.Fatalf("CleanupIntervalMinutes = %d, want 360", cfg.CleanupIntervalMinutes)
 	}
+	if cfg.MaxLogRetentionDays != 30 {
+		t.Fatalf("MaxLogRetentionDays = %d, want 30", cfg.MaxLogRetentionDays)
+	}
+	if cfg.MaxTraceRetentionDays != 15 {
+		t.Fatalf("MaxTraceRetentionDays = %d, want 15", cfg.MaxTraceRetentionDays)
+	}
 	if cfg.DashboardRequestTimeoutSec != 15 {
 		t.Fatalf("DashboardRequestTimeoutSec = %d, want 15", cfg.DashboardRequestTimeoutSec)
 	}
