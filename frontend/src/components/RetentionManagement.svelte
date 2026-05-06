@@ -30,6 +30,7 @@
   let confirmMessage = "";
   let showAllJobs = false;
   let totalJobs = 0;
+  $: visibleJobs = jobs.filter((job) => job.recordsDeleted > 0);
   const signalLabels: Record<SignalType, string> = {
     logs: "Log",
     traces: "Trace",
@@ -359,7 +360,7 @@
 
   <div class="panel">
     <h3>{t($locale, "retention.historyTitle")}</h3>
-    {#if jobs.length === 0}
+    {#if visibleJobs.length === 0}
       <div class="status">{t($locale, "retention.noHistory")}</div>
     {:else}
       <table>
@@ -375,7 +376,7 @@
           </tr>
         </thead>
         <tbody>
-          {#each jobs as job}
+          {#each visibleJobs as job}
             <tr>
               <td class="monospace">{job.jobId.slice(0, 8)}</td>
               <td>{job.jobType}</td>

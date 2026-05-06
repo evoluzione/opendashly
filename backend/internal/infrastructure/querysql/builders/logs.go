@@ -111,7 +111,9 @@ func extractLogsBodySearch(filterList []FilterItem) (string, []FilterItem) {
 
 func isSimpleToken(s string) bool {
 	for _, c := range s {
-		if !((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '_') {
+		// ClickHouse hasTokenCaseInsensitive requires a single token needle
+		// without separator characters (for example "_").
+		if !((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9')) {
 			return false
 		}
 	}

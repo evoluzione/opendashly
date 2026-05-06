@@ -154,7 +154,7 @@ func (s *CleanupService) CleanupByRetention(ctx context.Context) error {
 			continue
 		}
 
-		deleted, err := s.deleteOldRecords(ctx, setting.SignalType, cutoffTime, "")
+		deleted, err := s.deleteOldRecords(ctx, setting.SignalType, cutoffTime, "", s.EnableCountBefore)
 		if err != nil {
 			log.Printf("retention cleanup: failed to delete %s records: %v", setting.SignalType, err)
 			failures = append(failures, fmt.Sprintf("%s: %v", setting.SignalType, err))
@@ -286,7 +286,7 @@ func (s *CleanupService) CleanupAll(ctx context.Context, signalTypes []string) (
 			return nil, fmt.Errorf("create cleanup job: %w", err)
 		}
 
-		deleted, err := s.deleteAllRecords(ctx, signalType, "")
+		deleted, err := s.deleteAllRecords(ctx, signalType, "", true)
 		if err != nil {
 			_ = s.Repo.UpdateCleanupJob(ctx, jobID, "failed", 0, err.Error())
 			return nil, fmt.Errorf("delete %s records: %w", signalType, err)
@@ -324,7 +324,7 @@ func (s *CleanupService) CleanupByService(ctx context.Context, signalTypes []str
 			return nil, fmt.Errorf("create cleanup job: %w", err)
 		}
 
-		deleted, err := s.deleteAllRecords(ctx, signalType, serviceName)
+		deleted, err := s.deleteAllRecords(ctx, signalType, serviceName, true)
 		if err != nil {
 			_ = s.Repo.UpdateCleanupJob(ctx, jobID, "failed", 0, err.Error())
 			return nil, fmt.Errorf("delete %s records for service %s: %w", signalType, serviceName, err)
@@ -344,29 +344,29 @@ func (s *CleanupService) CleanupByService(ctx context.Context, signalTypes []str
 	return results, nil
 }
 
-func (s *CleanupService) deleteOldRecords(ctx context.Context, signalType string, cutoffTime time.Time, serviceName string) (uint64, error) {
+func (s *CleanupService) deleteOldRecords(ctx context.Context, signalType string, cutoffTime time.Time, serviceName string, countBefore bool) (uint64, error) {
 	switch signalType {
 	case "logs":
-		return s.deleteLogsRecords(ctx, &cutoffTime, serviceName)
+		return s.deleteLogsRecords(ctx, &cutoffTime, serviceName, countBefore)
 	case "traces":
-		return s.deleteTracesRecords(ctx, &cutoffTime, serviceName)
+		return s.deleteTracesRecords(ctx, &cutoffTime, serviceName, countBefore)
 	default:
 		return 0, fmt.Errorf("unknown signal type: %s", signalType)
 	}
 }
 
-func (s *CleanupService) deleteAllRecords(ctx context.Context, signalType string, serviceName string) (uint64, error) {
+func (s *CleanupService) deleteAllRecords(ctx context.Context, signalType string, serviceName string, countBefore bool) (uint64, error) {
 	switch signalType {
 	case "logs":
-		return s.deleteLogsRecords(ctx, nil, serviceName)
+		return s.deleteLogsRecords(ctx, nil, serviceName, countBefore)
 	case "traces":
-		return s.deleteTracesRecords(ctx, nil, serviceName)
+		return s.deleteTracesRecords(ctx, nil, serviceName, countBefore)
 	default:
 		return 0, fmt.Errorf("unknown signal type: %s", signalType)
 	}
 }
 
-func (s *CleanupService) deleteLogsRecords(ctx context.Context, cutoffTime *time.Time, serviceName string) (uint64, error) {
+func (s *CleanupService) deleteLogsRecords(ctx context.Context, cutoffTime *time.Time, serviceName string, countBefore bool) (uint64, error) {
 	var countQuery string
 	var deleteQuery string
 
@@ -388,7 +388,7 @@ func (s *CleanupService) deleteLogsRecords(ctx context.Context, cutoffTime *time
 
 	var count uint64
 	args := buildDeleteArgs(cutoffTime, serviceName)
-	if s.EnableCountBefore {
+	if countBefore {
 		row := s.Conn.QueryRow(ctx, countQuery, args...)
 		if err := row.Scan(&count); err != nil {
 			return 0, fmt.Errorf("count logs: %w", err)
@@ -403,7 +403,7 @@ func (s *CleanupService) deleteLogsRecords(ctx context.Context, cutoffTime *time
 	return count, nil
 }
 
-func (s *CleanupService) deleteTracesRecords(ctx context.Context, cutoffTime *time.Time, serviceName string) (uint64, error) {
+func (s *CleanupService) deleteTracesRecords(ctx context.Context, cutoffTime *time.Time, serviceName string, countBefore bool) (uint64, error) {
 	var countQuery string
 	var deleteQuery string
 
@@ -425,7 +425,7 @@ func (s *CleanupService) deleteTracesRecords(ctx context.Context, cutoffTime *ti
 
 	var count uint64
 	args := buildDeleteArgs(cutoffTime, serviceName)
-	if s.EnableCountBefore {
+	if countBefore {
 		row := s.Conn.QueryRow(ctx, countQuery, args...)
 		if err := row.Scan(&count); err != nil {
 			return 0, fmt.Errorf("count traces: %w", err)
