@@ -1,8 +1,10 @@
 package query
 
 import (
-	"opendashly/backend/internal/infrastructure/storage"
+	"context"
 	"sync"
+
+	"opendashly/backend/internal/infrastructure/storage"
 )
 
 // Service handles query execution.
@@ -17,6 +19,8 @@ type Service struct {
 	cache        *cacheManager
 	runnerInit   sync.Once
 	signalRunner signalRunner
+
+	serviceNameFetcher func(context.Context, string) ([]string, error)
 }
 
 func (s *Service) getCacheManager() *cacheManager {

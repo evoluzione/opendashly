@@ -53,6 +53,19 @@ func TestDashboardQueryBuilders_DoNotReadRawTelemetryTables(t *testing.T) {
 	}
 }
 
+func TestBuildSlowestEndpointsQuery_UsesLatencyBuckets(t *testing.T) {
+	query := BuildSlowestEndpointsQuery(time.Unix(0, 0), time.Unix(3600, 0), "", 10)
+
+	if strings.Contains(query, "duration_quantiles_state") {
+		t.Fatalf("slowest endpoints query must not merge TDigest state, got: %s", query)
+	}
+	for _, expected := range []string{"latency_0_100", "latency_10000_inf", "arrayCumSum(bucket_counts)"} {
+		if !strings.Contains(query, expected) {
+			t.Fatalf("expected bucket percentile expression %q, got: %s", expected, query)
+		}
+	}
+}
+
 func TestBackfillQueryBuilders_ReadRawTelemetryTables(t *testing.T) {
 	query := buildTraceServiceBackfillQuery(time.Unix(0, 0), time.Unix(3600, 0))
 
@@ -61,6 +74,20 @@ func TestBackfillQueryBuilders_ReadRawTelemetryTables(t *testing.T) {
 	}
 	if !strings.Contains(query, "upper(toString(SpanKind)) IN ('SERVER', 'SPAN_KIND_SERVER')") {
 		t.Fatalf("expected normalized SpanKind filter, got: %s", query)
+	}
+}
+
+func TestTraceEndpointBackfillQuery_PopulatesLatencyBuckets(t *testing.T) {
+	query := buildTraceEndpointBackfillQuery(time.Unix(0, 0), time.Unix(3600, 0))
+
+	for _, expected := range []string{
+		"latency_0_100",
+		"latency_10000_inf",
+		"countIf(duration_ms > 5000 AND duration_ms <= 10000) AS latency_5000_10000",
+	} {
+		if !strings.Contains(query, expected) {
+			t.Fatalf("expected endpoint backfill bucket %q, got: %s", expected, query)
+		}
 	}
 }
 

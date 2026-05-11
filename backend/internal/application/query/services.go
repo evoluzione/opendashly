@@ -5,12 +5,21 @@ import (
 	"fmt"
 	"log"
 	"sort"
-	"sync"
-
-	"golang.org/x/sync/errgroup"
 )
 
-var serviceSourceTables = []string{
+const serviceNamesQuerySettings = `SETTINGS
+	max_memory_usage = 67108864,
+	max_bytes_before_external_group_by = 16777216,
+	max_threads = 1,
+	optimize_aggregation_in_order = 1`
+
+var serviceRollupSourceTables = []string{
+	"telemetry.dashboard_trace_service_1m",
+	"telemetry.dashboard_log_level_1m",
+	"telemetry.dashboard_trace_endpoint_1m",
+}
+
+var serviceRawSourceTables = []string{
 	"telemetry.otel_logs",
 	"telemetry.otel_traces",
 }
@@ -24,52 +33,62 @@ func (s *Service) ListServices(ctx context.Context) ([]string, error) {
 		return services, nil
 	}
 
-	var (
-		mu        sync.Mutex
-		seen      = map[string]struct{}{}
-		successes int
-	)
-
-	g, gctx := errgroup.WithContext(ctx)
-	for _, table := range serviceSourceTables {
-		table := table
-		g.Go(func() error {
-			names, err := s.queryServiceNames(gctx, table)
-			if err != nil {
-				log.Printf("services.list: %s failed: %v", table, err)
-				return nil
-			}
-			mu.Lock()
-			successes++
-			for _, name := range names {
-				seen[name] = struct{}{}
-			}
-			mu.Unlock()
-			return nil
-		})
+	services, err := s.listServiceNamesFromTables(ctx, serviceRollupSourceTables)
+	if err != nil {
+		log.Printf("services.list: rollup sources failed: %v", err)
 	}
-	if err := g.Wait(); err != nil {
+	if len(services) > 0 {
+		s.setServicesCache(services)
+		return services, nil
+	}
+
+	services, err = s.listServiceNamesFromTables(ctx, serviceRawSourceTables)
+	if err != nil {
 		return nil, err
+	}
+	s.setServicesCache(services)
+	return services, nil
+}
+
+func (s *Service) listServiceNamesFromTables(ctx context.Context, tables []string) ([]string, error) {
+	seen := map[string]struct{}{}
+	successes := 0
+
+	for _, table := range tables {
+		names, err := s.fetchServiceNames(ctx, table)
+		if err != nil {
+			log.Printf("services.list: %s failed: %v", table, err)
+			continue
+		}
+		successes++
+		for _, name := range names {
+			seen[name] = struct{}{}
+		}
 	}
 	if successes == 0 {
 		return nil, fmt.Errorf("list services: all source tables failed")
 	}
-
 	services := make([]string, 0, len(seen))
 	for name := range seen {
 		services = append(services, name)
 	}
 	sort.Strings(services)
-	s.setServicesCache(services)
 	return services, nil
+}
+
+func (s *Service) fetchServiceNames(ctx context.Context, table string) ([]string, error) {
+	if s.serviceNameFetcher != nil {
+		return s.serviceNameFetcher(ctx, table)
+	}
+	return s.queryServiceNames(ctx, table)
 }
 
 func (s *Service) queryServiceNames(ctx context.Context, table string) ([]string, error) {
 	query := fmt.Sprintf(`SELECT ServiceName
-FROM %s
-WHERE ServiceName != ''
-GROUP BY ServiceName
-SETTINGS optimize_aggregation_in_order = 1`, table)
+	FROM %s
+	WHERE ServiceName != ''
+	GROUP BY ServiceName
+	%s`, table, serviceNamesQuerySettings)
 	rows, err := s.Storage.Conn.Query(ctx, query)
 	if err != nil {
 		return nil, fmt.Errorf("query: %w", err)
