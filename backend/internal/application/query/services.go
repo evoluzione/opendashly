@@ -41,11 +41,7 @@ func (s *Service) ListServices(ctx context.Context) ([]string, error) {
 		s.setServicesCache(services)
 		return services, nil
 	}
-
-	services, err = s.listServiceNamesFromTables(ctx, serviceRawSourceTables)
-	if err != nil {
-		return nil, err
-	}
+	services = []string{}
 	s.setServicesCache(services)
 	return services, nil
 }

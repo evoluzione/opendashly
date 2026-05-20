@@ -44,6 +44,7 @@ type Config struct {
 	DashboardStaleCacheTTLSec    int
 	DashboardRequestTimeoutSec   int
 	DashboardQueryParallelism    int
+	TelemetryQueryConcurrency    int
 	DashboardHalveOnOOM          bool
 	DashboardRawFallback         bool
 	DashboardPressureCooldownSec int
@@ -93,6 +94,7 @@ type machinePreset struct {
 	DashboardStaleCacheTTLSec    int
 	DashboardRequestTimeoutSec   int
 	DashboardQueryParallelism    int
+	TelemetryQueryConcurrency    int
 	DashboardHalveOnOOM          bool
 	DashboardRawFallback         bool
 	DashboardPressureCooldownSec int
@@ -133,6 +135,7 @@ var machinePresets = map[string]machinePreset{
 		DashboardStaleCacheTTLSec:    900,
 		DashboardRequestTimeoutSec:   25,
 		DashboardQueryParallelism:    1,
+		TelemetryQueryConcurrency:    1,
 		DashboardHalveOnOOM:          true,
 		DashboardRawFallback:         false,
 		DashboardPressureCooldownSec: 60,
@@ -171,6 +174,7 @@ var machinePresets = map[string]machinePreset{
 		DashboardStaleCacheTTLSec:    900,
 		DashboardRequestTimeoutSec:   20,
 		DashboardQueryParallelism:    1,
+		TelemetryQueryConcurrency:    2,
 		DashboardHalveOnOOM:          true,
 		DashboardRawFallback:         false,
 		DashboardPressureCooldownSec: 60,
@@ -209,6 +213,7 @@ var machinePresets = map[string]machinePreset{
 		DashboardStaleCacheTTLSec:    900,
 		DashboardRequestTimeoutSec:   15,
 		DashboardQueryParallelism:    2,
+		TelemetryQueryConcurrency:    3,
 		DashboardHalveOnOOM:          true,
 		DashboardRawFallback:         false,
 		DashboardPressureCooldownSec: 60,
@@ -304,6 +309,7 @@ func (cfg *Config) applyMachineTuning() {
 	cfg.DashboardStaleCacheTTLSec = preset.DashboardStaleCacheTTLSec
 	cfg.DashboardRequestTimeoutSec = preset.DashboardRequestTimeoutSec
 	cfg.DashboardQueryParallelism = preset.DashboardQueryParallelism
+	cfg.TelemetryQueryConcurrency = preset.TelemetryQueryConcurrency
 	cfg.DashboardHalveOnOOM = preset.DashboardHalveOnOOM
 	cfg.DashboardRawFallback = preset.DashboardRawFallback
 	cfg.DashboardPressureCooldownSec = preset.DashboardPressureCooldownSec

@@ -227,17 +227,20 @@ Derived profile mapping:
 
 Auto-tuned baseline (selected values):
 
-| Profile | Service timeout | CH max memory | Dashboard timeout | OTEL memory limit |
-|---|---:|---:|---:|---:|
-| Small | 25s | 96 MiB | 25s | 96 MiB |
-| Standard | 20s | 160 MiB | 20s | 170 MiB |
-| Big | 15s | 256 MiB | 15s | 300 MiB |
+| Profile | Service timeout | CH query memory | Telemetry concurrency | Dashboard timeout | OTEL memory limit |
+|---|---:|---:|---:|---:|---:|
+| Small | 25s | 96 MiB | 1 | 25s | 96 MiB |
+| Standard | 20s | 160 MiB | 2 | 20s | 170 MiB |
+| Big | 15s | 256 MiB | 3 | 15s | 300 MiB |
+
+`CLICKHOUSE_MEM_LIMIT` / `CLICKHOUSE_MEMSWAP_LIMIT` in `docker-compose.prod.yml` control the ClickHouse container/server budget. If the host has enough RAM and ClickHouse reports `maximum: 1.20 GiB`, raise those limits; the application still isolates heavy telemetry queries so the UI remains navigable under pressure.
 
 **2. Resilience behavior** — shared across all profiles:
 
 - ad-hoc query execution returns `status: "partial"` with per-signal failures in `signalErrors`
 - dashboard metrics always return a response: any failing widget (recoverable or not) is reported via `warnings`, never a 5xx
-- dashboard metrics read bounded minute rollups; raw telemetry fallback is disabled by default
+- dashboard and system monitor metrics read bounded minute rollups; raw telemetry fallback is disabled by default for operational screens
+- auth/settings/status use a separate ClickHouse control lane while telemetry queries use a bounded telemetry lane
 - on `memory limit exceeded` / `OvercommitTracker`, the dashboard opens a short pressure cooldown and serves the last good snapshot instead of retrying expensive widgets
 - dashboard rollups use `quantilesTDigest` and inline `SETTINGS` so a single hot widget can't exhaust ClickHouse on small VMs
 - `otel-collector` uses persistent queue storage (`file_storage`) and `blocking: true`, so under pressure it applies backpressure instead of dropping data aggressively. If backlog stays high for a long period, tune queue size first, then collector/ClickHouse resources.

@@ -11,6 +11,7 @@ import (
 
 	"golang.org/x/sync/errgroup"
 
+	"opendashly/backend/internal/application/pressure"
 	"opendashly/backend/internal/infrastructure/storage"
 )
 
@@ -19,6 +20,8 @@ var errDashboardPressure = errors.New("dashboard backend pressure")
 // Service handles dashboard metrics calculations.
 type Service struct {
 	Storage          *storage.Client
+	MaintenanceStore *storage.Client
+	Limiter          *pressure.Limiter
 	FreshCacheTTL    time.Duration
 	StaleCacheTTL    time.Duration
 	LastGoodCacheTTL time.Duration
@@ -173,6 +176,23 @@ func (s *Service) GetDashboard(ctx context.Context, req DashboardRequest) (*Dash
 		resp.Warnings = []string{warning}
 		return resp, nil
 	}
+
+	release, ok := s.Limiter.TryAcquire()
+	if !ok {
+		s.openDashboardPressure(pressure.ErrBusy)
+		warning := dashboardPressureWarning()
+		if hasStale {
+			staleResult := cloneDashboardResponse(staleSnapshot)
+			staleResult.Health = DashboardHealth{Status: "degraded", Source: "stale_cache", Reason: "backend_pressure"}
+			appendDashboardWarningValue(&staleResult.Warnings, warning)
+			return staleResult, nil
+		}
+		resp := emptyResponse()
+		resp.Health = DashboardHealth{Status: "degraded", Source: "empty", Reason: "backend_pressure"}
+		resp.Warnings = []string{warning}
+		return resp, nil
+	}
+	defer release()
 
 	log.Printf("metrics.service.GetDashboard: from=%s to=%s service=%s",
 		req.From.Format(time.RFC3339), req.To.Format(time.RFC3339), req.ServiceName)
@@ -672,6 +692,9 @@ func isDashboardPressureError(err error) bool {
 		return false
 	}
 	if errors.Is(err, errDashboardPressure) {
+		return true
+	}
+	if errors.Is(err, pressure.ErrBusy) {
 		return true
 	}
 	lower := strings.ToLower(err.Error())

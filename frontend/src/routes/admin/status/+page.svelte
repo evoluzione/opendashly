@@ -270,6 +270,13 @@
         detail: status.error || t($locale, "status.databaseUnavailable"),
       });
     }
+    for (const warning of status?.warnings ?? []) {
+      list.push({
+        tone: "warn",
+        title: t($locale, "status.issueRuntimeWarning"),
+        detail: sanitizeIssueDetail(warning),
+      });
+    }
     for (const row of signalRows) {
       if (row.tone === "error") {
         list.push({
@@ -316,7 +323,7 @@
         list.push({
           tone: "warn",
           title: t($locale, "status.issueRuntimeWarning"),
-          detail: warning,
+          detail: sanitizeIssueDetail(warning),
         });
       }
     }
@@ -337,6 +344,12 @@
       degraded: components.filter((component) => component.status === "degraded").length,
       down: components.filter((component) => component.status === "down").length,
     };
+  }
+
+  function sanitizeIssueDetail(detail: string) {
+    if (!detail) return "";
+    if (detail.length <= 180) return detail;
+    return `${detail.slice(0, 177)}...`;
   }
 
   function componentTone(status: string): Tone {

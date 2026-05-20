@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"opendashly/backend/internal/application/pressure"
 	"opendashly/backend/internal/infrastructure/storage"
 )
 
@@ -274,6 +275,39 @@ func TestGetDashboard_PressureErrorOpensCircuitBreakerWithoutRetry(t *testing.T)
 	if !active {
 		t.Fatal("expected pressure circuit breaker to be active")
 	}
+}
+
+func TestGetDashboard_LimiterBusyReturnsDegradedEmptyWithoutCallingFetchers(t *testing.T) {
+	limiter := pressure.NewLimiter(1)
+	release, ok := limiter.TryAcquire()
+	if !ok {
+		t.Fatal("expected limiter setup acquire to succeed")
+	}
+	defer release()
+
+	fetchers := testSuccessFetchers()
+	fetchers.latencyDistribution = func(context.Context, DashboardRequest) ([]LatencyBucket, error) {
+		t.Fatal("fetcher should not run when telemetry limiter is saturated")
+		return nil, nil
+	}
+
+	svc := &Service{
+		Storage:  &storage.Client{},
+		Limiter:  limiter,
+		fetchers: &fetchers,
+	}
+
+	result, err := svc.GetDashboard(context.Background(), DashboardRequest{
+		From: time.Date(2026, 4, 15, 10, 0, 0, 0, time.UTC),
+		To:   time.Date(2026, 4, 15, 11, 0, 0, 0, time.UTC),
+	})
+	if err != nil {
+		t.Fatalf("dashboard should degrade instead of returning error: %v", err)
+	}
+	if result.Health.Status != "degraded" || result.Health.Reason != "backend_pressure" {
+		t.Fatalf("expected degraded backend_pressure health, got %#v", result.Health)
+	}
+	assertDashboardSlicesInitialized(t, result)
 }
 
 func TestGetDashboard_UsesLastGoodForRollingWindowUnderPressure(t *testing.T) {

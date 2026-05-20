@@ -4,13 +4,15 @@ import (
 	"context"
 	"sync"
 
+	"opendashly/backend/internal/application/pressure"
 	"opendashly/backend/internal/infrastructure/storage"
 )
 
 // Service handles query execution.
 type Service struct {
-	Storage *storage.Client
-	Debug   bool
+	Storage          *storage.Client
+	Debug            bool
+	Limiter          *pressure.Limiter
 	PressureObserver interface {
 		ObserveQueryError(msg string)
 	}

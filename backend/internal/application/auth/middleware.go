@@ -16,13 +16,15 @@ const (
 )
 
 type MiddlewareOptions struct {
-	Mode            string
-	CookieName      string
-	JWTSecret       []byte
-	Repo            Repository
-	TenantID        string
-	AllowlistPaths  []string
-	SessionDuration time.Duration
+	Mode              string
+	CookieName        string
+	JWTSecret         []byte
+	Repo              Repository
+	UserCache         *UserCache
+	TenantID          string
+	AllowlistPaths    []string
+	SessionDuration   time.Duration
+	UserLookupTimeout time.Duration
 }
 
 // Middleware enforces authentication using the configured auth mode.
@@ -62,14 +64,27 @@ func Middleware(opts MiddlewareOptions) func(http.Handler) http.Handler {
 				w.WriteHeader(http.StatusUnauthorized)
 				return
 			}
-			if opts.Repo == nil {
-				w.WriteHeader(http.StatusUnauthorized)
-				return
-			}
-			user, err := opts.Repo.GetByID(r.Context(), claims.UserID)
-			if err != nil {
-				w.WriteHeader(http.StatusUnauthorized)
-				return
+			var user *User
+			if cached, ok := opts.UserCache.Get(claims.UserID); ok {
+				user = &cached
+			} else {
+				if opts.Repo == nil {
+					w.WriteHeader(http.StatusUnauthorized)
+					return
+				}
+				lookupCtx := r.Context()
+				cancel := func() {}
+				if opts.UserLookupTimeout > 0 {
+					lookupCtx, cancel = context.WithTimeout(r.Context(), opts.UserLookupTimeout)
+				}
+				dbUser, err := opts.Repo.GetByID(lookupCtx, claims.UserID)
+				cancel()
+				if err != nil {
+					w.WriteHeader(http.StatusUnauthorized)
+					return
+				}
+				opts.UserCache.Set(*dbUser)
+				user = dbUser
 			}
 			if user.IsDisabled {
 				w.WriteHeader(http.StatusForbidden)

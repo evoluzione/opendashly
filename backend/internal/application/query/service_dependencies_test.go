@@ -63,7 +63,7 @@ func TestListServices_PrefersRollupTables(t *testing.T) {
 	}
 }
 
-func TestListServices_FallsBackToRawTablesWhenRollupsAreEmpty(t *testing.T) {
+func TestListServices_ReturnsEmptyWhenRollupsAreEmptyWithoutRawFallback(t *testing.T) {
 	called := []string{}
 	svc := &Service{
 		Storage: &storage.Client{},
@@ -74,13 +74,7 @@ func TestListServices_FallsBackToRawTablesWhenRollupsAreEmpty(t *testing.T) {
 					return []string{}, nil
 				}
 			}
-			if table == serviceRawSourceTables[0] {
-				return []string{"logs-service"}, nil
-			}
-			if table == serviceRawSourceTables[1] {
-				return []string{"traces-service", "logs-service"}, nil
-			}
-			t.Fatalf("unexpected table %s", table)
+			t.Fatalf("raw table %s should not be queried when rollups are empty", table)
 			return nil, nil
 		},
 	}
@@ -89,10 +83,10 @@ func TestListServices_FallsBackToRawTablesWhenRollupsAreEmpty(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ListServices returned error: %v", err)
 	}
-	if want := []string{"logs-service", "traces-service"}; !reflect.DeepEqual(services, want) {
+	if want := []string{}; !reflect.DeepEqual(services, want) {
 		t.Fatalf("services = %#v, want %#v", services, want)
 	}
-	if want := len(serviceRollupSourceTables) + len(serviceRawSourceTables); len(called) != want {
-		t.Fatalf("queried %d tables, want %d rollup plus raw tables", len(called), want)
+	if want := len(serviceRollupSourceTables); len(called) != want {
+		t.Fatalf("queried %d tables, want %d rollup tables", len(called), want)
 	}
 }

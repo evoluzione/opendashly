@@ -29,18 +29,24 @@ type Summary struct {
 	Ok          bool          `json:"ok"`
 	GeneratedAt time.Time     `json:"generatedAt"`
 	Error       string        `json:"error,omitempty"`
+	Warnings    []string      `json:"warnings,omitempty"`
 	Checks      Checks        `json:"checks"`
 	Counts      SummaryCounts `json:"counts"`
 }
 
 type SummaryCounts struct {
-	Logs    TelemetryCounts `json:"logs"`
-	Traces  TelemetryCounts `json:"traces"`
+	Logs   TelemetryCounts `json:"logs"`
+	Traces TelemetryCounts `json:"traces"`
 }
 
 type Service struct {
 	Storage            *storage.Client
+	MaintenanceStorage *storage.Client
 	CollectorHealthURL string
+
+	pingDatabase  func(context.Context) error
+	countsFetcher func(context.Context, *storage.Client, string) (TelemetryCounts, error)
+	seriesFetcher func(context.Context, *storage.Client, string, time.Time, int, int) ([]TelemetryPoint, error)
 }
 
 const (
@@ -58,39 +64,72 @@ func (s *Service) Summary(ctx context.Context) Summary {
 		summary.Error = "storage not configured"
 		return summary
 	}
-	if err := s.Storage.Conn.Ping(ctx); err != nil {
+	if err := s.getDatabasePinger()(ctx); err != nil {
 		summary.Error = fmt.Sprintf("database unavailable: %v", err)
 		return summary
 	}
 	summary.Checks.Database = true
 
-	logs, err := fetchCounts(ctx, s.Storage, logsCountsQuery)
+	warnings := make([]string, 0, 4)
+	logs, err := s.getCountsFetcher()(ctx, s.Storage, logsCountsQuery)
 	if err != nil {
-		summary.Error = fmt.Sprintf("logs counts failed: %v", err)
-		return summary
+		warnings = append(warnings, fmt.Sprintf("logs counts failed: %v", err))
 	}
-	traces, err := fetchCounts(ctx, s.Storage, tracesCountsQuery)
+	traces, err := s.getCountsFetcher()(ctx, s.Storage, tracesCountsQuery)
 	if err != nil {
-		summary.Error = fmt.Sprintf("traces counts failed: %v", err)
-		return summary
+		warnings = append(warnings, fmt.Sprintf("traces counts failed: %v", err))
 	}
 	anchor := summary.GeneratedAt.UTC().Truncate(time.Duration(seriesBucketMinutes) * time.Minute)
-	logs.Series, err = fetchSeries(ctx, s.Storage, logsSeriesQuery, anchor, seriesBucketMinutes, seriesPointCount)
+	logs.Series, err = s.getSeriesFetcher()(ctx, s.Storage, logsSeriesQuery, anchor, seriesBucketMinutes, seriesPointCount)
 	if err != nil {
-		summary.Error = fmt.Sprintf("logs series failed: %v", err)
-		return summary
+		warnings = append(warnings, fmt.Sprintf("logs series failed: %v", err))
 	}
-	traces.Series, err = fetchSeries(ctx, s.Storage, tracesSeriesQuery, anchor, seriesBucketMinutes, seriesPointCount)
+	traces.Series, err = s.getSeriesFetcher()(ctx, s.Storage, tracesSeriesQuery, anchor, seriesBucketMinutes, seriesPointCount)
 	if err != nil {
-		summary.Error = fmt.Sprintf("traces series failed: %v", err)
-		return summary
+		warnings = append(warnings, fmt.Sprintf("traces series failed: %v", err))
 	}
 	summary.Counts = SummaryCounts{
 		Logs:   logs,
 		Traces: traces,
 	}
 	summary.Ok = summary.Checks.Database
+	if len(warnings) > 0 {
+		summary.Warnings = warnings
+	}
 	return summary
+}
+
+func (s *Service) getDatabasePinger() func(context.Context) error {
+	if s.pingDatabase != nil {
+		return s.pingDatabase
+	}
+	return func(ctx context.Context) error {
+		pingCtx, cancel := context.WithTimeout(ctx, 750*time.Millisecond)
+		defer cancel()
+		return s.Storage.Conn.Ping(pingCtx)
+	}
+}
+
+func (s *Service) getCountsFetcher() func(context.Context, *storage.Client, string) (TelemetryCounts, error) {
+	if s.countsFetcher != nil {
+		return s.countsFetcher
+	}
+	return func(ctx context.Context, store *storage.Client, query string) (TelemetryCounts, error) {
+		queryCtx, cancel := context.WithTimeout(ctx, 1200*time.Millisecond)
+		defer cancel()
+		return fetchCounts(queryCtx, store, query)
+	}
+}
+
+func (s *Service) getSeriesFetcher() func(context.Context, *storage.Client, string, time.Time, int, int) ([]TelemetryPoint, error) {
+	if s.seriesFetcher != nil {
+		return s.seriesFetcher
+	}
+	return func(ctx context.Context, store *storage.Client, query string, anchor time.Time, bucketMinutes int, pointCount int) ([]TelemetryPoint, error) {
+		queryCtx, cancel := context.WithTimeout(ctx, 1200*time.Millisecond)
+		defer cancel()
+		return fetchSeries(queryCtx, store, query, anchor, bucketMinutes, pointCount)
+	}
 }
 
 func fetchCounts(ctx context.Context, store *storage.Client, query string) (TelemetryCounts, error) {
@@ -145,11 +184,12 @@ const logsCountsQuery = `
 	) AS total_rows
 	SELECT
 		total_rows AS total,
-		countIf(Timestamp >= now() - INTERVAL 5 MINUTE) AS last5m,
-		countIf(Timestamp >= now() - INTERVAL 10 MINUTE) AS last10m,
-		count() AS last60m
-	FROM telemetry.otel_logs
-	WHERE Timestamp >= now() - INTERVAL 60 MINUTE
+		toUInt64(ifNull(sumIf(total, time_bucket >= now() - INTERVAL 5 MINUTE), 0)) AS last5m,
+		toUInt64(ifNull(sumIf(total, time_bucket >= now() - INTERVAL 10 MINUTE), 0)) AS last10m,
+		toUInt64(ifNull(sum(total), 0)) AS last60m
+	FROM telemetry.status_logs_1m
+	WHERE time_bucket >= now() - INTERVAL 60 MINUTE
+	SETTINGS max_execution_time = 2, max_threads = 1, max_memory_usage = 33554432
 `
 
 const tracesCountsQuery = `
@@ -160,30 +200,32 @@ const tracesCountsQuery = `
 	) AS total_rows
 	SELECT
 		total_rows AS total,
-		uniqIf(TraceId, Timestamp >= now() - INTERVAL 5 MINUTE) AS last5m,
-		uniqIf(TraceId, Timestamp >= now() - INTERVAL 10 MINUTE) AS last10m,
-		uniq(TraceId) AS last60m
-	FROM telemetry.otel_traces
-	WHERE Timestamp >= now() - INTERVAL 60 MINUTE
+		toUInt64(ifNull(sumIf(total, time_bucket >= now() - INTERVAL 5 MINUTE), 0)) AS last5m,
+		toUInt64(ifNull(sumIf(total, time_bucket >= now() - INTERVAL 10 MINUTE), 0)) AS last10m,
+		toUInt64(ifNull(sum(total), 0)) AS last60m
+	FROM telemetry.status_traces_1m
+	WHERE time_bucket >= now() - INTERVAL 60 MINUTE
+	SETTINGS max_execution_time = 2, max_threads = 1, max_memory_usage = 33554432
 `
 
 const logsSeriesQuery = `
 	SELECT
-		toStartOfInterval(Timestamp, INTERVAL 5 MINUTE) AS bucket,
-		count() AS count
-	FROM telemetry.otel_logs
-	WHERE Timestamp >= now() - INTERVAL 60 MINUTE
+		toStartOfInterval(time_bucket, INTERVAL 5 MINUTE) AS bucket,
+		toUInt64(sum(total)) AS count
+	FROM telemetry.status_logs_1m
+	WHERE time_bucket >= now() - INTERVAL 60 MINUTE
 	GROUP BY bucket
 	ORDER BY bucket
+	SETTINGS max_execution_time = 2, max_threads = 1, max_memory_usage = 33554432
 `
 
 const tracesSeriesQuery = `
 	SELECT
-		toStartOfInterval(Timestamp, INTERVAL 5 MINUTE) AS bucket,
-		uniqExact(TraceId) AS count
-	FROM telemetry.otel_traces
-	WHERE Timestamp >= now() - INTERVAL 60 MINUTE
+		toStartOfInterval(time_bucket, INTERVAL 5 MINUTE) AS bucket,
+		toUInt64(sum(total)) AS count
+	FROM telemetry.status_traces_1m
+	WHERE time_bucket >= now() - INTERVAL 60 MINUTE
 	GROUP BY bucket
 	ORDER BY bucket
+	SETTINGS max_execution_time = 2, max_threads = 1, max_memory_usage = 33554432
 `
-

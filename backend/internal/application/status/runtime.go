@@ -22,23 +22,23 @@ type ComponentHealth struct {
 }
 
 type ResourceHealth struct {
-	CPUCoresAvailable      float64 `json:"cpuCoresAvailable"`
-	CPUUsedPercentOneCore  float64 `json:"cpuUsedPercentOneCore"`
-	MemoryLimitBytes       uint64  `json:"memoryLimitBytes"`
-	MemoryUsedBytes        uint64  `json:"memoryUsedBytes"`
-	MemoryUsedPercent      float64 `json:"memoryUsedPercent"`
-	GoHeapAllocBytes       uint64  `json:"goHeapAllocBytes"`
-	GoRoutines             int     `json:"goRoutines"`
-	BackendUptimeSeconds   int64   `json:"backendUptimeSeconds"`
+	CPUCoresAvailable     float64 `json:"cpuCoresAvailable"`
+	CPUUsedPercentOneCore float64 `json:"cpuUsedPercentOneCore"`
+	MemoryLimitBytes      uint64  `json:"memoryLimitBytes"`
+	MemoryUsedBytes       uint64  `json:"memoryUsedBytes"`
+	MemoryUsedPercent     float64 `json:"memoryUsedPercent"`
+	GoHeapAllocBytes      uint64  `json:"goHeapAllocBytes"`
+	GoRoutines            int     `json:"goRoutines"`
+	BackendUptimeSeconds  int64   `json:"backendUptimeSeconds"`
 }
 
 type QueryHealth struct {
-	RunningNow            uint64  `json:"runningNow"`
-	SlowRunningNow        uint64  `json:"slowRunningNow"`
-	MaxRunningElapsedSec  float64 `json:"maxRunningElapsedSec"`
-	SlowQueriesLast15m    uint64  `json:"slowQueriesLast15m"`
-	FailedQueriesLast15m  uint64  `json:"failedQueriesLast15m"`
-	SlowThresholdSec      float64 `json:"slowThresholdSec"`
+	RunningNow           uint64  `json:"runningNow"`
+	SlowRunningNow       uint64  `json:"slowRunningNow"`
+	MaxRunningElapsedSec float64 `json:"maxRunningElapsedSec"`
+	SlowQueriesLast15m   uint64  `json:"slowQueriesLast15m"`
+	FailedQueriesLast15m uint64  `json:"failedQueriesLast15m"`
+	SlowThresholdSec     float64 `json:"slowThresholdSec"`
 }
 
 type RuntimeSummary struct {
@@ -74,7 +74,9 @@ func (s *Service) Runtime(ctx context.Context) RuntimeSummary {
 		warnings = append(warnings, "Storage non configurato: metriche database non disponibili")
 	} else {
 		summary.Components = append(summary.Components, s.databaseHealth(ctx))
-		queries, queryWarnings, queryErr := s.queryHealth(ctx, slowThresholdSec)
+		queryCtx, cancel := context.WithTimeout(ctx, 750*time.Millisecond)
+		queries, queryWarnings, queryErr := s.queryHealth(queryCtx, slowThresholdSec)
+		cancel()
 		if queryErr != nil {
 			warnings = append(warnings, fmt.Sprintf("Diagnostica query non disponibile: %v", queryErr))
 		} else {
@@ -102,7 +104,9 @@ func (s *Service) Runtime(ctx context.Context) RuntimeSummary {
 
 func (s *Service) databaseHealth(ctx context.Context) ComponentHealth {
 	startedAt := time.Now()
-	if err := s.Storage.Conn.Ping(ctx); err != nil {
+	pingCtx, cancel := context.WithTimeout(ctx, 500*time.Millisecond)
+	defer cancel()
+	if err := s.Storage.Conn.Ping(pingCtx); err != nil {
 		return ComponentHealth{
 			Name:      "database",
 			Status:    "down",
@@ -221,14 +225,14 @@ func collectResourceHealth(now time.Time) ResourceHealth {
 	}
 
 	return ResourceHealth{
-		CPUCoresAvailable:      cpuCores,
-		CPUUsedPercentOneCore:  cpuPercentOfCore,
-		MemoryLimitBytes:       memoryLimit,
-		MemoryUsedBytes:        memoryUsed,
-		MemoryUsedPercent:      memoryUsedPercent,
-		GoHeapAllocBytes:       memStats.Alloc,
-		GoRoutines:             runtime.NumGoroutine(),
-		BackendUptimeSeconds:   int64(uptimeSeconds),
+		CPUCoresAvailable:     cpuCores,
+		CPUUsedPercentOneCore: cpuPercentOfCore,
+		MemoryLimitBytes:      memoryLimit,
+		MemoryUsedBytes:       memoryUsed,
+		MemoryUsedPercent:     memoryUsedPercent,
+		GoHeapAllocBytes:      memStats.Alloc,
+		GoRoutines:            runtime.NumGoroutine(),
+		BackendUptimeSeconds:  int64(uptimeSeconds),
 	}
 }
 
