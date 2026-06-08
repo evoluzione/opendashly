@@ -3,10 +3,12 @@ package handlers
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"log"
 	"net/http"
 	"time"
 
+	"opendashly/backend/internal/application/pressure"
 	"opendashly/backend/internal/application/query"
 )
 
@@ -38,6 +40,10 @@ func (h *QueryHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	result, err := h.Service.Run(ctx, req)
 	if err != nil {
 		log.Printf("query.run failed: %v", err)
+		if errors.Is(err, pressure.ErrBusy) {
+			writeError(w, http.StatusServiceUnavailable, "Backend sotto pressione: restringi intervallo o filtri e riprova.")
+			return
+		}
 		if ctx.Err() == context.DeadlineExceeded {
 			w.WriteHeader(http.StatusGatewayTimeout)
 			return

@@ -17,6 +17,7 @@ export type StatusSummary = {
   ok: boolean;
   generatedAt: string;
   error?: string;
+  warnings?: string[];
   checks: { database: boolean };
   counts: {
     logs: TelemetryCounts;

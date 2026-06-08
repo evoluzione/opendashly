@@ -10,9 +10,11 @@ import (
 	"opendashly/backend/internal/application/auth"
 	"opendashly/backend/internal/application/dashboard"
 	"opendashly/backend/internal/application/metrics"
+	"opendashly/backend/internal/application/pressure"
 	"opendashly/backend/internal/application/query"
 	"opendashly/backend/internal/application/retention"
 	"opendashly/backend/internal/application/status"
+	"opendashly/backend/internal/application/tuning"
 	"opendashly/backend/internal/application/workspace"
 	"opendashly/backend/internal/infrastructure/config"
 	"opendashly/backend/internal/infrastructure/storage"
@@ -33,32 +35,28 @@ func Build(ctx context.Context) (*App, error) {
 		return nil, err
 	}
 
-	client, err := storage.NewClientWithOptions(ctx, storage.ClientOptions{
-		DSN:                           cfg.ClickHouseAddr,
-		User:                          cfg.ClickHouseUser,
-		Password:                      cfg.ClickHousePassword,
-		MaxOpenConns:                  cfg.ClickHouseMaxOpenConns,
-		MaxIdleConns:                  cfg.ClickHouseMaxIdleConns,
-		DialTimeout:                   time.Duration(cfg.ClickHouseDialTimeout) * time.Second,
-		ReadTimeout:                   time.Duration(cfg.ClickHouseReadTimeout) * time.Second,
-		MaxMemoryUsageBytes:           cfg.ClickHouseMaxMemoryMiB * 1024 * 1024,
-		MaxBytesBeforeExternalGroupBy: cfg.ClickHouseExternalGroupByMiB * 1024 * 1024,
-		MaxBytesBeforeExternalSort:    cfg.ClickHouseExternalSortMiB * 1024 * 1024,
-		MaxTempDataOnDiskBytes:        cfg.ClickHouseTempDiskMiB * 1024 * 1024,
-		MaxExecutionTimeSec:           cfg.ClickHouseMaxExecSec,
-	})
+	maintenanceClient, err := storage.NewClientWithOptions(ctx, maintenanceClickHouseOptions(cfg))
 	if err != nil {
 		return nil, err
 	}
-	if err := storage.ApplyMigrations(ctx, client.Conn); err != nil {
+	if err := storage.ApplyMigrations(ctx, maintenanceClient.Conn); err != nil {
 		return nil, err
 	}
+	controlClient, err := storage.NewClientWithOptions(ctx, controlClickHouseOptions(cfg))
+	if err != nil {
+		return nil, err
+	}
+	telemetryClient, err := storage.NewClientWithOptions(ctx, telemetryClickHouseOptions(cfg))
+	if err != nil {
+		return nil, err
+	}
+	telemetryLimiter := pressure.NewLimiter(cfg.TelemetryQueryConcurrency)
 
-	queryService := &query.Service{Storage: client, Debug: cfg.DebugQuery}
-	relatedService := &query.RelatedService{Storage: client}
-	traceSpansService := &query.TraceSpansService{Storage: client}
-	statusService := &status.Service{Storage: client, CollectorHealthURL: cfg.CollectorHealthURL}
-	dashboardService := &metrics.Service{Storage: client}
+	queryService := &query.Service{Storage: telemetryClient, Debug: cfg.DebugQuery, Limiter: telemetryLimiter}
+	relatedService := &query.RelatedService{Storage: telemetryClient}
+	traceSpansService := &query.TraceSpansService{Storage: telemetryClient}
+	statusService := &status.Service{Storage: controlClient, MaintenanceStorage: maintenanceClient, CollectorHealthURL: cfg.CollectorHealthURL}
+	dashboardService := &metrics.Service{Storage: telemetryClient, MaintenanceStore: maintenanceClient, Limiter: telemetryLimiter}
 	dashboardService.FreshCacheTTL = time.Duration(cfg.DashboardFreshCacheTTLSec) * time.Second
 	dashboardService.StaleCacheTTL = time.Duration(cfg.DashboardStaleCacheTTLSec) * time.Second
 	dashboardService.LastGoodCacheTTL = time.Duration(cfg.DashboardLastGoodTTLSec) * time.Second
@@ -68,14 +66,15 @@ func Build(ctx context.Context) (*App, error) {
 	dashboardService.PressureCooldown = time.Duration(cfg.DashboardPressureCooldownSec) * time.Second
 	if cfg.DashboardRollupBackfill {
 		dashboardService.StartRollupBackfill(context.Background(), cfg.DashboardRollupBackfillHours)
+		statusService.StartRollupBackfill(context.Background(), cfg.DashboardRollupBackfillHours)
 	}
 	savedRepo := query.NewSavedQueryRepo()
-	authRepo := &auth.Repo{Conn: client.Conn}
+	authRepo := &auth.Repo{Conn: controlClient.Conn}
 	if err := seedDefaultAdmin(ctx, authRepo); err != nil {
 		return nil, err
 	}
 
-	retentionRepo := &retention.Repo{Conn: client.Conn}
+	retentionRepo := &retention.Repo{Conn: maintenanceClient.Conn}
 	defaultLogsRetention := boundedDefaultRetentionDays(7, uint32(cfg.MaxLogRetentionDays))
 	defaultTracesRetention := boundedDefaultRetentionDays(7, uint32(cfg.MaxTraceRetentionDays))
 	if err := retentionRepo.EnsureSetting(ctx, "logs", defaultLogsRetention, "system"); err != nil {
@@ -104,10 +103,20 @@ func Build(ctx context.Context) (*App, error) {
 		PressureMemoryBudgetMiB:             cfg.RetentionPressureMemBudgetMB,
 		PressureClickHouseDiskThresholdPerc: cfg.RetentionPressureDiskPct,
 	}
-	pressureMonitor := retention.NewPressureMonitor(client.Conn, adaptiveOptions)
+	pressureMonitor := retention.NewPressureMonitor(maintenanceClient.Conn, adaptiveOptions)
+
+	// Replace the old static machine profiles with a runtime self-tuning loop:
+	// it starts the load-sensitive knobs at their safe floor and adapts them to
+	// real pressure (AIMD), keeping the shared telemetry limiter resized live.
+	tuningController := tuning.New(tuning.DefaultBounds(), func(ctx context.Context) bool {
+		return pressureMonitor.Snapshot(ctx).Pressure
+	}, telemetryLimiter)
+	dashboardService.Tuner = tuningController
+	go tuningController.Run(context.Background())
+
 	cleanupService := &retention.CleanupService{
 		Repo:              retentionRepo,
-		Conn:              client.Conn,
+		Conn:              maintenanceClient.Conn,
 		EnableCountBefore: cfg.RetentionPreCount,
 		AdaptiveOptions:   adaptiveOptions,
 		PressureMonitor:   pressureMonitor,
@@ -121,11 +130,11 @@ func Build(ctx context.Context) (*App, error) {
 		MaxTraceRetentionDays: uint32(cfg.MaxTraceRetentionDays),
 	}
 
-	aiRepo := &ai.Repo{Conn: client.Conn}
+	aiRepo := &ai.Repo{Conn: controlClient.Conn}
 	aiService := &ai.Service{Repo: aiRepo}
-	dashboardSettingsRepo := &dashboard.Repo{Conn: client.Conn}
+	dashboardSettingsRepo := &dashboard.Repo{Conn: controlClient.Conn}
 	dashboardSettingsService := &dashboard.Service{Repo: dashboardSettingsRepo}
-	workspaceRepo := &workspace.Repo{Conn: client.Conn}
+	workspaceRepo := &workspace.Repo{Conn: controlClient.Conn}
 	workspaceService := &workspace.Service{Repo: workspaceRepo}
 
 	scheduler := retention.NewScheduler(cleanupService, cfg.CleanupIntervalMinutes)
@@ -144,13 +153,15 @@ func Build(ctx context.Context) (*App, error) {
 		Timeout: time.Duration(cfg.ServiceListTimeoutSec) * time.Second,
 	}
 	authMiddleware := auth.Middleware(auth.MiddlewareOptions{
-		Mode:            cfg.AuthMode,
-		CookieName:      cfg.AuthCookieName,
-		JWTSecret:       []byte(cfg.AuthSecret),
-		Repo:            authRepo,
-		TenantID:        "default",
-		AllowlistPaths:  []string{"/healthz", "/api/auth/login"},
-		SessionDuration: 24 * time.Hour,
+		Mode:              cfg.AuthMode,
+		CookieName:        cfg.AuthCookieName,
+		JWTSecret:         []byte(cfg.AuthSecret),
+		Repo:              authRepo,
+		UserCache:         auth.NewUserCache(time.Minute),
+		TenantID:          "default",
+		AllowlistPaths:    []string{"/healthz", "/api/auth/login"},
+		SessionDuration:   24 * time.Hour,
+		UserLookupTimeout: 750 * time.Millisecond,
 	})
 
 	handler := httpapi.NewRouter(httpapi.RouterConfig{
@@ -173,6 +184,64 @@ func Build(ctx context.Context) (*App, error) {
 	})
 
 	return &App{ListenAddr: cfg.ListenAddr, Handler: handler}, nil
+}
+
+func baseClickHouseOptions(cfg *config.Config) storage.ClientOptions {
+	return storage.ClientOptions{
+		DSN:                           cfg.ClickHouseAddr,
+		User:                          cfg.ClickHouseUser,
+		Password:                      cfg.ClickHousePassword,
+		MaxOpenConns:                  cfg.ClickHouseMaxOpenConns,
+		MaxIdleConns:                  cfg.ClickHouseMaxIdleConns,
+		DialTimeout:                   time.Duration(cfg.ClickHouseDialTimeout) * time.Second,
+		ReadTimeout:                   time.Duration(cfg.ClickHouseReadTimeout) * time.Second,
+		MaxMemoryUsageBytes:           cfg.ClickHouseMaxMemoryMiB * 1024 * 1024,
+		MaxBytesBeforeExternalGroupBy: cfg.ClickHouseExternalGroupByMiB * 1024 * 1024,
+		MaxBytesBeforeExternalSort:    cfg.ClickHouseExternalSortMiB * 1024 * 1024,
+		MaxTempDataOnDiskBytes:        cfg.ClickHouseTempDiskMiB * 1024 * 1024,
+		MaxExecutionTimeSec:           cfg.ClickHouseMaxExecSec,
+		MaxThreads:                    1,
+	}
+}
+
+func telemetryClickHouseOptions(cfg *config.Config) storage.ClientOptions {
+	opts := baseClickHouseOptions(cfg)
+	opts.MaxThreads = 1
+	return opts
+}
+
+func controlClickHouseOptions(cfg *config.Config) storage.ClientOptions {
+	opts := baseClickHouseOptions(cfg)
+	opts.MaxOpenConns = minPositiveInt(cfg.ClickHouseMaxOpenConns, 2)
+	opts.MaxIdleConns = 1
+	opts.ReadTimeout = 5 * time.Second
+	opts.MaxMemoryUsageBytes = minPositiveInt(cfg.ClickHouseMaxMemoryMiB, 64) * 1024 * 1024
+	opts.MaxBytesBeforeExternalGroupBy = 16 * 1024 * 1024
+	opts.MaxBytesBeforeExternalSort = 16 * 1024 * 1024
+	opts.MaxExecutionTimeSec = 3
+	opts.MaxThreads = 1
+	return opts
+}
+
+func maintenanceClickHouseOptions(cfg *config.Config) storage.ClientOptions {
+	opts := baseClickHouseOptions(cfg)
+	opts.MaxOpenConns = 1
+	opts.MaxIdleConns = 1
+	opts.MaxThreads = 1
+	return opts
+}
+
+func minPositiveInt(a, b int) int {
+	if a <= 0 {
+		return b
+	}
+	if b <= 0 {
+		return a
+	}
+	if a < b {
+		return a
+	}
+	return b
 }
 
 func seedDefaultAdmin(ctx context.Context, repo *auth.Repo) error {

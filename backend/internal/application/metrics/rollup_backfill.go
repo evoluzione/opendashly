@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"log"
 	"time"
+
+	"opendashly/backend/internal/infrastructure/storage"
 )
 
 const dashboardRollupBackfillName = "dashboard_v1"
@@ -13,7 +15,8 @@ const dashboardRollupBackfillName = "dashboard_v1"
 // Materialized views cover new writes; this only fills data that existed
 // before the rollup migration was applied.
 func (s *Service) StartRollupBackfill(ctx context.Context, hours int) {
-	if s.Storage == nil || s.Storage.Conn == nil {
+	store := s.backfillStore()
+	if store == nil || store.Conn == nil {
 		return
 	}
 	if hours <= 0 {
@@ -42,7 +45,7 @@ func (s *Service) runRollupBackfill(ctx context.Context, hours int) error {
 		return nil
 	}
 
-	chunkSize := time.Hour
+	chunkSize := 15 * time.Minute
 	for start := lower; start.Before(upper); start = start.Add(chunkSize) {
 		if reason, ok := s.dashboardPressureActive(); ok {
 			return fmt.Errorf("backend pressure active before backfill chunk: %s", reason)
@@ -58,7 +61,7 @@ func (s *Service) runRollupBackfill(ctx context.Context, hours int) error {
 		if done {
 			continue
 		}
-		if err := s.backfillChunkAdaptive(ctx, start, end, 5*time.Minute); err != nil {
+		if err := s.backfillChunkAdaptive(ctx, start, end, time.Minute); err != nil {
 			return err
 		}
 		if err := s.markBackfillChunkCompleted(ctx, start, end); err != nil {
@@ -97,7 +100,7 @@ func (s *Service) backfillChunkAdaptive(ctx context.Context, start, end time.Tim
 }
 
 func (s *Service) rollupMigrationAppliedAt(ctx context.Context) (time.Time, error) {
-	rows, err := s.Storage.Conn.Query(ctx, `
+	rows, err := s.backfillStore().Conn.Query(ctx, `
 		SELECT max(applied_at)
 		FROM telemetry.schema_migrations
 		WHERE name = '014_dashboard_rollups.sql'
@@ -120,7 +123,7 @@ func (s *Service) rollupMigrationAppliedAt(ctx context.Context) (time.Time, erro
 }
 
 func (s *Service) backfillChunkCompleted(ctx context.Context, start, end time.Time) (bool, error) {
-	rows, err := s.Storage.Conn.Query(ctx, `
+	rows, err := s.backfillStore().Conn.Query(ctx, `
 		SELECT count()
 		FROM telemetry.dashboard_rollup_backfill_chunks
 		WHERE rollup = ? AND chunk_start = ? AND chunk_end = ?
@@ -143,7 +146,7 @@ func (s *Service) backfillChunkCompleted(ctx context.Context, start, end time.Ti
 }
 
 func (s *Service) markBackfillChunkCompleted(ctx context.Context, start, end time.Time) error {
-	if err := s.Storage.Conn.Exec(ctx, `
+	if err := s.backfillStore().Conn.Exec(ctx, `
 		INSERT INTO telemetry.dashboard_rollup_backfill_chunks
 			(rollup, chunk_start, chunk_end, completed_at)
 		VALUES (?, ?, ?, ?)
@@ -162,19 +165,26 @@ func (s *Service) backfillChunk(ctx context.Context, start, end time.Time) error
 			formatTime(start),
 			formatTime(end),
 		)
-		if err := s.Storage.Conn.Exec(ctx, stmt); err != nil {
+		if err := s.backfillStore().Conn.Exec(ctx, stmt); err != nil {
 			return fmt.Errorf("clear rollup chunk %s: %w", table, err)
 		}
 	}
 
-	if err := s.Storage.Conn.Exec(ctx, buildTraceServiceBackfillQuery(start, end)); err != nil {
+	if err := s.backfillStore().Conn.Exec(ctx, buildTraceServiceBackfillQuery(start, end)); err != nil {
 		return fmt.Errorf("backfill trace service rollup: %w", err)
 	}
-	if err := s.Storage.Conn.Exec(ctx, buildTraceEndpointBackfillQuery(start, end)); err != nil {
+	if err := s.backfillStore().Conn.Exec(ctx, buildTraceEndpointBackfillQuery(start, end)); err != nil {
 		return fmt.Errorf("backfill trace endpoint rollup: %w", err)
 	}
-	if err := s.Storage.Conn.Exec(ctx, buildLogLevelBackfillQuery(start, end)); err != nil {
+	if err := s.backfillStore().Conn.Exec(ctx, buildLogLevelBackfillQuery(start, end)); err != nil {
 		return fmt.Errorf("backfill log level rollup: %w", err)
 	}
 	return nil
+}
+
+func (s *Service) backfillStore() *storage.Client {
+	if s.MaintenanceStore != nil {
+		return s.MaintenanceStore
+	}
+	return s.Storage
 }

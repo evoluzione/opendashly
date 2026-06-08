@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"encoding/json"
+	"log"
 	"net/http"
 	"strconv"
 	"time"
@@ -227,12 +228,14 @@ func (h *RetentionHandler) ListJobs(w http.ResponseWriter, r *http.Request) {
 
 	jobs, err := h.Repo.ListCleanupJobs(r.Context(), limit)
 	if err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
+		log.Printf("retention.jobs: list failed: %v", err)
+		writeError(w, http.StatusInternalServerError, "Unable to load cleanup jobs")
 		return
 	}
 	total, err := h.Repo.CountCleanupJobs(r.Context())
 	if err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
+		log.Printf("retention.jobs: count failed: %v", err)
+		writeError(w, http.StatusInternalServerError, "Unable to load cleanup jobs")
 		return
 	}
 

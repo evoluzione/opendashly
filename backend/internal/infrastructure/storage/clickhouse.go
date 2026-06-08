@@ -28,6 +28,7 @@ type ClientOptions struct {
 	MaxBytesBeforeExternalSort    int
 	MaxTempDataOnDiskBytes        int
 	MaxExecutionTimeSec           int
+	MaxThreads                    int
 }
 
 // NewClient creates a ClickHouse client from DSN.
@@ -46,6 +47,7 @@ func NewClient(ctx context.Context, dsn string, user string, password string) (*
 		MaxBytesBeforeExternalSort:    64 * 1024 * 1024,
 		MaxTempDataOnDiskBytes:        1024 * 1024 * 1024,
 		MaxExecutionTimeSec:           8,
+		MaxThreads:                    2,
 	})
 }
 
@@ -80,6 +82,9 @@ func NewClientWithOptions(ctx context.Context, opts ClientOptions) (*Client, err
 	if opts.MaxExecutionTimeSec <= 0 {
 		opts.MaxExecutionTimeSec = 8
 	}
+	if opts.MaxThreads <= 0 {
+		opts.MaxThreads = 2
+	}
 
 	conn, err := clickhouse.Open(&clickhouse.Options{
 		Addr: []string{opts.DSN},
@@ -98,6 +103,7 @@ func NewClientWithOptions(ctx context.Context, opts ClientOptions) (*Client, err
 			"max_bytes_before_external_sort":            opts.MaxBytesBeforeExternalSort,
 			"max_temporary_data_on_disk_size_for_query": opts.MaxTempDataOnDiskBytes,
 			"max_execution_time":                        opts.MaxExecutionTimeSec,
+			"max_threads":                               opts.MaxThreads,
 		},
 	})
 	if err != nil {

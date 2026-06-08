@@ -9,9 +9,6 @@ services:
       - CLICKHOUSE_ADDR=clickhouse:9000
       - CLICKHOUSE_USER=otel
       - CLICKHOUSE_PASSWORD=${CLICKHOUSE_PASSWORD}
-      - MACHINE_PROFILE=${MACHINE_PROFILE:-}
-      - MACHINE_RAM_GB=${MACHINE_RAM_GB:-}
-      - MACHINE_CPU_CORES=${MACHINE_CPU_CORES:-}
       - COLLECTOR_HEALTH_URL=http://otel-collector:13133
       - AUTH_MODE=jwt
       - AUTH_SECRET=${AUTH_SECRET}
@@ -66,9 +63,6 @@ services:
       - "13133:13133"
     environment:
       - CLICKHOUSE_PASSWORD=${CLICKHOUSE_PASSWORD}
-      - MACHINE_PROFILE=${MACHINE_PROFILE:-}
-      - MACHINE_RAM_GB=${MACHINE_RAM_GB:-}
-      - MACHINE_CPU_CORES=${MACHINE_CPU_CORES:-}
       - OTEL_FILE_STORAGE_DIR=${OTEL_FILE_STORAGE_DIR:-/var/lib/otelcol/queue}
     depends_on:
       clickhouse:

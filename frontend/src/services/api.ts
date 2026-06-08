@@ -93,7 +93,10 @@ async function toApiError(response: Response, path: string, method: string): Pro
         }
       }
     } catch {
-      // Keep default message if response body is not valid JSON.
+      const plain = bodyText.trim();
+      if (plain) {
+        message = plain;
+      }
     }
   }
 

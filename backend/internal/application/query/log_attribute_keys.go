@@ -47,7 +47,7 @@ func buildLogAttributeKeysQuery(search string) string {
 		escaped := querysql.EscapeLiteral(search)
 		query += " AND key ILIKE '%" + escaped + "%'"
 	}
-	query += " ORDER BY key LIMIT 100"
+	query += " ORDER BY key LIMIT 100 SETTINGS max_execution_time = 3, max_threads = 1, max_memory_usage = 33554432, max_bytes_before_external_sort = 8388608"
 	return query
 }
 
@@ -69,12 +69,28 @@ func (s *Service) GetLogAttributeKeys(ctx context.Context, search string) ([]str
 	if keys, ok := s.getAttributesFromCache(search); ok {
 		return keys, nil
 	}
+	release, ok := s.Limiter.TryAcquire()
+	if !ok {
+		filtered := fallbackLogAttributeKeys(search)
+		s.setAttributesCache(search, filtered)
+		return filtered, nil
+	}
+	defer release()
 
 	query := buildLogAttributeKeysQuery(search)
 
 	rows, err := s.Storage.Conn.Query(ctx, query)
 	if err != nil {
-		return nil, fmt.Errorf("query attributes: %w", err)
+		filtered := fallbackLogAttributeKeys(search)
+		s.setAttributesCache(search, filtered)
+		lower := strings.ToLower(err.Error())
+		if strings.Contains(lower, "memory limit exceeded") ||
+			strings.Contains(lower, "overcommittracker") ||
+			strings.Contains(lower, "timeout") ||
+			strings.Contains(lower, "deadline exceeded") {
+			return filtered, nil
+		}
+		return filtered, fmt.Errorf("query attributes: %w", err)
 	}
 	defer rows.Close()
 

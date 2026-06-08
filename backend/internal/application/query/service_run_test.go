@@ -2,10 +2,12 @@ package query
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"testing"
 	"time"
 
+	"opendashly/backend/internal/application/pressure"
 	"opendashly/backend/internal/infrastructure/storage"
 
 	"github.com/ClickHouse/clickhouse-go/v2/lib/driver"
@@ -93,6 +95,34 @@ func TestRun_StorageNilReturnsEmptyResultWithDefaults(t *testing.T) {
 	}
 	if res.Summary.LogCount != 0 || res.Summary.TraceCount != 0 {
 		t.Fatalf("expected empty summary, got %#v", res.Summary)
+	}
+}
+
+func TestRun_ReturnsBusyWithoutStartingSignalQueriesWhenLimiterIsSaturated(t *testing.T) {
+	limiter := pressure.NewLimiter(1)
+	release, ok := limiter.TryAcquire()
+	if !ok {
+		t.Fatal("expected limiter setup acquire to succeed")
+	}
+	defer release()
+
+	fake := &fakeSignalRunner{}
+	svc := &Service{
+		Storage:      &storage.Client{},
+		Limiter:      limiter,
+		signalRunner: fake,
+	}
+
+	_, err := svc.Run(context.Background(), QueryRequest{
+		Signals:   []string{"logs"},
+		TimeRange: TimeRange{From: time.Now().Add(-time.Hour), To: time.Now()},
+	})
+
+	if !errors.Is(err, pressure.ErrBusy) {
+		t.Fatalf("expected ErrBusy, got %v", err)
+	}
+	if fake.called {
+		t.Fatal("signal runner should not start when limiter is saturated")
 	}
 }
 

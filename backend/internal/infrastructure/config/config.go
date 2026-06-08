@@ -8,12 +8,14 @@ import (
 )
 
 // Config holds runtime configuration for the API.
+//
+// The load-sensitive knobs below (DashboardQueryParallelism,
+// TelemetryQueryConcurrency, ClickHouseMaxMemoryMiB and its spill thresholds)
+// are seeded here at their safe floor and then owned at runtime by the adaptive
+// tuning controller. Every other knob is a single resilient default — there are
+// no longer small/standard/big machine profiles; the system discovers its own
+// ceiling under real pressure.
 type Config struct {
-	MachineProfile               string
-	MachineRAMGB                 int
-	MachineCPUCores              int
-	MachineAutoTuning            bool
-	ResolvedMachineProfile       string
 	RetentionAdaptiveEnabled     bool
 	MaxLogRetentionDays          int
 	MaxTraceRetentionDays        int
@@ -44,6 +46,7 @@ type Config struct {
 	DashboardStaleCacheTTLSec    int
 	DashboardRequestTimeoutSec   int
 	DashboardQueryParallelism    int
+	TelemetryQueryConcurrency    int
 	DashboardHalveOnOOM          bool
 	DashboardRawFallback         bool
 	DashboardPressureCooldownSec int
@@ -62,184 +65,21 @@ type Config struct {
 	DebugQuery                   bool
 }
 
-type machinePreset struct {
-	ServiceListTimeoutSec        int
-	CleanupIntervalMinutes       int
-	RetentionAdaptiveEnabled     bool
-	MaxLogRetentionDays          int
-	MaxTraceRetentionDays        int
-	RetentionStepDownDays        int
-	RetentionMaxLevel            int
-	RetentionMinTraceHours       int
-	RetentionMinLogHours         int
-	RetentionPressureCooldownSec int
-	RetentionPressureMinSignals  int
-	RetentionPressureWindowSec   int
-	RetentionPressureErrorCount  int
-	RetentionPressureMemPct      int
-	RetentionPressureMemBudgetMB int
-	RetentionPressureDiskPct     int
-	RetentionPreCount            bool
-	ClickHouseMaxMemoryMiB       int
-	ClickHouseExternalGroupByMiB int
-	ClickHouseExternalSortMiB    int
-	ClickHouseTempDiskMiB        int
-	ClickHouseMaxExecSec         int
-	ClickHouseMaxOpenConns       int
-	ClickHouseMaxIdleConns       int
-	ClickHouseDialTimeout        int
-	ClickHouseReadTimeout        int
-	DashboardFreshCacheTTLSec    int
-	DashboardStaleCacheTTLSec    int
-	DashboardRequestTimeoutSec   int
-	DashboardQueryParallelism    int
-	DashboardHalveOnOOM          bool
-	DashboardRawFallback         bool
-	DashboardPressureCooldownSec int
-	DashboardLastGoodTTLSec      int
-	DashboardRollupBackfill      bool
-	DashboardRollupBackfillHours int
-}
-
-var machinePresets = map[string]machinePreset{
-	"small": {
-		ServiceListTimeoutSec:        25,
-		CleanupIntervalMinutes:       1440,
-		RetentionAdaptiveEnabled:     true,
-		MaxLogRetentionDays:          7,
-		MaxTraceRetentionDays:        3,
-		RetentionStepDownDays:        2,
-		RetentionMaxLevel:            2,
-		RetentionMinTraceHours:       24,
-		RetentionMinLogHours:         24,
-		RetentionPressureCooldownSec: 300,
-		RetentionPressureMinSignals:  2,
-		RetentionPressureWindowSec:   300,
-		RetentionPressureErrorCount:  3,
-		RetentionPressureMemPct:      85,
-		RetentionPressureMemBudgetMB: 160,
-		RetentionPressureDiskPct:     90,
-		RetentionPreCount:            false,
-		ClickHouseMaxMemoryMiB:       96,
-		ClickHouseExternalGroupByMiB: 24,
-		ClickHouseExternalSortMiB:    24,
-		ClickHouseTempDiskMiB:        512,
-		ClickHouseMaxExecSec:         25,
-		ClickHouseMaxOpenConns:       2,
-		ClickHouseMaxIdleConns:       1,
-		ClickHouseDialTimeout:        5,
-		ClickHouseReadTimeout:        40,
-		DashboardFreshCacheTTLSec:    30,
-		DashboardStaleCacheTTLSec:    900,
-		DashboardRequestTimeoutSec:   25,
-		DashboardQueryParallelism:    1,
-		DashboardHalveOnOOM:          true,
-		DashboardRawFallback:         false,
-		DashboardPressureCooldownSec: 60,
-		DashboardLastGoodTTLSec:      1800,
-		DashboardRollupBackfill:      true,
-		DashboardRollupBackfillHours: 48,
-	},
-	"standard": {
-		ServiceListTimeoutSec:        20,
-		CleanupIntervalMinutes:       720,
-		RetentionAdaptiveEnabled:     true,
-		MaxLogRetentionDays:          14,
-		MaxTraceRetentionDays:        7,
-		RetentionStepDownDays:        2,
-		RetentionMaxLevel:            2,
-		RetentionMinTraceHours:       24,
-		RetentionMinLogHours:         24,
-		RetentionPressureCooldownSec: 300,
-		RetentionPressureMinSignals:  2,
-		RetentionPressureWindowSec:   300,
-		RetentionPressureErrorCount:  4,
-		RetentionPressureMemPct:      85,
-		RetentionPressureMemBudgetMB: 256,
-		RetentionPressureDiskPct:     90,
-		RetentionPreCount:            false,
-		ClickHouseMaxMemoryMiB:       160,
-		ClickHouseExternalGroupByMiB: 48,
-		ClickHouseExternalSortMiB:    48,
-		ClickHouseTempDiskMiB:        768,
-		ClickHouseMaxExecSec:         20,
-		ClickHouseMaxOpenConns:       4,
-		ClickHouseMaxIdleConns:       2,
-		ClickHouseDialTimeout:        5,
-		ClickHouseReadTimeout:        30,
-		DashboardFreshCacheTTLSec:    30,
-		DashboardStaleCacheTTLSec:    900,
-		DashboardRequestTimeoutSec:   20,
-		DashboardQueryParallelism:    1,
-		DashboardHalveOnOOM:          true,
-		DashboardRawFallback:         false,
-		DashboardPressureCooldownSec: 60,
-		DashboardLastGoodTTLSec:      1800,
-		DashboardRollupBackfill:      true,
-		DashboardRollupBackfillHours: 48,
-	},
-	"big": {
-		ServiceListTimeoutSec:        15,
-		CleanupIntervalMinutes:       360,
-		RetentionAdaptiveEnabled:     true,
-		MaxLogRetentionDays:          30,
-		MaxTraceRetentionDays:        15,
-		RetentionStepDownDays:        2,
-		RetentionMaxLevel:            2,
-		RetentionMinTraceHours:       24,
-		RetentionMinLogHours:         24,
-		RetentionPressureCooldownSec: 300,
-		RetentionPressureMinSignals:  2,
-		RetentionPressureWindowSec:   300,
-		RetentionPressureErrorCount:  6,
-		RetentionPressureMemPct:      85,
-		RetentionPressureMemBudgetMB: 384,
-		RetentionPressureDiskPct:     90,
-		RetentionPreCount:            false,
-		ClickHouseMaxMemoryMiB:       256,
-		ClickHouseExternalGroupByMiB: 64,
-		ClickHouseExternalSortMiB:    64,
-		ClickHouseTempDiskMiB:        1024,
-		ClickHouseMaxExecSec:         15,
-		ClickHouseMaxOpenConns:       8,
-		ClickHouseMaxIdleConns:       4,
-		ClickHouseDialTimeout:        5,
-		ClickHouseReadTimeout:        20,
-		DashboardFreshCacheTTLSec:    30,
-		DashboardStaleCacheTTLSec:    900,
-		DashboardRequestTimeoutSec:   15,
-		DashboardQueryParallelism:    2,
-		DashboardHalveOnOOM:          true,
-		DashboardRawFallback:         false,
-		DashboardPressureCooldownSec: 60,
-		DashboardLastGoodTTLSec:      1800,
-		DashboardRollupBackfill:      true,
-		DashboardRollupBackfillHours: 48,
-	},
-}
-
 // Load reads configuration from environment variables.
 func Load() (*Config, error) {
 	cfg := &Config{
-		MachineProfile:          strings.ToLower(strings.TrimSpace(os.Getenv("MACHINE_PROFILE"))),
-		MachineRAMGB:            getEnvInt("MACHINE_RAM_GB", 0),
-		MachineCPUCores:         getEnvInt("MACHINE_CPU_CORES", 0),
-		ClickHouseAddr:          os.Getenv("CLICKHOUSE_ADDR"),
-		ClickHouseUser:          os.Getenv("CLICKHOUSE_USER"),
-		ClickHousePassword:      os.Getenv("CLICKHOUSE_PASSWORD"),
-		ClickHouseDialTimeout:   5,
-		DashboardHalveOnOOM:     true,
-		DashboardRollupBackfill: true,
-		CollectorHealthURL:      os.Getenv("COLLECTOR_HEALTH_URL"),
-		ListenAddr:              os.Getenv("API_LISTEN_ADDR"),
-		AuthMode:                os.Getenv("AUTH_MODE"),
-		AuthSecret:              os.Getenv("AUTH_SECRET"),
-		AuthCookieName:          os.Getenv("AUTH_COOKIE_NAME"),
-		RetentionPreCount:       false,
-		CORSAllowedOrigins:      getEnvCSV("CORS_ALLOWED_ORIGINS", []string{"http://localhost:5173"}),
-		DebugQuery:              os.Getenv("VITE_DEBUG_QUERY") == "true",
+		ClickHouseAddr:     os.Getenv("CLICKHOUSE_ADDR"),
+		ClickHouseUser:     os.Getenv("CLICKHOUSE_USER"),
+		ClickHousePassword: os.Getenv("CLICKHOUSE_PASSWORD"),
+		CollectorHealthURL: os.Getenv("COLLECTOR_HEALTH_URL"),
+		ListenAddr:         os.Getenv("API_LISTEN_ADDR"),
+		AuthMode:           os.Getenv("AUTH_MODE"),
+		AuthSecret:         os.Getenv("AUTH_SECRET"),
+		AuthCookieName:     os.Getenv("AUTH_COOKIE_NAME"),
+		CORSAllowedOrigins: getEnvCSV("CORS_ALLOWED_ORIGINS", []string{"http://localhost:5173"}),
+		DebugQuery:         os.Getenv("VITE_DEBUG_QUERY") == "true",
 	}
-	cfg.applyMachineTuning()
+	cfg.applyDefaults()
 	if cfg.ClickHouseAddr == "" {
 		return nil, fmt.Errorf("CLICKHOUSE_ADDR is required")
 	}
@@ -261,117 +101,59 @@ func Load() (*Config, error) {
 	return cfg, nil
 }
 
-func (cfg *Config) applyMachineTuning() {
-	profile := resolveMachineProfile(cfg.MachineProfile, cfg.MachineRAMGB, cfg.MachineCPUCores)
+// applyDefaults seeds the single resilient default for every tuning knob. There
+// are no machine profiles: knobs that are not safe to vary live (timeouts,
+// pools, retention caps, pressure thresholds) get one conservative value, while
+// the load-sensitive knobs (DashboardQueryParallelism, TelemetryQueryConcurrency,
+// ClickHouseMaxMemoryMiB and its spill thresholds) are seeded at their floor and
+// then driven at runtime by the adaptive tuning controller.
+func (cfg *Config) applyDefaults() {
+	// Static, resilient defaults (set once, never varied at runtime).
+	cfg.ServiceListTimeoutSec = 20
+	cfg.CleanupIntervalMinutes = 720
+	cfg.RetentionAdaptiveEnabled = true
+	// Generous retention caps: adaptive retention + disk-pressure step-down pull
+	// these down only under real pressure, so we never pre-emptively drop data.
+	cfg.MaxLogRetentionDays = 30
+	cfg.MaxTraceRetentionDays = 15
+	cfg.RetentionStepDownDays = 2
+	cfg.RetentionMaxLevel = 2
+	cfg.RetentionMinTraceHours = 24
+	cfg.RetentionMinLogHours = 24
+	cfg.RetentionPressureCooldownSec = 300
+	cfg.RetentionPressureMinSignals = 2
+	cfg.RetentionPressureWindowSec = 300
+	cfg.RetentionPressureErrorCount = 4
+	cfg.RetentionPressureMemPct = 85
+	cfg.RetentionPressureMemBudgetMB = 256
+	cfg.RetentionPressureDiskPct = 90
+	cfg.RetentionPreCount = false
+	cfg.ClickHouseTempDiskMiB = 768
+	cfg.ClickHouseMaxExecSec = 20
+	cfg.ClickHouseMaxOpenConns = 4
+	cfg.ClickHouseMaxIdleConns = 2
+	cfg.ClickHouseDialTimeout = 5
+	cfg.ClickHouseReadTimeout = 30
+	cfg.DashboardFreshCacheTTLSec = 30
+	cfg.DashboardStaleCacheTTLSec = 900
+	cfg.DashboardRequestTimeoutSec = 20
+	cfg.DashboardHalveOnOOM = true
+	cfg.DashboardRawFallback = false
+	cfg.DashboardPressureCooldownSec = 60
+	cfg.DashboardLastGoodTTLSec = 1800
+	cfg.DashboardRollupBackfill = true
+	cfg.DashboardRollupBackfillHours = 48
 
-	preset, ok := machinePresets[profile]
-	if !ok {
-		preset = machinePresets["standard"]
-		profile = "standard"
-	}
-
-	cfg.MachineAutoTuning = true
-	cfg.ResolvedMachineProfile = profile
-
-	// Auto-tuning intentionally overrides low-level manual knobs when active.
-	cfg.ServiceListTimeoutSec = preset.ServiceListTimeoutSec
-	cfg.CleanupIntervalMinutes = preset.CleanupIntervalMinutes
-	cfg.RetentionAdaptiveEnabled = preset.RetentionAdaptiveEnabled
-	cfg.MaxLogRetentionDays = preset.MaxLogRetentionDays
-	cfg.MaxTraceRetentionDays = preset.MaxTraceRetentionDays
-	cfg.RetentionStepDownDays = preset.RetentionStepDownDays
-	cfg.RetentionMaxLevel = preset.RetentionMaxLevel
-	cfg.RetentionMinTraceHours = preset.RetentionMinTraceHours
-	cfg.RetentionMinLogHours = preset.RetentionMinLogHours
-	cfg.RetentionPressureCooldownSec = preset.RetentionPressureCooldownSec
-	cfg.RetentionPressureMinSignals = preset.RetentionPressureMinSignals
-	cfg.RetentionPressureWindowSec = preset.RetentionPressureWindowSec
-	cfg.RetentionPressureErrorCount = preset.RetentionPressureErrorCount
-	cfg.RetentionPressureMemPct = preset.RetentionPressureMemPct
-	cfg.RetentionPressureMemBudgetMB = preset.RetentionPressureMemBudgetMB
-	cfg.RetentionPressureDiskPct = preset.RetentionPressureDiskPct
-	cfg.RetentionPreCount = preset.RetentionPreCount
-	cfg.ClickHouseMaxMemoryMiB = preset.ClickHouseMaxMemoryMiB
-	cfg.ClickHouseExternalGroupByMiB = preset.ClickHouseExternalGroupByMiB
-	cfg.ClickHouseExternalSortMiB = preset.ClickHouseExternalSortMiB
-	cfg.ClickHouseTempDiskMiB = preset.ClickHouseTempDiskMiB
-	cfg.ClickHouseMaxExecSec = preset.ClickHouseMaxExecSec
-	cfg.ClickHouseMaxOpenConns = preset.ClickHouseMaxOpenConns
-	cfg.ClickHouseMaxIdleConns = preset.ClickHouseMaxIdleConns
-	cfg.ClickHouseDialTimeout = preset.ClickHouseDialTimeout
-	cfg.ClickHouseReadTimeout = preset.ClickHouseReadTimeout
-	cfg.DashboardFreshCacheTTLSec = preset.DashboardFreshCacheTTLSec
-	cfg.DashboardStaleCacheTTLSec = preset.DashboardStaleCacheTTLSec
-	cfg.DashboardRequestTimeoutSec = preset.DashboardRequestTimeoutSec
-	cfg.DashboardQueryParallelism = preset.DashboardQueryParallelism
-	cfg.DashboardHalveOnOOM = preset.DashboardHalveOnOOM
-	cfg.DashboardRawFallback = preset.DashboardRawFallback
-	cfg.DashboardPressureCooldownSec = preset.DashboardPressureCooldownSec
-	cfg.DashboardLastGoodTTLSec = preset.DashboardLastGoodTTLSec
-	cfg.DashboardRollupBackfill = preset.DashboardRollupBackfill
-	cfg.DashboardRollupBackfillHours = preset.DashboardRollupBackfillHours
-}
-
-func resolveMachineProfile(profile string, ramGB int, cpuCores int) string {
-	if _, ok := machinePresets[profile]; ok {
-		return profile
-	}
-
-	if ramGB <= 0 && cpuCores <= 0 {
-		return "standard"
-	}
-
-	classByRAM := resourceClassFromRAM(ramGB)
-	classByCPU := resourceClassFromCPU(cpuCores)
-	class := minPositiveClass(classByRAM, classByCPU)
-
-	switch class {
-	case 1:
-		return "small"
-	case 2:
-		return "standard"
-	default:
-		return "big"
-	}
-}
-
-func resourceClassFromRAM(ramGB int) int {
-	if ramGB <= 0 {
-		return 0
-	}
-	if ramGB <= 2 {
-		return 1
-	}
-	if ramGB <= 4 {
-		return 2
-	}
-	return 3
-}
-
-func resourceClassFromCPU(cpuCores int) int {
-	if cpuCores <= 0 {
-		return 0
-	}
-	if cpuCores <= 1 {
-		return 1
-	}
-	if cpuCores <= 2 {
-		return 2
-	}
-	return 3
-}
-
-func minPositiveClass(a int, b int) int {
-	if a == 0 {
-		return b
-	}
-	if b == 0 {
-		return a
-	}
-	if a < b {
-		return a
-	}
-	return b
+	// Load-sensitive knobs: seeded at the controller floor. The tuning
+	// controller raises them while the backend is calm and cuts them under
+	// pressure. The values here are the connection-level safety floor used
+	// before the controller's first tick and as a fallback for non-dashboard
+	// queries.
+	cfg.DashboardQueryParallelism = 1
+	cfg.TelemetryQueryConcurrency = 1
+	cfg.ClickHouseMaxMemoryMiB = 64
+	cfg.ClickHouseExternalGroupByMiB = 16
+	cfg.ClickHouseExternalSortMiB = 16
 }
 
 func getEnvInt(key string, defaultVal int) int {

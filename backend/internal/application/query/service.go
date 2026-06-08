@@ -3,6 +3,8 @@ package query
 import (
 	"context"
 	"log"
+
+	"opendashly/backend/internal/application/pressure"
 )
 
 // Run executes an ad-hoc query and returns results.
@@ -22,6 +24,11 @@ func (s *Service) Run(ctx context.Context, req QueryRequest) (*QueryRunResult, e
 	if err != nil {
 		return nil, err
 	}
+	release, ok := s.Limiter.TryAcquire()
+	if !ok {
+		return nil, pressure.ErrBusy
+	}
+	defer release()
 	if s.Debug {
 		log.Printf("DEBUG: executing logsQuery: %s", queries.logs)
 		log.Printf("query.service.run built queries: logs=%q traces=%q", queries.logs, queries.traces)

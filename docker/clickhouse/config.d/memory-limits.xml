@@ -11,11 +11,18 @@
     <number_of_free_entries_in_pool_to_execute_optimize_entire_partition>4</number_of_free_entries_in_pool_to_execute_optimize_entire_partition>
   </merge_tree>
 
+  <!--
+    Server total memory auto-scales via max_server_memory_usage_to_ram_ratio
+    above, so no machine profile is needed here. The per-query defaults below are
+    only a safety floor for queries that arrive WITHOUT explicit SETTINGS; the
+    backend sends its own adaptive per-query budget (see the tuning controller),
+    so these match the backend's safe floor (64 MiB) rather than any tier.
+  -->
   <profiles>
     <default>
-      <max_memory_usage>157286400</max_memory_usage>
-      <max_bytes_before_external_group_by>33554432</max_bytes_before_external_group_by>
-      <max_bytes_before_external_sort>33554432</max_bytes_before_external_sort>
+      <max_memory_usage>67108864</max_memory_usage>
+      <max_bytes_before_external_group_by>16777216</max_bytes_before_external_group_by>
+      <max_bytes_before_external_sort>16777216</max_bytes_before_external_sort>
       <max_temporary_data_on_disk_size_for_query>1073741824</max_temporary_data_on_disk_size_for_query>
       <max_execution_time>8</max_execution_time>
       <max_threads>2</max_threads>

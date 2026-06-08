@@ -46,10 +46,7 @@ func BuildTracesQuery(filters map[string]string, filterList []FilterItem, from, 
 			query += " OFFSET " + strconv.Itoa(offset)
 		}
 	}
-	// GROUP BY TraceId on multi-day windows can build a huge in-memory state
-	// (one entry per distinct trace, each carrying argMin strings). Force spill
-	// to disk early so we don't trip the per-query memory limit.
-	query += " SETTINGS max_bytes_before_external_group_by = 33554432, max_bytes_before_external_sort = 33554432"
+	query += rawTelemetryQuerySettings
 	return query
 }
 
@@ -70,7 +67,7 @@ func BuildTracesCountQuery(filters map[string]string, filterList []FilterItem, f
 	case "without_errors":
 		query += " HAVING errorCount = 0"
 	}
-	return "SELECT count() FROM (" + query + ") SETTINGS max_bytes_before_external_group_by = 33554432"
+	return "SELECT count() FROM (" + query + ")" + rawTelemetryQuerySettings
 }
 
 func extractTraceErrorScope(filterList []FilterItem) (string, []FilterItem) {

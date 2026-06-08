@@ -76,6 +76,29 @@ func endpointSpanFilter() string {
 	return "(startsWith(SpanName, 'GET ') OR startsWith(SpanName, 'POST ') OR startsWith(SpanName, 'PUT ') OR startsWith(SpanName, 'PATCH ') OR startsWith(SpanName, 'DELETE ') OR startsWith(SpanName, 'OPTIONS ') OR startsWith(SpanName, 'HEAD '))"
 }
 
+func endpointLatencyBucketCountsExpression() string {
+	return `[
+						toUInt64(sum(latency_0_100)),
+						toUInt64(sum(latency_100_250)),
+						toUInt64(sum(latency_250_500)),
+						toUInt64(sum(latency_500_1000)),
+						toUInt64(sum(latency_1000_2000)),
+						toUInt64(sum(latency_2000_5000)),
+						toUInt64(sum(latency_5000_10000)),
+						toUInt64(sum(latency_10000_inf))
+					]`
+}
+
+func endpointLatencyBucketValuesExpression() string {
+	return "[toFloat64(100), toFloat64(250), toFloat64(500), toFloat64(1000), toFloat64(2000), toFloat64(5000), toFloat64(10000), toFloat64(10000)]"
+}
+
+func bucketPercentileExpression(factor string) string {
+	target := fmt.Sprintf("toUInt64(ceil(toFloat64(bucket_cnt) * %s))", factor)
+	index := fmt.Sprintf("arrayFirstIndex(x -> x >= %s, cumulative_counts)", target)
+	return fmt.Sprintf("if(bucket_cnt > 0, bucket_values[if(%s = 0, length(bucket_values), %s)], 0)", index, index)
+}
+
 func timeBucketInterval(from, to time.Time) string {
 	duration := to.Sub(from)
 	interval := "1 MINUTE"
@@ -121,35 +144,48 @@ func BuildLatencyDistributionQuery(from, to time.Time, serviceName string) strin
 }
 
 // BuildSlowestEndpointsQuery builds a query to get the slowest endpoints by P95.
-// quantileTDigest is memory-bounded (O(1) state per group) so it survives high
-// SpanName cardinality without exploding the aggregation hash table.
+// It uses fixed latency buckets to avoid merging high-cardinality TDigest states.
 func BuildSlowestEndpointsQuery(from, to time.Time, serviceName string, limit int) string {
+	p50Expr := bucketPercentileExpression("0.50")
+	p95Expr := bucketPercentileExpression("0.95")
+	p99Expr := bucketPercentileExpression("0.99")
+
 	return fmt.Sprintf(`
-		SELECT
-			endpoint,
-			service,
-			if(cnt > 0, duration_sum_ms / cnt, 0) AS avg_ms,
-			toFloat64(qs[1]) AS p50,
-			toFloat64(qs[2]) AS p95,
-			toFloat64(qs[3]) AS p99,
-			cnt
-		FROM (
 			SELECT
-				Endpoint AS endpoint,
-				ServiceName AS service,
-				sum(duration_sum_ms) AS duration_sum_ms,
-				toUInt64(sum(request_count)) AS cnt,
-				quantilesTDigestMerge(0.5, 0.95, 0.99)(duration_quantiles_state) AS qs
-			FROM %s
-			WHERE time_bucket >= '%s' AND time_bucket <= '%s'
-				%s
-			GROUP BY endpoint, service
-		)
-		WHERE cnt >= 5
-		ORDER BY p95 DESC
-		LIMIT %d
-		%s
-		`, traceEndpointRollupTable, formatTime(from), formatTime(to), serviceFilter(serviceName), limit, querySettings)
+				endpoint,
+				service,
+				if(cnt > 0, duration_sum_ms / cnt, 0) AS avg_ms,
+				%s AS p50,
+				%s AS p95,
+				%s AS p99,
+				cnt
+			FROM (
+				SELECT
+					endpoint,
+					service,
+					duration_sum_ms,
+					cnt,
+					toUInt64(arraySum(bucket_counts)) AS bucket_cnt,
+					arrayCumSum(bucket_counts) AS cumulative_counts,
+					%s AS bucket_values
+				FROM (
+					SELECT
+						Endpoint AS endpoint,
+						ServiceName AS service,
+						sum(duration_sum_ms) AS duration_sum_ms,
+						toUInt64(sum(request_count)) AS cnt,
+						%s AS bucket_counts
+					FROM %s
+					WHERE time_bucket >= '%s' AND time_bucket <= '%s'
+						%s
+					GROUP BY endpoint, service
+				)
+			)
+			WHERE cnt >= 5
+			ORDER BY p95 DESC
+			LIMIT %d
+			%s
+			`, p50Expr, p95Expr, p99Expr, endpointLatencyBucketValuesExpression(), endpointLatencyBucketCountsExpression(), traceEndpointRollupTable, formatTime(from), formatTime(to), serviceFilter(serviceName), limit, querySettings)
 }
 
 // BuildErrorHotspotsQuery builds a query to get endpoints with highest error rates.
@@ -410,16 +446,40 @@ func buildTraceServiceBackfillQuery(from, to time.Time) string {
 
 func buildTraceEndpointBackfillQuery(from, to time.Time) string {
 	return fmt.Sprintf(`
-		INSERT INTO %s
-		SELECT
-			time_bucket,
-			ServiceName,
-			Endpoint,
-			count() AS request_count,
-			countIf(status_code IN ('Error', '2', 'STATUS_CODE_ERROR')) AS error_count,
-			sum(duration_ms) AS duration_sum_ms,
-			quantilesTDigestState(0.5, 0.95, 0.99)(duration_ms) AS duration_quantiles_state
-		FROM (
+			INSERT INTO %s (
+				time_bucket,
+				ServiceName,
+				Endpoint,
+				request_count,
+				error_count,
+				latency_0_100,
+				latency_100_250,
+				latency_250_500,
+				latency_500_1000,
+				latency_1000_2000,
+				latency_2000_5000,
+				latency_5000_10000,
+				latency_10000_inf,
+				duration_sum_ms,
+				duration_quantiles_state
+			)
+			SELECT
+				time_bucket,
+				ServiceName,
+				Endpoint,
+				count() AS request_count,
+				countIf(status_code IN ('Error', '2', 'STATUS_CODE_ERROR')) AS error_count,
+				countIf(duration_ms <= 100) AS latency_0_100,
+				countIf(duration_ms > 100 AND duration_ms <= 250) AS latency_100_250,
+				countIf(duration_ms > 250 AND duration_ms <= 500) AS latency_250_500,
+				countIf(duration_ms > 500 AND duration_ms <= 1000) AS latency_500_1000,
+				countIf(duration_ms > 1000 AND duration_ms <= 2000) AS latency_1000_2000,
+				countIf(duration_ms > 2000 AND duration_ms <= 5000) AS latency_2000_5000,
+				countIf(duration_ms > 5000 AND duration_ms <= 10000) AS latency_5000_10000,
+				countIf(duration_ms > 10000) AS latency_10000_inf,
+				sum(duration_ms) AS duration_sum_ms,
+				quantilesTDigestState(0.5, 0.95, 0.99)(duration_ms) AS duration_quantiles_state
+			FROM (
 			SELECT
 				toStartOfMinute(toDateTime(Timestamp)) AS time_bucket,
 				ServiceName,
