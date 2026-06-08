@@ -173,15 +173,7 @@ The production stack uses prebuilt images from GHCR — no repository clone need
 
 ### Deploy
 
-**1. Pick machine sizing input.** Create a `.env` next to `docker-compose.prod.yml` and set only secrets, CORS, plus machine sizing.
-
-| Profile | VM size | Use when |
-|---|---|---|
-| Small | 1 vCPU / 2 GB RAM | Very low traffic, test or small internal setup |
-| Standard | 2 vCPU / 4 GB RAM | Small production baseline |
-| Big | 4 vCPU / 8 GB RAM | Higher telemetry throughput |
-
-Use one of these minimal `.env` patterns:
+**1. Set secrets and CORS.** Create a `.env` next to `docker-compose.prod.yml`. There are **no machine profiles to choose** — the stack self-tunes (see below), so you only set secrets, CORS, and optional ports.
 
 ```bash
 # Required secrets
@@ -189,53 +181,20 @@ AUTH_SECRET=replace-with-32-plus-random-chars
 CLICKHOUSE_PASSWORD=replace-with-strong-password
 CORS_ALLOWED_ORIGINS=http://your-host:5173
 
-# Option A: preset profile
-MACHINE_PROFILE=standard
-
 # Optional ports
 CLICKHOUSE_HTTP_PORT=8123
 CLICKHOUSE_TCP_PORT=9000
 ```
 
-```bash
-# Required secrets
-AUTH_SECRET=replace-with-32-plus-random-chars
-CLICKHOUSE_PASSWORD=replace-with-strong-password
-CORS_ALLOWED_ORIGINS=http://your-host:5173
+**Self-tuning instead of profiles.** The old `small`/`standard`/`big` profiles are gone. Each component adapts on its own and stays as resilient as possible:
 
-# Option B: explicit machine hints
-MACHINE_RAM_GB=4
-MACHINE_CPU_CORES=2
+- **Backend** — starts its load-sensitive knobs (dashboard query parallelism, telemetry concurrency, per-query ClickHouse memory) at a safe floor that runs on the weakest VM, then adapts them at runtime with an AIMD controller: it grows them by one step after sustained calm and cuts them sharply the moment it detects pressure (memory, ClickHouse disk, or recoverable OOM/timeout errors). No sizing input required — it discovers its own ceiling.
+- **OTel collector** — sizes its `memory_limiter` at boot from the container's cgroup memory limit (the collector's `mem_limit` in compose), falling back to host RAM. Set `OTEL_MEMORY_LIMIT_MIB` only as an explicit escape hatch.
+- **ClickHouse** — scales server memory from available RAM via `max_server_memory_usage_to_ram_ratio`; per-query budgets come from the backend's adaptive settings.
 
-# Optional ports
-CLICKHOUSE_HTTP_PORT=8123
-CLICKHOUSE_TCP_PORT=9000
-```
+To constrain a component on a small host, set its container `mem_limit` in compose — the collector and ClickHouse adapt to whatever they're given. `CLICKHOUSE_MEM_LIMIT` / `CLICKHOUSE_MEMSWAP_LIMIT` in `docker-compose.prod.yml` control the ClickHouse container/server budget; raise them if the host has spare RAM. Heavy telemetry queries stay isolated so the UI remains navigable under pressure.
 
-Opendashly always applies automatic backend and collector tuning from machine sizing. Manual low-level tuning overrides are not supported.
-
-Derived profile mapping:
-
-| Input | Resolved profile |
-|---|---|
-| `MACHINE_PROFILE=small` | Small |
-| `MACHINE_PROFILE=standard` | Standard |
-| `MACHINE_PROFILE=big` | Big |
-| `MACHINE_RAM_GB<=2` or `MACHINE_CPU_CORES<=1` | Small |
-| `MACHINE_RAM_GB<=4` or `MACHINE_CPU_CORES<=2` | Standard |
-| Higher resources | Big |
-
-Auto-tuned baseline (selected values):
-
-| Profile | Service timeout | CH query memory | Telemetry concurrency | Dashboard timeout | OTEL memory limit |
-|---|---:|---:|---:|---:|---:|
-| Small | 25s | 96 MiB | 1 | 25s | 96 MiB |
-| Standard | 20s | 160 MiB | 2 | 20s | 170 MiB |
-| Big | 15s | 256 MiB | 3 | 15s | 300 MiB |
-
-`CLICKHOUSE_MEM_LIMIT` / `CLICKHOUSE_MEMSWAP_LIMIT` in `docker-compose.prod.yml` control the ClickHouse container/server budget. If the host has enough RAM and ClickHouse reports `maximum: 1.20 GiB`, raise those limits; the application still isolates heavy telemetry queries so the UI remains navigable under pressure.
-
-**2. Resilience behavior** — shared across all profiles:
+**2. Resilience behavior:**
 
 - ad-hoc query execution returns `status: "partial"` with per-signal failures in `signalErrors`
 - dashboard metrics always return a response: any failing widget (recoverable or not) is reported via `warnings`, never a 5xx

@@ -1,8 +1,8 @@
 FROM golang:1.25-alpine AS autotune-build
 
 WORKDIR /src
-COPY autotune/main.go /src/main.go
-RUN CGO_ENABLED=0 GOOS=linux go build -o /out/otel-autotune-launcher /src/main.go
+COPY autotune/ /src/
+RUN CGO_ENABLED=0 GOOS=linux go build -o /out/otel-autotune-launcher .
 
 FROM otel/opentelemetry-collector-contrib:0.122.0
 

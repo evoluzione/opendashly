@@ -17,11 +17,19 @@ import (
 
 var errDashboardPressure = errors.New("dashboard backend pressure")
 
+// Tuner supplies the runtime-adaptive knobs owned by the tuning controller.
+// When nil, the service falls back to its static QueryParallelism field.
+type Tuner interface {
+	Parallelism() int
+	CHMaxMemoryBytes() int
+}
+
 // Service handles dashboard metrics calculations.
 type Service struct {
 	Storage          *storage.Client
 	MaintenanceStore *storage.Client
 	Limiter          *pressure.Limiter
+	Tuner            Tuner
 	FreshCacheTTL    time.Duration
 	StaleCacheTTL    time.Duration
 	LastGoodCacheTTL time.Duration
@@ -94,6 +102,11 @@ func (s *Service) openDashboardPressure(err error) {
 }
 
 func (s *Service) getQueryParallelism() int {
+	if s.Tuner != nil {
+		if p := s.Tuner.Parallelism(); p > 0 {
+			return p
+		}
+	}
 	if s.QueryParallelism <= 0 {
 		return 1
 	}
@@ -210,6 +223,12 @@ func (s *Service) GetDashboard(ctx context.Context, req DashboardRequest) (*Dash
 	logVolume := []LogVolumePoint{}
 	logLevels := []LogLevelCount{}
 	errorRate := float64(0)
+
+	// Apply the controller's current per-query ClickHouse memory budget so the
+	// dashboard fan-out adapts to runtime pressure. Fetchers inherit gctx.
+	if s.Tuner != nil {
+		ctx = storage.WithQueryMemory(ctx, s.Tuner.CHMaxMemoryBytes())
+	}
 
 	g, gctx := errgroup.WithContext(ctx)
 	g.SetLimit(s.getQueryParallelism())

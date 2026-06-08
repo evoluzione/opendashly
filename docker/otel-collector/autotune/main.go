@@ -1,3 +1,10 @@
+// Command otel-autotune-launcher sizes the OpenTelemetry collector's
+// memory_limiter from the resources the container actually has, then execs the
+// collector. It replaces the old small/standard/big machine profiles: there are
+// no tiers to choose, the launcher reads the cgroup memory limit (or host RAM)
+// at boot and derives a single safe, proportional configuration. The collector
+// memory_limiter is fixed for the process lifetime, so unlike the backend this
+// is a boot-time decision rather than a runtime feedback loop.
 package main
 
 import (
@@ -5,180 +12,147 @@ import (
 	"os"
 	"strconv"
 	"strings"
-	"syscall"
 )
 
-type otelPreset struct {
-	memoryLimiterCheckInterval string
-	memoryLimitMiB             string
-	memorySpikeLimitMiB        string
-	batchSendSize              string
-	batchTimeout               string
-	exporterTimeout            string
-	sendingQueueSize           string
-	sendingQueueConsumers      string
-	retryInitialInterval       string
-	retryMaxInterval           string
-	retryMaxElapsedTime        string
-}
+// fixed knobs that were identical across every old profile.
+const (
+	memoryLimiterCheckInterval = "1s"
+	batchSendSize              = "500"
+	batchTimeout               = "2s"
+	exporterTimeout            = "10s"
+	sendingQueueSize           = "5000"
+	sendingQueueConsumers      = "1"
+	retryInitialInterval       = "1s"
+	retryMaxInterval           = "30s"
+	retryMaxElapsedTime        = "0"
+)
 
-var otelPresets = map[string]otelPreset{
-	"small": {
-		memoryLimiterCheckInterval: "1s",
-		memoryLimitMiB:             "96",
-		memorySpikeLimitMiB:        "20",
-		batchSendSize:              "500",
-		batchTimeout:               "2s",
-		exporterTimeout:            "10s",
-		sendingQueueSize:           "5000",
-		sendingQueueConsumers:      "1",
-		retryInitialInterval:       "1s",
-		retryMaxInterval:           "30s",
-		retryMaxElapsedTime:        "0",
-	},
-	"standard": {
-		memoryLimiterCheckInterval: "1s",
-		memoryLimitMiB:             "170",
-		memorySpikeLimitMiB:        "35",
-		batchSendSize:              "500",
-		batchTimeout:               "2s",
-		exporterTimeout:            "10s",
-		sendingQueueSize:           "5000",
-		sendingQueueConsumers:      "1",
-		retryInitialInterval:       "1s",
-		retryMaxInterval:           "30s",
-		retryMaxElapsedTime:        "0",
-	},
-	"big": {
-		memoryLimiterCheckInterval: "1s",
-		memoryLimitMiB:             "300",
-		memorySpikeLimitMiB:        "60",
-		batchSendSize:              "500",
-		batchTimeout:               "2s",
-		exporterTimeout:            "10s",
-		sendingQueueSize:           "5000",
-		sendingQueueConsumers:      "1",
-		retryInitialInterval:       "1s",
-		retryMaxInterval:           "30s",
-		retryMaxElapsedTime:        "0",
-	},
-}
+const (
+	mib = 1024 * 1024
+
+	// Floors keep the collector alive even on a tiny container.
+	minMemoryLimitMiB = 64
+	minSpikeLimitMiB  = 16
+
+	// Fraction of the available memory the limiter is allowed to use, and the
+	// spike (soft) headroom as a fraction of that limit.
+	memoryLimitPercent = 75
+	spikePercent       = 20
+
+	// cgroup values at/above this are treated as "unlimited" sentinels.
+	unlimitedThreshold = uint64(1) << 62
+)
 
 func main() {
-	applyMachineAutoTuning()
+	applyMemoryAutoTuning(realEnv{})
 	execCollector()
 }
 
-func applyMachineAutoTuning() {
-	profile := resolveMachineProfile(
-		strings.ToLower(strings.TrimSpace(os.Getenv("MACHINE_PROFILE"))),
-		getEnvInt("MACHINE_RAM_GB", 0),
-		getEnvInt("MACHINE_CPU_CORES", 0),
-	)
-
-	preset, ok := otelPresets[profile]
-	if !ok {
-		preset = otelPresets["standard"]
-		profile = "standard"
-	}
-
-	// Auto-tuning intentionally overrides OTEL_* knobs whenever MACHINE_* is provided.
-	mustSetEnv("OTEL_MEMORY_LIMITER_CHECK_INTERVAL", preset.memoryLimiterCheckInterval)
-	mustSetEnv("OTEL_MEMORY_LIMIT_MIB", preset.memoryLimitMiB)
-	mustSetEnv("OTEL_MEMORY_SPIKE_LIMIT_MIB", preset.memorySpikeLimitMiB)
-	mustSetEnv("OTEL_BATCH_SEND_SIZE", preset.batchSendSize)
-	mustSetEnv("OTEL_BATCH_TIMEOUT", preset.batchTimeout)
-	mustSetEnv("OTEL_EXPORTER_TIMEOUT", preset.exporterTimeout)
-	mustSetEnv("OTEL_SENDING_QUEUE_SIZE", preset.sendingQueueSize)
-	mustSetEnv("OTEL_SENDING_QUEUE_CONSUMERS", preset.sendingQueueConsumers)
-	mustSetEnv("OTEL_RETRY_INITIAL_INTERVAL", preset.retryInitialInterval)
-	mustSetEnv("OTEL_RETRY_MAX_INTERVAL", preset.retryMaxInterval)
-	mustSetEnv("OTEL_RETRY_MAX_ELAPSED_TIME", preset.retryMaxElapsedTime)
-
-	log.Printf("otel machine auto-tuning enabled: profile=%s", profile)
+// memorySizing is the derived collector memory configuration.
+type memorySizing struct {
+	limitMiB int
+	spikeMiB int
 }
 
-func execCollector() {
-	target := "/otelcol-contrib"
-	args := os.Args[1:]
-	if len(args) == 0 {
-		args = []string{"--config=/etc/otelcol/config.yaml"}
-	}
-
-	if err := syscall.Exec(target, append([]string{target}, args...), os.Environ()); err != nil {
-		log.Fatalf("failed to exec otel collector: %v", err)
-	}
+// env abstracts the host so the sizing can be unit-tested.
+type env interface {
+	getenv(string) string
+	readFile(string) ([]byte, error)
+	hostRAMBytes() (uint64, bool)
 }
 
-func resolveMachineProfile(profile string, ramGB int, cpuCores int) string {
-	if _, ok := otelPresets[profile]; ok {
-		return profile
-	}
+func applyMemoryAutoTuning(e env) {
+	sizing := resolveMemorySizing(e)
+	mustSetEnv("OTEL_MEMORY_LIMITER_CHECK_INTERVAL", memoryLimiterCheckInterval)
+	mustSetEnv("OTEL_MEMORY_LIMIT_MIB", strconv.Itoa(sizing.limitMiB))
+	mustSetEnv("OTEL_MEMORY_SPIKE_LIMIT_MIB", strconv.Itoa(sizing.spikeMiB))
+	mustSetEnv("OTEL_BATCH_SEND_SIZE", batchSendSize)
+	mustSetEnv("OTEL_BATCH_TIMEOUT", batchTimeout)
+	mustSetEnv("OTEL_EXPORTER_TIMEOUT", exporterTimeout)
+	mustSetEnv("OTEL_SENDING_QUEUE_SIZE", sendingQueueSize)
+	mustSetEnv("OTEL_SENDING_QUEUE_CONSUMERS", sendingQueueConsumers)
+	mustSetEnv("OTEL_RETRY_INITIAL_INTERVAL", retryInitialInterval)
+	mustSetEnv("OTEL_RETRY_MAX_INTERVAL", retryMaxInterval)
+	mustSetEnv("OTEL_RETRY_MAX_ELAPSED_TIME", retryMaxElapsedTime)
 
-	if ramGB <= 0 && cpuCores <= 0 {
-		return "standard"
-	}
-
-	classByRAM := resourceClassFromRAM(ramGB)
-	classByCPU := resourceClassFromCPU(cpuCores)
-	class := minPositiveClass(classByRAM, classByCPU)
-
-	switch class {
-	case 1:
-		return "small"
-	case 2:
-		return "standard"
-	default:
-		return "big"
-	}
+	log.Printf("otel auto-tuning: memory_limit=%dMiB spike=%dMiB", sizing.limitMiB, sizing.spikeMiB)
 }
 
-func resourceClassFromRAM(ramGB int) int {
-	if ramGB <= 0 {
-		return 0
-	}
-	if ramGB <= 2 {
-		return 1
-	}
-	if ramGB <= 4 {
-		return 2
-	}
-	return 3
-}
-
-func resourceClassFromCPU(cpuCores int) int {
-	if cpuCores <= 0 {
-		return 0
-	}
-	if cpuCores <= 1 {
-		return 1
-	}
-	if cpuCores <= 2 {
-		return 2
-	}
-	return 3
-}
-
-func minPositiveClass(a int, b int) int {
-	if a == 0 {
-		return b
-	}
-	if b == 0 {
-		return a
-	}
-	if a < b {
-		return a
-	}
-	return b
-}
-
-func getEnvInt(key string, defaultVal int) int {
-	if value := strings.TrimSpace(os.Getenv(key)); value != "" {
-		if parsed, err := strconv.Atoi(value); err == nil {
-			return parsed
+// resolveMemorySizing derives the limiter sizing from, in order: an explicit
+// OTEL_MEMORY_LIMIT_MIB override (escape hatch), the cgroup memory limit, or
+// host RAM. A safe floor applies in all cases.
+func resolveMemorySizing(e env) memorySizing {
+	if override := strings.TrimSpace(e.getenv("OTEL_MEMORY_LIMIT_MIB")); override != "" {
+		if mibVal, err := strconv.Atoi(override); err == nil && mibVal > 0 {
+			return sizingFromLimitMiB(mibVal)
 		}
 	}
-	return defaultVal
+
+	availBytes, ok := detectMemoryLimitBytes(e)
+	if !ok {
+		// No signal at all: assume a modest container.
+		return sizingFromAvailableMiB(256)
+	}
+	return sizingFromAvailableMiB(int(availBytes / mib))
+}
+
+// sizingFromAvailableMiB applies the proportional policy to total available MiB.
+func sizingFromAvailableMiB(availMiB int) memorySizing {
+	limit := availMiB * memoryLimitPercent / 100
+	return sizingFromLimitMiB(limit)
+}
+
+// sizingFromLimitMiB clamps a chosen limit to the floor and derives the spike.
+func sizingFromLimitMiB(limitMiB int) memorySizing {
+	if limitMiB < minMemoryLimitMiB {
+		limitMiB = minMemoryLimitMiB
+	}
+	spike := limitMiB * spikePercent / 100
+	if spike < minSpikeLimitMiB {
+		spike = minSpikeLimitMiB
+	}
+	return memorySizing{limitMiB: limitMiB, spikeMiB: spike}
+}
+
+// detectMemoryLimitBytes reads the cgroup (v2 then v1) memory limit, falling
+// back to host RAM. Returns false only when nothing is readable.
+func detectMemoryLimitBytes(e env) (uint64, bool) {
+	if v, ok := readCgroupV2(e); ok {
+		return v, true
+	}
+	if v, ok := readCgroupV1(e); ok {
+		return v, true
+	}
+	return e.hostRAMBytes()
+}
+
+func readCgroupV2(e env) (uint64, bool) {
+	data, err := e.readFile("/sys/fs/cgroup/memory.max")
+	if err != nil {
+		return 0, false
+	}
+	text := strings.TrimSpace(string(data))
+	if text == "" || text == "max" {
+		// Unlimited cgroup: defer to host RAM.
+		return e.hostRAMBytes()
+	}
+	v, err := strconv.ParseUint(text, 10, 64)
+	if err != nil || v == 0 || v >= unlimitedThreshold {
+		return e.hostRAMBytes()
+	}
+	return v, true
+}
+
+func readCgroupV1(e env) (uint64, bool) {
+	data, err := e.readFile("/sys/fs/cgroup/memory/memory.limit_in_bytes")
+	if err != nil {
+		return 0, false
+	}
+	v, err := strconv.ParseUint(strings.TrimSpace(string(data)), 10, 64)
+	if err != nil || v == 0 || v >= unlimitedThreshold {
+		return e.hostRAMBytes()
+	}
+	return v, true
 }
 
 func mustSetEnv(key string, value string) {
@@ -186,3 +160,12 @@ func mustSetEnv(key string, value string) {
 		log.Fatalf("failed setting %s: %v", key, err)
 	}
 }
+
+// realEnv is the production env backed by the OS.
+type realEnv struct{}
+
+func (realEnv) getenv(key string) string { return os.Getenv(key) }
+
+func (realEnv) readFile(path string) ([]byte, error) { return os.ReadFile(path) }
+
+func (realEnv) hostRAMBytes() (uint64, bool) { return hostRAMBytes() }

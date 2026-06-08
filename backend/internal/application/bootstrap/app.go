@@ -14,6 +14,7 @@ import (
 	"opendashly/backend/internal/application/query"
 	"opendashly/backend/internal/application/retention"
 	"opendashly/backend/internal/application/status"
+	"opendashly/backend/internal/application/tuning"
 	"opendashly/backend/internal/application/workspace"
 	"opendashly/backend/internal/infrastructure/config"
 	"opendashly/backend/internal/infrastructure/storage"
@@ -103,6 +104,16 @@ func Build(ctx context.Context) (*App, error) {
 		PressureClickHouseDiskThresholdPerc: cfg.RetentionPressureDiskPct,
 	}
 	pressureMonitor := retention.NewPressureMonitor(maintenanceClient.Conn, adaptiveOptions)
+
+	// Replace the old static machine profiles with a runtime self-tuning loop:
+	// it starts the load-sensitive knobs at their safe floor and adapts them to
+	// real pressure (AIMD), keeping the shared telemetry limiter resized live.
+	tuningController := tuning.New(tuning.DefaultBounds(), func(ctx context.Context) bool {
+		return pressureMonitor.Snapshot(ctx).Pressure
+	}, telemetryLimiter)
+	dashboardService.Tuner = tuningController
+	go tuningController.Run(context.Background())
+
 	cleanupService := &retention.CleanupService{
 		Repo:              retentionRepo,
 		Conn:              maintenanceClient.Conn,
