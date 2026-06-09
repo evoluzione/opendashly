@@ -2,6 +2,7 @@ package bootstrap
 
 import (
 	"context"
+	"log"
 	"math"
 	"net/http"
 	"time"
@@ -64,30 +65,37 @@ func Build(ctx context.Context) (*App, error) {
 	dashboardService.HalveOnOOM = cfg.DashboardHalveOnOOM
 	dashboardService.RawFallback = cfg.DashboardRawFallback
 	dashboardService.PressureCooldown = time.Duration(cfg.DashboardPressureCooldownSec) * time.Second
-	if cfg.DashboardRollupBackfill {
-		dashboardService.StartRollupBackfill(context.Background(), cfg.DashboardRollupBackfillHours)
-		statusService.StartRollupBackfill(context.Background(), cfg.DashboardRollupBackfillHours)
-	}
+	// NOTE: the rollup backfill is intentionally NOT started here. It issues
+	// heavy historical aggregation queries on the single-connection maintenance
+	// lane; starting it before the boot-critical setup below starved that lane
+	// and made Build() fail with "acquire conn timeout", taking the whole API
+	// down. It is now started last, after the API is ready (see end of Build).
 	savedRepo := query.NewSavedQueryRepo()
 	authRepo := &auth.Repo{Conn: controlClient.Conn}
 	if err := seedDefaultAdmin(ctx, authRepo); err != nil {
-		return nil, err
+		// Best-effort: if the admin already exists this is a no-op, and a
+		// transient lookup failure must not stop the API from serving login.
+		log.Printf("bootstrap: seed default admin (continuing): %v", err)
 	}
 
 	retentionRepo := &retention.Repo{Conn: maintenanceClient.Conn}
 	defaultLogsRetention := boundedDefaultRetentionDays(7, uint32(cfg.MaxLogRetentionDays))
 	defaultTracesRetention := boundedDefaultRetentionDays(7, uint32(cfg.MaxTraceRetentionDays))
+	// Seeding retention defaults is best-effort: it must never block the API from
+	// coming up. If ClickHouse is momentarily contended, log and continue — the
+	// retention scheduler re-applies these later, and login does not depend on
+	// them. This keeps the backend resilient under transient storage pressure.
 	if err := retentionRepo.EnsureSetting(ctx, "logs", defaultLogsRetention, "system"); err != nil {
-		return nil, err
+		log.Printf("bootstrap: ensure retention setting for logs (continuing): %v", err)
 	}
 	if err := retentionRepo.EnsureSetting(ctx, "traces", defaultTracesRetention, "system"); err != nil {
-		return nil, err
+		log.Printf("bootstrap: ensure retention setting for traces (continuing): %v", err)
 	}
 	if err := clampRetentionSetting(ctx, retentionRepo, "logs", uint32(cfg.MaxLogRetentionDays)); err != nil {
-		return nil, err
+		log.Printf("bootstrap: clamp retention setting for logs (continuing): %v", err)
 	}
 	if err := clampRetentionSetting(ctx, retentionRepo, "traces", uint32(cfg.MaxTraceRetentionDays)); err != nil {
-		return nil, err
+		log.Printf("bootstrap: clamp retention setting for traces (continuing): %v", err)
 	}
 	adaptiveOptions := retention.AdaptiveRetentionOptions{
 		Enabled:                             cfg.RetentionAdaptiveEnabled,
@@ -183,6 +191,18 @@ func Build(ctx context.Context) (*App, error) {
 		CORSAllowedOrigins: cfg.CORSAllowedOrigins,
 	})
 
+	// Start the rollup backfill only now that every boot-critical step has run,
+	// and defer it so the API is listening and warm before the heavy historical
+	// queries hit the maintenance lane. A failed/contended backfill can no
+	// longer affect login.
+	if cfg.DashboardRollupBackfill {
+		go func() {
+			time.Sleep(30 * time.Second)
+			dashboardService.StartRollupBackfill(context.Background(), cfg.DashboardRollupBackfillHours)
+			statusService.StartRollupBackfill(context.Background(), cfg.DashboardRollupBackfillHours)
+		}()
+	}
+
 	return &App{ListenAddr: cfg.ListenAddr, Handler: handler}, nil
 }
 
@@ -225,8 +245,12 @@ func controlClickHouseOptions(cfg *config.Config) storage.ClientOptions {
 
 func maintenanceClickHouseOptions(cfg *config.Config) storage.ClientOptions {
 	opts := baseClickHouseOptions(cfg)
-	opts.MaxOpenConns = 1
-	opts.MaxIdleConns = 1
+	// The maintenance lane runs migrations, retention setup, cleanup and the
+	// rollup backfill. A single connection let a long backfill query deadlock
+	// boot-critical setup; give it two so concurrent maintenance work overlaps
+	// instead of starving.
+	opts.MaxOpenConns = 2
+	opts.MaxIdleConns = 2
 	opts.MaxThreads = 1
 	return opts
 }
