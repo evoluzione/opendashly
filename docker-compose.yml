@@ -15,11 +15,16 @@ services:
     volumes:
       - clickhouse_data:/var/lib/clickhouse
     healthcheck:
-      test: ["CMD", "clickhouse-client", "--user", "otel", "--password", "${CLICKHOUSE_PASSWORD:-otelpass}", "--query", "SELECT 1"]
+      # Force the probe through the memory tracker (max_untracked_memory=0): a
+      # bare SELECT 1 fits in untracked memory and stays green even when the
+      # server rejects every real query with code 241 (tracked total > cap).
+      test: ["CMD", "clickhouse-client", "--user", "otel", "--password", "${CLICKHOUSE_PASSWORD:-otelpass}", "--max_untracked_memory", "0", "--max_threads", "1", "--query", "SELECT count() FROM numbers(65536)"]
       interval: 5s
       timeout: 3s
       retries: 15
       start_period: 60s
+    labels:
+      - autoheal=true
     restart: unless-stopped
     logging:
       driver: json-file
@@ -45,12 +50,34 @@ services:
     user: "0:0"
     volumes:
       - otelcol_queue_data:/var/lib/otelcol
+    healthcheck:
+      test: ["CMD", "/otel-healthcheck"]
+      interval: 10s
+      timeout: 3s
+      retries: 6
+      start_period: 30s
+    labels:
+      - autoheal=true
     restart: unless-stopped
     logging:
       driver: json-file
       options:
         max-size: "10m"
         max-file: "3"
+
+  # Docker never restarts an unhealthy container on its own: restart policies
+  # only fire on process exit, and healthchecks only gate depends_on at boot.
+  # autoheal closes that gap by restarting any container labeled autoheal=true.
+  autoheal:
+    container_name: autoheal
+    image: willfarrell/autoheal:latest
+    environment:
+      - AUTOHEAL_CONTAINER_LABEL=autoheal
+      - AUTOHEAL_INTERVAL=10
+      - AUTOHEAL_START_PERIOD=60
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    restart: unless-stopped
 
   backend:
     container_name: backend

@@ -1,5 +1,15 @@
 <clickhouse>
   <max_server_memory_usage_to_ram_ratio>0.80</max_server_memory_usage_to_ram_ratio>
+
+  <!--
+    The (total) memory tracker drifts upward over time (allocations whose frees
+    are not re-attributed: killed queries, in-flight inserts, jemalloc arenas).
+    Once the tracked total passes max_server_memory_usage every query fails with
+    code 241 even though real RSS is far below the cap, and the server never
+    recovers without a restart. Let the background memory worker correct the
+    tracker against the real usage reported by jemalloc/cgroups.
+  -->
+  <memory_worker_correct_memory_tracker>1</memory_worker_correct_memory_tracker>
   <mark_cache_size>33554432</mark_cache_size>
   <uncompressed_cache_size>16777216</uncompressed_cache_size>
   <background_pool_size>2</background_pool_size>

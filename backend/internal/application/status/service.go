@@ -99,14 +99,28 @@ func (s *Service) Summary(ctx context.Context) Summary {
 	return summary
 }
 
+// databaseProbeQuery is the health probe for ClickHouse. A protocol-level
+// Ping (or an untracked SELECT 1) succeeds even when the server's (total)
+// memory tracker is past its cap and every real query fails with code 241,
+// so the probe is a real query forced through the tracker.
+const databaseProbeQuery = `
+	SELECT count()
+	FROM numbers(65536)
+	SETTINGS max_untracked_memory = 0, max_threads = 1, max_memory_usage = 33554432, max_execution_time = 2
+`
+
 func (s *Service) getDatabasePinger() func(context.Context) error {
 	if s.pingDatabase != nil {
 		return s.pingDatabase
 	}
 	return func(ctx context.Context) error {
+		if s.Storage == nil || s.Storage.Conn == nil {
+			return fmt.Errorf("storage not configured")
+		}
 		pingCtx, cancel := context.WithTimeout(ctx, 750*time.Millisecond)
 		defer cancel()
-		return s.Storage.Conn.Ping(pingCtx)
+		var probed uint64
+		return s.Storage.Conn.QueryRow(pingCtx, databaseProbeQuery).Scan(&probed)
 	}
 }
 
