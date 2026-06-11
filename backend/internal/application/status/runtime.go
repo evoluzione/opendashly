@@ -104,9 +104,7 @@ func (s *Service) Runtime(ctx context.Context) RuntimeSummary {
 
 func (s *Service) databaseHealth(ctx context.Context) ComponentHealth {
 	startedAt := time.Now()
-	pingCtx, cancel := context.WithTimeout(ctx, 500*time.Millisecond)
-	defer cancel()
-	if err := s.Storage.Conn.Ping(pingCtx); err != nil {
+	if err := s.getDatabasePinger()(ctx); err != nil {
 		return ComponentHealth{
 			Name:      "database",
 			Status:    "down",
@@ -161,7 +159,7 @@ func (s *Service) collectorHealth(ctx context.Context) ComponentHealth {
 }
 
 func (s *Service) queryHealth(ctx context.Context, slowThresholdSec float64) (QueryHealth, []string, error) {
-	if s.Storage == nil {
+	if s.Storage == nil || s.Storage.Conn == nil {
 		return QueryHealth{}, nil, fmt.Errorf("storage not configured")
 	}
 

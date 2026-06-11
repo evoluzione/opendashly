@@ -27,7 +27,11 @@ exporters:
       queue_size: ${env:OTEL_SENDING_QUEUE_SIZE}
       num_consumers: ${env:OTEL_SENDING_QUEUE_CONSUMERS}
       storage: file_storage
-      blocking: true
+      # Never block the pipeline on a full queue: with blocking=true a broken
+      # ClickHouse backs the whole collector up until it wedges (health
+      # endpoint included). Dropping the overflow keeps the collector alive;
+      # the file-backed queue still preserves what fits across restarts.
+      blocking: false
     retry_on_failure:
       enabled: true
       initial_interval: ${env:OTEL_RETRY_INITIAL_INTERVAL}

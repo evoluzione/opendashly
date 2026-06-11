@@ -39,11 +39,16 @@ services:
     volumes:
       - clickhouse_data:/var/lib/clickhouse
     healthcheck:
-      test: ["CMD", "clickhouse-client", "--user", "otel", "--password", "${CLICKHOUSE_PASSWORD}", "--query", "SELECT 1"]
+      # Force the probe through the memory tracker (max_untracked_memory=0): a
+      # bare SELECT 1 fits in untracked memory and stays green even when the
+      # server rejects every real query with code 241 (tracked total > cap).
+      test: ["CMD", "clickhouse-client", "--user", "otel", "--password", "${CLICKHOUSE_PASSWORD}", "--max_untracked_memory", "0", "--max_threads", "1", "--query", "SELECT count() FROM numbers(65536)"]
       interval: 5s
       timeout: 3s
       retries: 15
       start_period: 60s
+    labels:
+      - autoheal=true
     mem_limit: ${CLICKHOUSE_MEM_LIMIT:-1536m}
     memswap_limit: ${CLICKHOUSE_MEMSWAP_LIMIT:-1536m}
     logging:
@@ -70,6 +75,14 @@ services:
     user: "0:0"
     volumes:
       - otelcol_queue_data:/var/lib/otelcol
+    healthcheck:
+      test: ["CMD", "/otel-healthcheck"]
+      interval: 10s
+      timeout: 3s
+      retries: 6
+      start_period: 30s
+    labels:
+      - autoheal=true
     mem_limit: ${OTEL_COLLECTOR_MEM_LIMIT:-512m}
     memswap_limit: ${OTEL_COLLECTOR_MEMSWAP_LIMIT:-512m}
     logging:
@@ -77,6 +90,22 @@ services:
       options:
         max-size: "10m"
         max-file: "3"
+    restart: unless-stopped
+
+  # Docker never restarts an unhealthy container on its own: restart policies
+  # only fire on process exit, and healthchecks only gate depends_on at boot.
+  # autoheal closes that gap by restarting any container labeled autoheal=true
+  # that stays unhealthy (e.g. ClickHouse rejecting every query with code 241
+  # while its process is still alive, or a wedged collector pipeline).
+  autoheal:
+    image: willfarrell/autoheal:latest
+    container_name: opendashly-autoheal
+    environment:
+      - AUTOHEAL_CONTAINER_LABEL=autoheal
+      - AUTOHEAL_INTERVAL=10
+      - AUTOHEAL_START_PERIOD=60
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
     restart: unless-stopped
 
 volumes:
