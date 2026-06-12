@@ -12,11 +12,17 @@ type TracesPageCursor struct {
 	TraceID  string
 }
 
+// traceErrorStatusExpr matches an errored span. StatusCode is stored as 'Error',
+// '2' or 'STATUS_CODE_ERROR' depending on the OTel ingestion path, so all three
+// representations must be checked — consistent with the span detail view and the
+// metrics queries. Matching only one of them silently undercounts errors.
+const traceErrorStatusExpr = "toString(StatusCode) IN ('Error', '2', 'STATUS_CODE_ERROR')"
+
 // BuildTracesQuery creates a ClickHouse SQL statement for traces.
 func BuildTracesQuery(filters map[string]string, filterList []FilterItem, from, to time.Time, limit, offset int, cursor *TracesPageCursor) string {
 	filteredForTraces := filterListForSignal("traces", filterList)
 	traceErrorScope, effectiveFilterList := extractTraceErrorScope(filteredForTraces)
-	base := "SELECT TraceId AS traceId, argMin(SpanName, Timestamp) AS name, argMin(ServiceName, Timestamp) AS service, count() AS spanCount, countIf(StatusCode = 'STATUS_CODE_ERROR') AS errorCount, max(Timestamp) AS lastSeen, max(Duration) / 1000000 AS durationMs FROM telemetry.otel_traces"
+	base := "SELECT TraceId AS traceId, argMin(SpanName, Timestamp) AS name, argMin(ServiceName, Timestamp) AS service, count() AS spanCount, countIf(" + traceErrorStatusExpr + ") AS errorCount, max(Timestamp) AS lastSeen, max(Duration) / 1000000 AS durationMs FROM telemetry.otel_traces"
 	clauses := buildOtelClauses("Timestamp", filters, effectiveFilterList, from, to, "ServiceName", "TraceId", "", []string{"ResourceAttributes", "SpanAttributes"})
 	query := base
 	if len(clauses) > 0 {
@@ -54,7 +60,7 @@ func BuildTracesQuery(filters map[string]string, filterList []FilterItem, from, 
 func BuildTracesCountQuery(filters map[string]string, filterList []FilterItem, from, to time.Time) string {
 	filteredForTraces := filterListForSignal("traces", filterList)
 	traceErrorScope, effectiveFilterList := extractTraceErrorScope(filteredForTraces)
-	base := "SELECT TraceId, countIf(StatusCode = 'STATUS_CODE_ERROR') AS errorCount FROM telemetry.otel_traces"
+	base := "SELECT TraceId, countIf(" + traceErrorStatusExpr + ") AS errorCount FROM telemetry.otel_traces"
 	clauses := buildOtelClauses("Timestamp", filters, effectiveFilterList, from, to, "ServiceName", "TraceId", "", []string{"ResourceAttributes", "SpanAttributes"})
 	query := base
 	if len(clauses) > 0 {
