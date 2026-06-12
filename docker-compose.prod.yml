@@ -16,6 +16,18 @@ services:
     depends_on:
       clickhouse:
         condition: service_healthy
+    # Probe the backend API on :8080 directly. A bare process-up check is not
+    # enough: the backend can die (or wedge) while the frontend on :5173 keeps
+    # the container "Up". /healthz is in the auth allowlist so it answers 200
+    # without credentials. autoheal restarts the container if this stays red.
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://localhost:8080/healthz"]
+      interval: 10s
+      timeout: 3s
+      retries: 6
+      start_period: 30s
+    labels:
+      - autoheal=true
     mem_limit: ${APP_MEM_LIMIT:-768m}
     memswap_limit: ${APP_MEMSWAP_LIMIT:-768m}
     logging:
