@@ -14,6 +14,18 @@ type Client struct {
 	Conn driver.Conn
 }
 
+// Query runs query against ClickHouse, applying any per-query memory budget
+// attached to ctx via WithQueryMemory. A fresh clickhouse options context
+// (fresh settings map) is constructed for THIS call only, so concurrent queries
+// that share a parent context never write a shared options map — see
+// WithQueryMemory for why that would otherwise crash the process.
+func (c *Client) Query(ctx context.Context, query string, args ...any) (driver.Rows, error) {
+	if settings, ok := queryMemorySettings(ctx); ok {
+		ctx = clickhouse.Context(ctx, clickhouse.WithSettings(settings))
+	}
+	return c.Conn.Query(ctx, query, args...)
+}
+
 type ClientOptions struct {
 	DSN                           string
 	User                          string

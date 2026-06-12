@@ -736,7 +736,7 @@ func (s *Service) getLatencyDistribution(ctx context.Context, req DashboardReque
 	query := BuildLatencyDistributionQuery(req.From, req.To, req.ServiceName)
 	log.Printf("metrics.service.getLatencyDistribution: executing query")
 
-	rows, err := s.Storage.Conn.Query(ctx, query)
+	rows, err := s.Storage.Query(ctx, query)
 	if err != nil {
 		return nil, fmt.Errorf("query: %w", err)
 	}
@@ -784,7 +784,7 @@ func (s *Service) getSlowestEndpoints(ctx context.Context, req DashboardRequest)
 	query := BuildSlowestEndpointsQuery(req.From, req.To, req.ServiceName, 10)
 	log.Printf("metrics.service.getSlowestEndpoints: executing query")
 
-	rows, err := s.Storage.Conn.Query(ctx, query)
+	rows, err := s.Storage.Query(ctx, query)
 	if err != nil {
 		return nil, fmt.Errorf("query: %w", err)
 	}
@@ -823,7 +823,7 @@ func (s *Service) getErrorHotspots(ctx context.Context, req DashboardRequest) ([
 	query := BuildErrorHotspotsQuery(req.From, req.To, req.ServiceName, 10)
 	log.Printf("metrics.service.getErrorHotspots: executing query")
 
-	rows, err := s.Storage.Conn.Query(ctx, query)
+	rows, err := s.Storage.Query(ctx, query)
 	if err != nil {
 		return nil, fmt.Errorf("query: %w", err)
 	}
@@ -860,7 +860,7 @@ func (s *Service) getLatencyPercentiles(ctx context.Context, req DashboardReques
 	query := BuildLatencyPercentilesQuery(req.From, req.To, req.ServiceName)
 	log.Printf("metrics.service.getLatencyPercentiles: executing query")
 
-	rows, err := s.Storage.Conn.Query(ctx, query)
+	rows, err := s.Storage.Query(ctx, query)
 	if err != nil {
 		return nil, fmt.Errorf("query: %w", err)
 	}
@@ -890,7 +890,7 @@ func (s *Service) getErrorRateSeries(ctx context.Context, req DashboardRequest) 
 	query := BuildErrorRateTimeSeriesQuery(req.From, req.To, req.ServiceName)
 	log.Printf("metrics.service.getErrorRateSeries: executing query")
 
-	rows, err := s.Storage.Conn.Query(ctx, query)
+	rows, err := s.Storage.Query(ctx, query)
 	if err != nil {
 		return nil, fmt.Errorf("query: %w", err)
 	}
@@ -921,7 +921,7 @@ func (s *Service) getStatusCodeBreakdown(ctx context.Context, req DashboardReque
 	query := BuildStatusCodeBreakdownQuery(req.From, req.To, req.ServiceName)
 	log.Printf("metrics.service.getStatusCodeBreakdown: executing query")
 
-	rows, err := s.Storage.Conn.Query(ctx, query)
+	rows, err := s.Storage.Query(ctx, query)
 	if err != nil {
 		return nil, fmt.Errorf("query: %w", err)
 	}
@@ -956,7 +956,7 @@ func (s *Service) getTopEndpointsThroughput(ctx context.Context, req DashboardRe
 	query := BuildTopEndpointsThroughputQuery(req.From, req.To, req.ServiceName, 10)
 	log.Printf("metrics.service.getTopEndpointsThroughput: executing query")
 
-	rows, err := s.Storage.Conn.Query(ctx, query)
+	rows, err := s.Storage.Query(ctx, query)
 	if err != nil {
 		return nil, fmt.Errorf("query: %w", err)
 	}
@@ -988,7 +988,7 @@ func (s *Service) getLogVolume(ctx context.Context, req DashboardRequest) ([]Log
 	query := BuildLogVolumeQuery(req.From, req.To, req.ServiceName)
 	log.Printf("metrics.service.getLogVolume: executing query")
 
-	rows, err := s.Storage.Conn.Query(ctx, query)
+	rows, err := s.Storage.Query(ctx, query)
 	if err != nil {
 		return nil, fmt.Errorf("query: %w", err)
 	}
@@ -1013,7 +1013,7 @@ func (s *Service) getLogLevels(ctx context.Context, req DashboardRequest) ([]Log
 	query := BuildLogLevelsQuery(req.From, req.To, req.ServiceName)
 	log.Printf("metrics.service.getLogLevels: executing query")
 
-	rows, err := s.Storage.Conn.Query(ctx, query)
+	rows, err := s.Storage.Query(ctx, query)
 	if err != nil {
 		return nil, fmt.Errorf("query: %w", err)
 	}
@@ -1045,7 +1045,7 @@ func (s *Service) getApdexScore(ctx context.Context, req DashboardRequest) (Apde
 	query := BuildApdexQuery(req.From, req.To, req.ServiceName)
 	log.Printf("metrics.service.getApdexScore: executing query")
 
-	rows, err := s.Storage.Conn.Query(ctx, query)
+	rows, err := s.Storage.Query(ctx, query)
 	if err != nil {
 		return ApdexScore{}, fmt.Errorf("query: %w", err)
 	}
@@ -1082,7 +1082,7 @@ func (s *Service) getThroughput(ctx context.Context, req DashboardRequest) (Thro
 	query := BuildThroughputQuery(req.From, req.To, req.ServiceName)
 	log.Printf("metrics.service.getThroughput: executing query")
 
-	rows, err := s.Storage.Conn.Query(ctx, query)
+	rows, err := s.Storage.Query(ctx, query)
 	if err != nil {
 		return ThroughputSummary{}, nil, fmt.Errorf("query: %w", err)
 	}
@@ -1143,7 +1143,7 @@ func (s *Service) getErrorRate(ctx context.Context, req DashboardRequest) (float
 	query := BuildErrorRateQuery(req.From, req.To, req.ServiceName)
 	log.Printf("metrics.service.getErrorRate: executing query")
 
-	rows, err := s.Storage.Conn.Query(ctx, query)
+	rows, err := s.Storage.Query(ctx, query)
 	if err != nil {
 		return 0, fmt.Errorf("query: %w", err)
 	}
