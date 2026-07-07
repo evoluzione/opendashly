@@ -4,11 +4,13 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"opendashly/backend/internal/infrastructure/config"
 )
 
-const (
-	servicesCacheTTL   = 30 * time.Minute
-	attributesCacheTTL = 5 * time.Minute
+var (
+	servicesCacheTTL   = time.Duration(config.Auto().QueryServicesCacheTTLSec) * time.Second
+	attributesCacheTTL = time.Duration(config.Auto().QueryAttributesCacheTTLSec) * time.Second
 )
 
 type cachedStringSlice struct {

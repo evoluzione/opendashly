@@ -11,10 +11,7 @@ import (
 )
 
 func main() {
-	url := os.Getenv("OTEL_HEALTH_URL")
-	if url == "" {
-		url = "http://127.0.0.1:13133/"
-	}
+	const url = "http://127.0.0.1:13133/"
 
 	client := &http.Client{Timeout: 2 * time.Second}
 	resp, err := client.Get(url)

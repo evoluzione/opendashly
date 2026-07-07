@@ -4,11 +4,13 @@ import (
 	"fmt"
 	"sync"
 	"time"
+
+	"opendashly/backend/internal/infrastructure/config"
 )
 
-const (
-	defaultDashboardFreshCacheTTL = 30 * time.Second
-	defaultDashboardStaleCacheTTL = 15 * time.Minute
+var (
+	defaultDashboardFreshCacheTTL = time.Duration(config.Auto().DashboardFreshCacheTTLSec) * time.Second
+	defaultDashboardStaleCacheTTL = time.Duration(config.Auto().DashboardStaleCacheTTLSec) * time.Second
 )
 
 type dashboardCacheEntry struct {
@@ -34,7 +36,7 @@ func newDashboardCache(freshTTL, staleTTL, lastGoodTTL time.Duration) *dashboard
 		staleTTL = defaultDashboardStaleCacheTTL
 	}
 	if lastGoodTTL <= 0 {
-		lastGoodTTL = 30 * time.Minute
+		lastGoodTTL = time.Duration(config.Auto().DashboardLastGoodTTLSec) * time.Second
 	}
 	if staleTTL < freshTTL {
 		staleTTL = freshTTL

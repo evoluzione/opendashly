@@ -2,7 +2,7 @@ package config
 
 import "testing"
 
-func TestApplyDefaultsSeedsResilientValues(t *testing.T) {
+func TestApplyDefaultsSeedsAutoTunedValues(t *testing.T) {
 	cfg := &Config{}
 	cfg.applyDefaults()
 
@@ -20,22 +20,19 @@ func TestApplyDefaultsSeedsResilientValues(t *testing.T) {
 		t.Fatalf("spill thresholds = %d/%d, want 16/16", cfg.ClickHouseExternalGroupByMiB, cfg.ClickHouseExternalSortMiB)
 	}
 
-	// Generous, resilient retention caps (adaptive step-down protects them).
-	if cfg.MaxLogRetentionDays != 30 {
-		t.Fatalf("MaxLogRetentionDays = %d, want 30", cfg.MaxLogRetentionDays)
-	}
-	if cfg.MaxTraceRetentionDays != 15 {
-		t.Fatalf("MaxTraceRetentionDays = %d, want 15", cfg.MaxTraceRetentionDays)
-	}
-
-	// A few static safety defaults.
 	if !cfg.RetentionAdaptiveEnabled {
 		t.Fatalf("RetentionAdaptiveEnabled should be true")
 	}
 	if !cfg.DashboardHalveOnOOM {
 		t.Fatalf("DashboardHalveOnOOM should be true")
 	}
-	if cfg.ClickHouseMaxOpenConns != 4 || cfg.ClickHouseMaxIdleConns != 2 {
-		t.Fatalf("conn pool = %d/%d, want 4/2", cfg.ClickHouseMaxOpenConns, cfg.ClickHouseMaxIdleConns)
+	if cfg.RetentionPressureMemBudgetMB <= 0 {
+		t.Fatalf("RetentionPressureMemBudgetMB should be auto-sized, got %d", cfg.RetentionPressureMemBudgetMB)
+	}
+	if cfg.ClickHouseMaxOpenConns < 2 || cfg.ClickHouseMaxIdleConns < 1 || cfg.ClickHouseMaxIdleConns > cfg.ClickHouseMaxOpenConns {
+		t.Fatalf("invalid auto-sized conn pool open=%d idle=%d", cfg.ClickHouseMaxOpenConns, cfg.ClickHouseMaxIdleConns)
+	}
+	if cfg.MaxLogRetentionDays < 30 || cfg.MaxTraceRetentionDays < 15 {
+		t.Fatalf("retention caps too low: logs=%d traces=%d", cfg.MaxLogRetentionDays, cfg.MaxTraceRetentionDays)
 	}
 }

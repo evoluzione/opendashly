@@ -44,6 +44,50 @@ func (r *authCacheTestRepo) UpdateLastLogin(context.Context, string, time.Time) 
 	return errors.New("not implemented")
 }
 
+func TestMiddlewareRefreshesCachedMustChangePasswordUser(t *testing.T) {
+	secret := []byte("test-secret")
+	user := User{ID: "user-1", Username: "alice", Role: RoleAdmin, MustChangePassword: true}
+	repo := &authCacheTestRepo{user: user}
+	token, err := GenerateToken(secret, user.ID, user.Role, time.Hour)
+	if err != nil {
+		t.Fatalf("GenerateToken() error = %v", err)
+	}
+
+	middleware := Middleware(MiddlewareOptions{
+		Mode:              "jwt",
+		CookieName:        "session",
+		JWTSecret:         secret,
+		Repo:              repo,
+		TenantID:          "default",
+		SessionDuration:   time.Hour,
+		UserCache:         NewUserCache(time.Minute),
+		UserLookupTimeout: 10 * time.Millisecond,
+	})
+	handler := middleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusNoContent)
+	}))
+
+	first := httptest.NewRequest(http.MethodGet, "/api/services", nil)
+	first.AddCookie(&http.Cookie{Name: "session", Value: token})
+	firstRec := httptest.NewRecorder()
+	handler.ServeHTTP(firstRec, first)
+	if firstRec.Code != http.StatusForbidden {
+		t.Fatalf("first request status = %d, want %d", firstRec.Code, http.StatusForbidden)
+	}
+
+	repo.user.MustChangePassword = false
+	second := httptest.NewRequest(http.MethodGet, "/api/services", nil)
+	second.AddCookie(&http.Cookie{Name: "session", Value: token})
+	secondRec := httptest.NewRecorder()
+	handler.ServeHTTP(secondRec, second)
+	if secondRec.Code != http.StatusNoContent {
+		t.Fatalf("second request status = %d, want %d", secondRec.Code, http.StatusNoContent)
+	}
+	if repo.calls < 2 {
+		t.Fatalf("expected cached must-change user to be refreshed, got %d repo calls", repo.calls)
+	}
+}
+
 func TestMiddlewareUsesShortLivedUserCacheWhenDatabaseIsUnavailable(t *testing.T) {
 	secret := []byte("test-secret")
 	user := User{ID: "user-1", Username: "alice", Role: RoleAdmin}

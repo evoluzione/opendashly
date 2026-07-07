@@ -52,7 +52,7 @@ func BuildTracesQuery(filters map[string]string, filterList []FilterItem, from, 
 			query += " OFFSET " + strconv.Itoa(offset)
 		}
 	}
-	query += rawTelemetryQuerySettings
+	query += rawTelemetryQuerySettings()
 	return query
 }
 
@@ -73,7 +73,7 @@ func BuildTracesCountQuery(filters map[string]string, filterList []FilterItem, f
 	case "without_errors":
 		query += " HAVING errorCount = 0"
 	}
-	return "SELECT count() FROM (" + query + ")" + rawTelemetryQuerySettings
+	return "SELECT count() FROM (" + query + ")" + rawTelemetryQuerySettings()
 }
 
 func extractTraceErrorScope(filterList []FilterItem) (string, []FilterItem) {

@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"log"
 	"net/http"
+	"strings"
 	"time"
 
 	"opendashly/backend/internal/application/auth"
@@ -108,6 +109,10 @@ func (h *AuthHandler) ChangePassword(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusForbidden)
 		return
 	}
+	if err := validateNewPassword(user.PasswordHash, req.NewPassword); err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
 	newHash, err := auth.HashPassword(req.NewPassword)
 	if err != nil {
 		log.Printf("auth.change_password: hash failed user=%s err=%v", user.ID, err)
@@ -159,6 +164,10 @@ func (h *AuthHandler) FirstLoginChangePassword(w http.ResponseWriter, r *http.Re
 		w.WriteHeader(http.StatusForbidden)
 		return
 	}
+	if err := validateNewPassword(user.PasswordHash, req.NewPassword); err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
 	newHash, err := auth.HashPassword(req.NewPassword)
 	if err != nil {
 		log.Printf("auth.first_login_change_password: hash failed user=%s err=%v", user.ID, err)
@@ -200,6 +209,25 @@ func (h *AuthHandler) Session(w http.ResponseWriter, r *http.Request) {
 	}
 	writeJSON(w, sessionResponse{User: toUserResponse(*user), MustChangePassword: user.MustChangePassword})
 }
+
+func validateNewPassword(currentHash string, newPassword string) error {
+	if strings.TrimSpace(newPassword) == "" {
+		return errInvalidNewPassword
+	}
+	if auth.ComparePassword(currentHash, newPassword) == nil {
+		return errPasswordUnchanged
+	}
+	return nil
+}
+
+var (
+	errInvalidNewPassword = simpleError("La nuova password non può essere vuota")
+	errPasswordUnchanged  = simpleError("La nuova password deve essere diversa da quella attuale")
+)
+
+type simpleError string
+
+func (e simpleError) Error() string { return string(e) }
 
 func toUserResponse(user auth.User) userResponse {
 	return userResponse{

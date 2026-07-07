@@ -6,6 +6,7 @@ import (
 	"log"
 	"time"
 
+	"opendashly/backend/internal/infrastructure/config"
 	"opendashly/backend/internal/infrastructure/storage"
 )
 
@@ -20,7 +21,7 @@ func (s *Service) StartRollupBackfill(ctx context.Context, hours int) {
 		return
 	}
 	if hours <= 0 {
-		hours = 48
+		hours = config.Auto().DashboardRollupBackfillHours
 	}
 
 	go func() {
@@ -45,7 +46,7 @@ func (s *Service) runRollupBackfill(ctx context.Context, hours int) error {
 		return nil
 	}
 
-	chunkSize := 15 * time.Minute
+	chunkSize := time.Duration(config.Auto().DashboardRollupChunkMinutes) * time.Minute
 	for start := lower; start.Before(upper); start = start.Add(chunkSize) {
 		if reason, ok := s.dashboardPressureActive(); ok {
 			return fmt.Errorf("backend pressure active before backfill chunk: %s", reason)

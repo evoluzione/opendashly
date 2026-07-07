@@ -10,8 +10,15 @@ package main
 import (
 	"log"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
+)
+
+const (
+	configTemplatePath = "/etc/otelcol/config.yaml"
+	renderedConfigPath = "/tmp/otelcol-config.yaml"
+	fileStorageDir     = "/var/lib/otelcol/queue"
 )
 
 // fixed knobs that were identical across every old profile.
@@ -44,8 +51,8 @@ const (
 )
 
 func main() {
-	applyMemoryAutoTuning(realEnv{})
-	execCollector()
+	configPath := applyAutoTuning(realEnv{})
+	execCollector(configPath)
 }
 
 // memorySizing is the derived collector memory configuration.
@@ -56,38 +63,55 @@ type memorySizing struct {
 
 // env abstracts the host so the sizing can be unit-tested.
 type env interface {
-	getenv(string) string
 	readFile(string) ([]byte, error)
 	hostRAMBytes() (uint64, bool)
 }
 
-func applyMemoryAutoTuning(e env) {
+func applyAutoTuning(e env) string {
 	sizing := resolveMemorySizing(e)
-	mustSetEnv("OTEL_MEMORY_LIMITER_CHECK_INTERVAL", memoryLimiterCheckInterval)
-	mustSetEnv("OTEL_MEMORY_LIMIT_MIB", strconv.Itoa(sizing.limitMiB))
-	mustSetEnv("OTEL_MEMORY_SPIKE_LIMIT_MIB", strconv.Itoa(sizing.spikeMiB))
-	mustSetEnv("OTEL_BATCH_SEND_SIZE", batchSendSize)
-	mustSetEnv("OTEL_BATCH_TIMEOUT", batchTimeout)
-	mustSetEnv("OTEL_EXPORTER_TIMEOUT", exporterTimeout)
-	mustSetEnv("OTEL_SENDING_QUEUE_SIZE", sendingQueueSize)
-	mustSetEnv("OTEL_SENDING_QUEUE_CONSUMERS", sendingQueueConsumers)
-	mustSetEnv("OTEL_RETRY_INITIAL_INTERVAL", retryInitialInterval)
-	mustSetEnv("OTEL_RETRY_MAX_INTERVAL", retryMaxInterval)
-	mustSetEnv("OTEL_RETRY_MAX_ELAPSED_TIME", retryMaxElapsedTime)
-
+	values := map[string]string{
+		"MEMORY_LIMITER_CHECK_INTERVAL": memoryLimiterCheckInterval,
+		"MEMORY_LIMIT_MIB":              strconv.Itoa(sizing.limitMiB),
+		"MEMORY_SPIKE_LIMIT_MIB":        strconv.Itoa(sizing.spikeMiB),
+		"BATCH_SEND_SIZE":               batchSendSize,
+		"BATCH_TIMEOUT":                 batchTimeout,
+		"EXPORTER_TIMEOUT":              exporterTimeout,
+		"SENDING_QUEUE_SIZE":            sendingQueueSize,
+		"SENDING_QUEUE_CONSUMERS":       sendingQueueConsumers,
+		"RETRY_INITIAL_INTERVAL":        retryInitialInterval,
+		"RETRY_MAX_INTERVAL":            retryMaxInterval,
+		"RETRY_MAX_ELAPSED_TIME":        retryMaxElapsedTime,
+		"FILE_STORAGE_DIR":              fileStorageDir,
+	}
+	renderConfig(e, values)
 	log.Printf("otel auto-tuning: memory_limit=%dMiB spike=%dMiB", sizing.limitMiB, sizing.spikeMiB)
+	return renderedConfigPath
 }
 
-// resolveMemorySizing derives the limiter sizing from, in order: an explicit
-// OTEL_MEMORY_LIMIT_MIB override (escape hatch), the cgroup memory limit, or
-// host RAM. A safe floor applies in all cases.
-func resolveMemorySizing(e env) memorySizing {
-	if override := strings.TrimSpace(e.getenv("OTEL_MEMORY_LIMIT_MIB")); override != "" {
-		if mibVal, err := strconv.Atoi(override); err == nil && mibVal > 0 {
-			return sizingFromLimitMiB(mibVal)
-		}
+func renderConfig(e env, values map[string]string) {
+	data, err := e.readFile(configTemplatePath)
+	if err != nil {
+		log.Fatalf("failed reading collector config template: %v", err)
 	}
+	out := string(data)
+	for key, value := range values {
+		out = strings.ReplaceAll(out, "__"+key+"__", value)
+	}
+	if strings.Contains(out, "__") {
+		log.Fatalf("collector config template contains unresolved auto-tuning placeholders")
+	}
+	if err := os.MkdirAll(filepath.Dir(renderedConfigPath), 0o755); err != nil {
+		log.Fatalf("failed creating rendered config directory: %v", err)
+	}
+	if err := os.WriteFile(renderedConfigPath, []byte(out), 0o600); err != nil {
+		log.Fatalf("failed writing rendered collector config: %v", err)
+	}
+}
 
+// resolveMemorySizing derives the limiter sizing from the cgroup memory limit
+// or host RAM. A safe floor applies in all cases; external env overrides are no
+// longer accepted because the collector is fully auto-tuned.
+func resolveMemorySizing(e env) memorySizing {
 	availBytes, ok := detectMemoryLimitBytes(e)
 	if !ok {
 		// No signal at all: assume a modest container.
@@ -155,16 +179,8 @@ func readCgroupV1(e env) (uint64, bool) {
 	return v, true
 }
 
-func mustSetEnv(key string, value string) {
-	if err := os.Setenv(key, value); err != nil {
-		log.Fatalf("failed setting %s: %v", key, err)
-	}
-}
-
-// realEnv is the production env backed by the OS.
+// realEnv is the production host backed by the OS.
 type realEnv struct{}
-
-func (realEnv) getenv(key string) string { return os.Getenv(key) }
 
 func (realEnv) readFile(path string) ([]byte, error) { return os.ReadFile(path) }
 

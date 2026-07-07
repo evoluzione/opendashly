@@ -76,13 +76,17 @@ func NewRouter(cfg RouterConfig) http.Handler {
 }
 
 func buildRouteHandlers(cfg RouterConfig) routeHandlers {
-	dashboardTimeout := 15 * time.Second
+	auto := config.Auto()
+	dashboardTimeout := time.Duration(auto.DashboardRequestTimeoutSec) * time.Second
 	if cfg.Config != nil && cfg.Config.DashboardRequestTimeoutSec > 0 {
 		dashboardTimeout = time.Duration(cfg.Config.DashboardRequestTimeoutSec) * time.Second
 	}
 
 	return routeHandlers{
-		queryHandler:          &handlers.QueryHandler{Service: cfg.QueryService},
+		queryHandler: &handlers.QueryHandler{
+			Service: cfg.QueryService,
+			Timeout: time.Duration(auto.QueryRequestTimeoutSec) * time.Second,
+		},
 		traceRelatedHandler:   &handlers.TraceRelatedHandler{Service: cfg.RelatedService},
 		traceSpansHandler:     &handlers.TraceSpansHandler{Service: cfg.TraceSpansService},
 		statusHandler:         &handlers.StatusHandler{Service: cfg.StatusService},
@@ -99,7 +103,10 @@ func buildRouteHandlers(cfg RouterConfig) routeHandlers {
 			Timeout: dashboardTimeout,
 		},
 		aiSettingsHandler: &handlers.AISettingsHandler{Service: cfg.AIService},
-		attributesHandler: &handlers.AttributesHandler{Service: cfg.QueryService},
+		attributesHandler: &handlers.AttributesHandler{
+			Service: cfg.QueryService,
+			Timeout: time.Duration(auto.QueryAttributesTimeoutSec) * time.Second,
+		},
 		dashboardSettings: &handlers.DashboardSettingsHandler{Service: cfg.DashboardSettings},
 		workspaceSettings: &handlers.WorkspaceSettingsHandler{Service: cfg.WorkspaceSettings},
 	}

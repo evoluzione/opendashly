@@ -8,10 +8,16 @@ import (
 	"time"
 
 	"opendashly/backend/internal/application/bootstrap"
+	"opendashly/backend/internal/infrastructure/config"
 )
 
 func main() {
-	debug.SetMemoryLimit(400 * 1024 * 1024)
+	auto := config.Auto()
+	memoryLimitMiB := auto.RetentionPressureMemBudgetMB
+	if memoryLimitMiB <= 0 {
+		memoryLimitMiB = 400
+	}
+	debug.SetMemoryLimit(int64(memoryLimitMiB) * 1024 * 1024)
 	debug.SetGCPercent(50)
 
 	ctx := context.Background()
@@ -23,9 +29,9 @@ func main() {
 	srv := &http.Server{
 		Addr:         app.ListenAddr,
 		Handler:      app.Handler,
-		ReadTimeout:  10 * time.Second,
-		WriteTimeout: 30 * time.Second,
-		IdleTimeout:  60 * time.Second,
+		ReadTimeout:  time.Duration(auto.APIReadTimeoutSec) * time.Second,
+		WriteTimeout: time.Duration(auto.APIWriteTimeoutSec) * time.Second,
+		IdleTimeout:  time.Duration(auto.APIIdleTimeoutSec) * time.Second,
 	}
 
 	log.Printf("listening on %s", app.ListenAddr)
