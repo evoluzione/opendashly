@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"opendashly/backend/internal/application/query"
+	"opendashly/backend/internal/infrastructure/config"
 )
 
 type ServicesHandler struct {
@@ -21,7 +22,7 @@ type servicesResponse struct {
 func (h *ServicesHandler) List(w http.ResponseWriter, r *http.Request) {
 	timeout := h.Timeout
 	if timeout <= 0 {
-		timeout = 15 * time.Second
+		timeout = time.Duration(config.Auto().ServiceListTimeoutSec) * time.Second
 	}
 	ctx, cancel := context.WithTimeout(r.Context(), timeout)
 	defer cancel()

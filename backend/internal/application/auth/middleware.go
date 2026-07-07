@@ -64,13 +64,9 @@ func Middleware(opts MiddlewareOptions) func(http.Handler) http.Handler {
 				w.WriteHeader(http.StatusUnauthorized)
 				return
 			}
-			var user *User
-			if cached, ok := opts.UserCache.Get(claims.UserID); ok {
-				user = &cached
-			} else {
+			fetchUser := func() (*User, bool) {
 				if opts.Repo == nil {
-					w.WriteHeader(http.StatusUnauthorized)
-					return
+					return nil, false
 				}
 				lookupCtx := r.Context()
 				cancel := func() {}
@@ -80,11 +76,31 @@ func Middleware(opts MiddlewareOptions) func(http.Handler) http.Handler {
 				dbUser, err := opts.Repo.GetByID(lookupCtx, claims.UserID)
 				cancel()
 				if err != nil {
+					return nil, false
+				}
+				opts.UserCache.Set(*dbUser)
+				return dbUser, true
+			}
+
+			var user *User
+			if cached, ok := opts.UserCache.Get(claims.UserID); ok {
+				user = &cached
+				// A cached must-change-password=true user is intentionally not trusted:
+				// immediately after the first-login password update, the cache may still
+				// contain the old user and would keep returning 403 for every API call
+				// until TTL expiry. Refresh once before enforcing the restriction.
+				if cached.MustChangePassword {
+					if refreshed, ok := fetchUser(); ok {
+						user = refreshed
+					}
+				}
+			} else {
+				var ok bool
+				user, ok = fetchUser()
+				if !ok {
 					w.WriteHeader(http.StatusUnauthorized)
 					return
 				}
-				opts.UserCache.Set(*dbUser)
-				user = dbUser
 			}
 			if user.IsDisabled {
 				w.WriteHeader(http.StatusForbidden)

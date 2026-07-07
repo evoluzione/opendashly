@@ -7,7 +7,7 @@ import "log"
 // execCollector is only meaningful inside the Linux collector image. The
 // non-Linux build exists solely so the sizing logic can be unit-tested on a
 // developer machine.
-func execCollector() {
+func execCollector(string) {
 	log.Fatal("otel-autotune-launcher is only supported on linux")
 }
 

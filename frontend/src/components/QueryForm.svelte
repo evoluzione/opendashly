@@ -733,6 +733,11 @@
         {/each}
         <option value="custom">{t($locale, "range.custom")}</option>
       </select>
+      {#if selectedRange === "custom"}
+        <button type="button" class="btn-secondary edit-custom-range" on:click={openCustomRangeModal}>
+          {t($locale, "query.editCustomRange")}
+        </button>
+      {/if}
     </div>
     <p class="time-range-summary">{rangeSummary}</p>
     {#if rangeError}
@@ -989,6 +994,16 @@
     grid-template-columns: minmax(0, 1fr);
     gap: 8px;
     align-items: center;
+  }
+
+  .time-range-controls:has(.edit-custom-range) {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .edit-custom-range {
+    padding: 10px 14px;
+    font-size: 13px;
+    white-space: nowrap;
   }
 
   .time-range-summary {

@@ -169,7 +169,7 @@ func Build(ctx context.Context) (*App, error) {
 		TenantID:          "default",
 		AllowlistPaths:    []string{"/healthz", "/api/auth/login"},
 		SessionDuration:   24 * time.Hour,
-		UserLookupTimeout: 750 * time.Millisecond,
+		UserLookupTimeout: time.Duration(config.Auto().AuthUserLookupTimeoutMS) * time.Millisecond,
 	})
 
 	handler := httpapi.NewRouter(httpapi.RouterConfig{
@@ -197,7 +197,7 @@ func Build(ctx context.Context) (*App, error) {
 	// longer affect login.
 	if cfg.DashboardRollupBackfill {
 		go func() {
-			time.Sleep(30 * time.Second)
+			time.Sleep(time.Duration(config.Auto().DashboardRollupBackfillDelaySec) * time.Second)
 			dashboardService.StartRollupBackfill(context.Background(), cfg.DashboardRollupBackfillHours)
 			statusService.StartRollupBackfill(context.Background(), cfg.DashboardRollupBackfillHours)
 		}()

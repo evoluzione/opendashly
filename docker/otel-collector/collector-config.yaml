@@ -8,24 +8,24 @@ receivers:
 
 processors:
   memory_limiter:
-    check_interval: ${env:OTEL_MEMORY_LIMITER_CHECK_INTERVAL}
-    limit_mib: ${env:OTEL_MEMORY_LIMIT_MIB}
-    spike_limit_mib: ${env:OTEL_MEMORY_SPIKE_LIMIT_MIB}
+    check_interval: __MEMORY_LIMITER_CHECK_INTERVAL__
+    limit_mib: __MEMORY_LIMIT_MIB__
+    spike_limit_mib: __MEMORY_SPIKE_LIMIT_MIB__
   batch:
-    send_batch_size: ${env:OTEL_BATCH_SEND_SIZE}
-    timeout: ${env:OTEL_BATCH_TIMEOUT}
+    send_batch_size: __BATCH_SEND_SIZE__
+    timeout: __BATCH_TIMEOUT__
 
 exporters:
   clickhouse:
     endpoint: tcp://clickhouse:9000
     database: telemetry
-    timeout: ${env:OTEL_EXPORTER_TIMEOUT}
+    timeout: __EXPORTER_TIMEOUT__
     username: otel
     password: ${env:CLICKHOUSE_PASSWORD}
     sending_queue:
       enabled: true
-      queue_size: ${env:OTEL_SENDING_QUEUE_SIZE}
-      num_consumers: ${env:OTEL_SENDING_QUEUE_CONSUMERS}
+      queue_size: __SENDING_QUEUE_SIZE__
+      num_consumers: __SENDING_QUEUE_CONSUMERS__
       storage: file_storage
       # Never block the pipeline on a full queue: with blocking=true a broken
       # ClickHouse backs the whole collector up until it wedges (health
@@ -34,15 +34,15 @@ exporters:
       blocking: false
     retry_on_failure:
       enabled: true
-      initial_interval: ${env:OTEL_RETRY_INITIAL_INTERVAL}
-      max_interval: ${env:OTEL_RETRY_MAX_INTERVAL}
-      max_elapsed_time: ${env:OTEL_RETRY_MAX_ELAPSED_TIME}
+      initial_interval: __RETRY_INITIAL_INTERVAL__
+      max_interval: __RETRY_MAX_INTERVAL__
+      max_elapsed_time: __RETRY_MAX_ELAPSED_TIME__
 
 extensions:
   health_check:
     endpoint: 0.0.0.0:13133
   file_storage:
-    directory: ${env:OTEL_FILE_STORAGE_DIR}
+    directory: __FILE_STORAGE_DIR__
     create_directory: true
 
 service:

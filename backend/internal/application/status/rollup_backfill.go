@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"opendashly/backend/internal/infrastructure/config"
 	"opendashly/backend/internal/infrastructure/storage"
 )
 
@@ -124,9 +125,9 @@ func buildStatusLogsBackfillQuery(start, end time.Time) string {
 		FROM telemetry.otel_logs
 		WHERE Timestamp >= '%s' AND Timestamp < '%s'
 		GROUP BY time_bucket
-		SETTINGS max_execution_time = 5, max_threads = 1, max_memory_usage = 67108864,
+		SETTINGS max_execution_time = %d, max_threads = 1, max_memory_usage = 67108864,
 			max_bytes_before_external_group_by = 16777216
-	`, formatStatusTime(start), formatStatusTime(end))
+	`, formatStatusTime(start), formatStatusTime(end), config.Auto().StatusRollupBackfillMaxExecSec)
 }
 
 func buildStatusTracesBackfillQuery(start, end time.Time) string {
@@ -138,9 +139,9 @@ func buildStatusTracesBackfillQuery(start, end time.Time) string {
 		FROM telemetry.otel_traces
 		WHERE Timestamp >= '%s' AND Timestamp < '%s'
 		GROUP BY time_bucket
-		SETTINGS max_execution_time = 5, max_threads = 1, max_memory_usage = 67108864,
+		SETTINGS max_execution_time = %d, max_threads = 1, max_memory_usage = 67108864,
 			max_bytes_before_external_group_by = 16777216
-	`, formatStatusTime(start), formatStatusTime(end))
+	`, formatStatusTime(start), formatStatusTime(end), config.Auto().StatusRollupBackfillMaxExecSec)
 }
 
 func formatStatusTime(t time.Time) string {

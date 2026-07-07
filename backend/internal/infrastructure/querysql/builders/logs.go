@@ -5,6 +5,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"opendashly/backend/internal/infrastructure/config"
 )
 
 type LogsPageCursor struct {
@@ -13,7 +15,9 @@ type LogsPageCursor struct {
 	SpanID    string
 }
 
-const rawTelemetryQuerySettings = " SETTINGS max_execution_time = 8, max_threads = 1, max_memory_usage = 67108864, max_bytes_before_external_group_by = 16777216, max_bytes_before_external_sort = 16777216"
+func rawTelemetryQuerySettings() string {
+	return fmt.Sprintf(" SETTINGS max_execution_time = %d, max_threads = 1, max_memory_usage = 67108864, max_bytes_before_external_group_by = 16777216, max_bytes_before_external_sort = 16777216", config.Auto().ClickHouseMaxExecSec)
+}
 
 // BuildLogsQuery creates a ClickHouse SQL statement for logs.
 //
@@ -48,7 +52,7 @@ func BuildLogsQuery(filters map[string]string, filterList []FilterItem, from, to
 		query := "SELECT Timestamp AS timestamp, SeverityText AS severity, Body AS body, TraceId AS traceId, SpanId AS spanId, ResourceAttributes AS resourceAttributes, LogAttributes AS logAttributes FROM telemetry.otel_logs"
 		query += whereClause
 		query += " ORDER BY Timestamp DESC, TraceId DESC, SpanId DESC"
-		return query + rawTelemetryQuerySettings
+		return query + rawTelemetryQuerySettings()
 	}
 
 	inner := "SELECT Timestamp, TraceId, SpanId FROM telemetry.otel_logs"
@@ -68,7 +72,7 @@ func BuildLogsQuery(filters map[string]string, filterList []FilterItem, from, to
 	}
 	query += "(Timestamp, TraceId, SpanId) IN (" + inner + ")"
 	query += " ORDER BY Timestamp DESC, TraceId DESC, SpanId DESC"
-	return query + rawTelemetryQuerySettings
+	return query + rawTelemetryQuerySettings()
 }
 
 // BuildLogsCountQuery creates a count query for logs.
@@ -86,7 +90,7 @@ func BuildLogsCountQuery(filters map[string]string, filterList []FilterItem, fro
 	if len(clauses) > 0 {
 		query += " WHERE " + strings.Join(clauses, " AND ")
 	}
-	return query + rawTelemetryQuerySettings
+	return query + rawTelemetryQuerySettings()
 }
 
 func extractLogsBodySearch(filterList []FilterItem) (string, []FilterItem) {

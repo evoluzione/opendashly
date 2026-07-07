@@ -6,20 +6,15 @@ services:
       - "8080:8080"
       - "5173:5173"
     environment:
-      - CLICKHOUSE_ADDR=clickhouse:9000
-      - CLICKHOUSE_USER=otel
-      - CLICKHOUSE_PASSWORD=${CLICKHOUSE_PASSWORD}
-      - COLLECTOR_HEALTH_URL=http://otel-collector:13133
-      - AUTH_MODE=jwt
-      - AUTH_SECRET=${AUTH_SECRET}
-      - CORS_ALLOWED_ORIGINS=${CORS_ALLOWED_ORIGINS}
+      - CLICKHOUSE_PASSWORD=${CLICKHOUSE_PASSWORD:?set CLICKHOUSE_PASSWORD}
+      - AUTH_SECRET=${AUTH_SECRET:?set AUTH_SECRET}
+      - CORS_ALLOWED_ORIGINS=${CORS_ALLOWED_ORIGINS:?set CORS_ALLOWED_ORIGINS}
     depends_on:
       clickhouse:
         condition: service_healthy
     # Probe the backend API on :8080 directly. A bare process-up check is not
     # enough: the backend can die (or wedge) while the frontend on :5173 keeps
-    # the container "Up". /healthz is in the auth allowlist so it answers 200
-    # without credentials. autoheal restarts the container if this stays red.
+    # the container "Up".
     healthcheck:
       test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://localhost:8080/healthz"]
       interval: 10s
@@ -28,8 +23,6 @@ services:
       start_period: 30s
     labels:
       - autoheal=true
-    mem_limit: ${APP_MEM_LIMIT:-768m}
-    memswap_limit: ${APP_MEMSWAP_LIMIT:-768m}
     logging:
       driver: json-file
       options:
@@ -41,12 +34,12 @@ services:
     image: ghcr.io/evoluzione/opendashly-clickhouse:latest
     container_name: opendashly-clickhouse
     ports:
-      - "127.0.0.1:${CLICKHOUSE_HTTP_PORT:-8123}:8123"
-      - "127.0.0.1:${CLICKHOUSE_TCP_PORT:-9000}:9000"
+      - "127.0.0.1:8123:8123"
+      - "127.0.0.1:9000:9000"
     environment:
       - CLICKHOUSE_DB=telemetry
       - CLICKHOUSE_USER=otel
-      - CLICKHOUSE_PASSWORD=${CLICKHOUSE_PASSWORD}
+      - CLICKHOUSE_PASSWORD=${CLICKHOUSE_PASSWORD:?set CLICKHOUSE_PASSWORD}
       - CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT=1
     volumes:
       - clickhouse_data:/var/lib/clickhouse
@@ -54,15 +47,13 @@ services:
       # Force the probe through the memory tracker (max_untracked_memory=0): a
       # bare SELECT 1 fits in untracked memory and stays green even when the
       # server rejects every real query with code 241 (tracked total > cap).
-      test: ["CMD", "clickhouse-client", "--user", "otel", "--password", "${CLICKHOUSE_PASSWORD}", "--max_untracked_memory", "0", "--max_threads", "1", "--query", "SELECT count() FROM numbers(65536)"]
+      test: ["CMD", "clickhouse-client", "--user", "otel", "--password", "${CLICKHOUSE_PASSWORD:?set CLICKHOUSE_PASSWORD}", "--max_untracked_memory", "0", "--max_threads", "1", "--query", "SELECT count() FROM numbers(65536)"]
       interval: 5s
       timeout: 3s
       retries: 15
       start_period: 60s
     labels:
       - autoheal=true
-    mem_limit: ${CLICKHOUSE_MEM_LIMIT:-1536m}
-    memswap_limit: ${CLICKHOUSE_MEMSWAP_LIMIT:-1536m}
     logging:
       driver: json-file
       options:
@@ -73,14 +64,12 @@ services:
   otel-collector:
     image: ghcr.io/evoluzione/opendashly-otel-collector:latest
     container_name: opendashly-otel-collector
-    command: ["--config=/etc/otelcol/config.yaml"]
     ports:
       - "4317:4317"
       - "4318:4318"
       - "13133:13133"
     environment:
-      - CLICKHOUSE_PASSWORD=${CLICKHOUSE_PASSWORD}
-      - OTEL_FILE_STORAGE_DIR=${OTEL_FILE_STORAGE_DIR:-/var/lib/otelcol/queue}
+      - CLICKHOUSE_PASSWORD=${CLICKHOUSE_PASSWORD:?set CLICKHOUSE_PASSWORD}
     depends_on:
       clickhouse:
         condition: service_healthy
@@ -95,8 +84,6 @@ services:
       start_period: 30s
     labels:
       - autoheal=true
-    mem_limit: ${OTEL_COLLECTOR_MEM_LIMIT:-512m}
-    memswap_limit: ${OTEL_COLLECTOR_MEMSWAP_LIMIT:-512m}
     logging:
       driver: json-file
       options:
@@ -104,11 +91,8 @@ services:
         max-file: "3"
     restart: unless-stopped
 
-  # Docker never restarts an unhealthy container on its own: restart policies
-  # only fire on process exit, and healthchecks only gate depends_on at boot.
-  # autoheal closes that gap by restarting any container labeled autoheal=true
-  # that stays unhealthy (e.g. ClickHouse rejecting every query with code 241
-  # while its process is still alive, or a wedged collector pipeline).
+  # Docker restart policies do not react to healthcheck failures. autoheal
+  # restarts containers labeled autoheal=true when they become unhealthy.
   autoheal:
     image: willfarrell/autoheal:latest
     container_name: opendashly-autoheal

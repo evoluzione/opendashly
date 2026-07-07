@@ -10,6 +10,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"opendashly/backend/internal/infrastructure/config"
 )
 
 var processStartedAt = time.Now()
@@ -51,7 +53,7 @@ type RuntimeSummary struct {
 }
 
 func (s *Service) Runtime(ctx context.Context) RuntimeSummary {
-	const slowThresholdSec = 2.0
+	slowThresholdSec := config.Auto().StatusSlowThresholdSec
 
 	now := time.Now().UTC()
 	summary := RuntimeSummary{
@@ -74,7 +76,7 @@ func (s *Service) Runtime(ctx context.Context) RuntimeSummary {
 		warnings = append(warnings, "Storage non configurato: metriche database non disponibili")
 	} else {
 		summary.Components = append(summary.Components, s.databaseHealth(ctx))
-		queryCtx, cancel := context.WithTimeout(ctx, 750*time.Millisecond)
+		queryCtx, cancel := context.WithTimeout(ctx, time.Duration(config.Auto().StatusRuntimeQueryTimeoutMS)*time.Millisecond)
 		queries, queryWarnings, queryErr := s.queryHealth(queryCtx, slowThresholdSec)
 		cancel()
 		if queryErr != nil {
@@ -130,7 +132,7 @@ func (s *Service) collectorHealth(ctx context.Context) ComponentHealth {
 		strings.TrimRight(url, "/") + "/health/status",
 	}
 
-	httpClient := &http.Client{Timeout: 1500 * time.Millisecond}
+	httpClient := &http.Client{Timeout: time.Duration(config.Auto().StatusCollectorTimeoutMS) * time.Millisecond}
 	for _, endpoint := range candidates {
 		startedAt := time.Now()
 		req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)

@@ -10,11 +10,13 @@ import (
 
 	"opendashly/backend/internal/application/pressure"
 	"opendashly/backend/internal/application/query"
+	"opendashly/backend/internal/infrastructure/config"
 )
 
 // QueryHandler runs ad-hoc queries.
 type QueryHandler struct {
 	Service *query.Service
+	Timeout time.Duration
 }
 
 func (h *QueryHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -34,7 +36,11 @@ func (h *QueryHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		req.Limit,
 		req.OrderBy,
 	)
-	ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
+	timeout := h.Timeout
+	if timeout <= 0 {
+		timeout = time.Duration(config.Auto().QueryRequestTimeoutSec) * time.Second
+	}
+	ctx, cancel := context.WithTimeout(r.Context(), timeout)
 	defer cancel()
 
 	result, err := h.Service.Run(ctx, req)

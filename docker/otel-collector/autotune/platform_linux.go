@@ -5,16 +5,20 @@ package main
 import (
 	"log"
 	"os"
+	"strings"
 	"syscall"
 )
 
-// execCollector replaces this process with the collector, preserving the
-// environment we just tuned.
-func execCollector() {
+// execCollector replaces this process with the collector using the rendered
+// auto-tuned config.
+func execCollector(configPath string) {
 	target := "/otelcol-contrib"
-	args := os.Args[1:]
-	if len(args) == 0 {
-		args = []string{"--config=/etc/otelcol/config.yaml"}
+	args := []string{"--config=" + configPath}
+	for _, arg := range os.Args[1:] {
+		if strings.HasPrefix(arg, "--config") {
+			continue
+		}
+		args = append(args, arg)
 	}
 
 	if err := syscall.Exec(target, append([]string{target}, args...), os.Environ()); err != nil {

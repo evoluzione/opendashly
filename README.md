@@ -173,26 +173,21 @@ The production stack uses prebuilt images from GHCR — no repository clone need
 
 ### Deploy
 
-**1. Set secrets and CORS.** Create a `.env` next to `docker-compose.prod.yml`. There are **no machine profiles to choose** — the stack self-tunes (see below), so you only set secrets, CORS, and optional ports.
+**1. Set only secrets and CORS.** Create a `.env` next to `docker-compose.prod.yml`. There are no machine profiles and no runtime tuning variables to set.
 
 ```bash
-# Required secrets
 AUTH_SECRET=replace-with-32-plus-random-chars
 CLICKHOUSE_PASSWORD=replace-with-strong-password
 CORS_ALLOWED_ORIGINS=http://your-host:5173
-
-# Optional ports
-CLICKHOUSE_HTTP_PORT=8123
-CLICKHOUSE_TCP_PORT=9000
 ```
 
 **Self-tuning instead of profiles.** The old `small`/`standard`/`big` profiles are gone. Each component adapts on its own and stays as resilient as possible:
 
-- **Backend** — starts its load-sensitive knobs (dashboard query parallelism, telemetry concurrency, per-query ClickHouse memory) at a safe floor that runs on the weakest VM, then adapts them at runtime with an AIMD controller: it grows them by one step after sustained calm and cuts them sharply the moment it detects pressure (memory, ClickHouse disk, or recoverable OOM/timeout errors). No sizing input required — it discovers its own ceiling.
-- **OTel collector** — sizes its `memory_limiter` at boot from the container's cgroup memory limit (the collector's `mem_limit` in compose), falling back to host RAM. Set `OTEL_MEMORY_LIMIT_MIB` only as an explicit escape hatch.
+- **Backend** — auto-sizes fixed operational defaults from cgroup CPU/RAM, starts load-sensitive knobs (dashboard query parallelism, telemetry concurrency, per-query ClickHouse memory) at a safe floor, then adapts them at runtime with an AIMD controller: it grows them by one step after sustained calm and cuts them sharply the moment it detects pressure (memory, ClickHouse disk, or recoverable OOM/timeout errors).
+- **OTel collector** — sizes its `memory_limiter`, batching and queue knobs at boot from the container cgroup limit, falling back to host RAM. There is no external override.
 - **ClickHouse** — scales server memory from available RAM via `max_server_memory_usage_to_ram_ratio`; per-query budgets come from the backend's adaptive settings.
 
-To constrain a component on a small host, set its container `mem_limit` in compose — the collector and ClickHouse adapt to whatever they're given. `CLICKHOUSE_MEM_LIMIT` / `CLICKHOUSE_MEMSWAP_LIMIT` in `docker-compose.prod.yml` control the ClickHouse container/server budget; raise them if the host has spare RAM. Heavy telemetry queries stay isolated so the UI remains navigable under pressure.
+Heavy telemetry queries stay isolated so the UI remains navigable under pressure.
 
 **2. Resilience behavior:**
 
@@ -228,7 +223,7 @@ Then open `http://localhost:5173` and log in with `admin` / `admin`.
 - [ ] Block direct ClickHouse ports (8123, 9000) from the internet
 - [ ] Restrict `CORS_ALLOWED_ORIGINS` to your actual domains
 - [ ] Enable API rate limiting
-- [ ] Configure data retention policies
+- [ ] Review data retention policies
 - [ ] Set up ClickHouse backups
 
 ---

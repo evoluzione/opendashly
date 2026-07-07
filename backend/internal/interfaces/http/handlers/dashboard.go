@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"opendashly/backend/internal/application/metrics"
+	"opendashly/backend/internal/infrastructure/config"
 )
 
 // DashboardHandler handles dashboard metrics requests.
@@ -70,7 +71,7 @@ func (h *DashboardHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	timeout := h.Timeout
 	if timeout <= 0 {
-		timeout = 15 * time.Second
+		timeout = time.Duration(config.Auto().DashboardRequestTimeoutSec) * time.Second
 	}
 
 	ctx, cancel := context.WithTimeout(r.Context(), timeout)

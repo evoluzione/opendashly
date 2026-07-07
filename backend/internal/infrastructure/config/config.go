@@ -1,9 +1,9 @@
 package config
 
 import (
-	"fmt"
+	"crypto/rand"
+	"encoding/base64"
 	"os"
-	"strconv"
 	"strings"
 )
 
@@ -65,130 +65,99 @@ type Config struct {
 	DebugQuery                   bool
 }
 
-// Load reads configuration from environment variables.
+// Load builds runtime configuration. Operational knobs are auto-derived; only
+// secrets and deployment-facing integration policy remain environment-driven.
 func Load() (*Config, error) {
 	cfg := &Config{
-		ClickHouseAddr:     os.Getenv("CLICKHOUSE_ADDR"),
-		ClickHouseUser:     os.Getenv("CLICKHOUSE_USER"),
+		ClickHouseAddr:     "clickhouse:9000",
+		ClickHouseUser:     "otel",
 		ClickHousePassword: os.Getenv("CLICKHOUSE_PASSWORD"),
-		CollectorHealthURL: os.Getenv("COLLECTOR_HEALTH_URL"),
-		ListenAddr:         os.Getenv("API_LISTEN_ADDR"),
-		AuthMode:           os.Getenv("AUTH_MODE"),
+		CollectorHealthURL: "http://otel-collector:13133",
+		ListenAddr:         ":8080",
+		AuthMode:           "jwt",
 		AuthSecret:         os.Getenv("AUTH_SECRET"),
-		AuthCookieName:     os.Getenv("AUTH_COOKIE_NAME"),
-		CORSAllowedOrigins: getEnvCSV("CORS_ALLOWED_ORIGINS", []string{"http://localhost:5173"}),
-		DebugQuery:         os.Getenv("VITE_DEBUG_QUERY") == "true",
-	}
-	cfg.applyDefaults()
-	if cfg.ClickHouseAddr == "" {
-		return nil, fmt.Errorf("CLICKHOUSE_ADDR is required")
-	}
-	if cfg.ListenAddr == "" {
-		cfg.ListenAddr = ":8080"
-	}
-	if cfg.CollectorHealthURL == "" {
-		cfg.CollectorHealthURL = "http://otel-collector:13133"
-	}
-	if cfg.AuthMode == "" {
-		cfg.AuthMode = "jwt"
+		AuthCookieName:     "oteldash_session",
+		CORSAllowedOrigins: envCSV("CORS_ALLOWED_ORIGINS", []string{"http://localhost:5173"}),
+		DebugQuery:         false,
 	}
 	if cfg.AuthSecret == "" {
-		cfg.AuthSecret = "dev-secret"
+		cfg.AuthSecret = generateEphemeralSecret()
 	}
-	if cfg.AuthCookieName == "" {
-		cfg.AuthCookieName = "oteldash_session"
-	}
+	cfg.applyDefaults()
 	return cfg, nil
 }
 
-// applyDefaults seeds the single resilient default for every tuning knob. There
-// are no machine profiles: knobs that are not safe to vary live (timeouts,
-// pools, retention caps, pressure thresholds) get one conservative value, while
-// the load-sensitive knobs (DashboardQueryParallelism, TelemetryQueryConcurrency,
-// ClickHouseMaxMemoryMiB and its spill thresholds) are seeded at their floor and
-// then driven at runtime by the adaptive tuning controller.
-func (cfg *Config) applyDefaults() {
-	// Static, resilient defaults (set once, never varied at runtime).
-	cfg.ServiceListTimeoutSec = 20
-	cfg.CleanupIntervalMinutes = 720
-	cfg.RetentionAdaptiveEnabled = true
-	// Generous retention caps: adaptive retention + disk-pressure step-down pull
-	// these down only under real pressure, so we never pre-emptively drop data.
-	cfg.MaxLogRetentionDays = 30
-	cfg.MaxTraceRetentionDays = 15
-	cfg.RetentionStepDownDays = 2
-	cfg.RetentionMaxLevel = 2
-	cfg.RetentionMinTraceHours = 24
-	cfg.RetentionMinLogHours = 24
-	cfg.RetentionPressureCooldownSec = 300
-	cfg.RetentionPressureMinSignals = 2
-	cfg.RetentionPressureWindowSec = 300
-	cfg.RetentionPressureErrorCount = 4
-	cfg.RetentionPressureMemPct = 85
-	cfg.RetentionPressureMemBudgetMB = 256
-	cfg.RetentionPressureDiskPct = 90
-	cfg.RetentionPreCount = false
-	cfg.ClickHouseTempDiskMiB = 768
-	cfg.ClickHouseMaxExecSec = 20
-	cfg.ClickHouseMaxOpenConns = 4
-	cfg.ClickHouseMaxIdleConns = 2
-	cfg.ClickHouseDialTimeout = 5
-	cfg.ClickHouseReadTimeout = 30
-	cfg.DashboardFreshCacheTTLSec = 30
-	cfg.DashboardStaleCacheTTLSec = 900
-	cfg.DashboardRequestTimeoutSec = 20
-	cfg.DashboardHalveOnOOM = true
-	cfg.DashboardRawFallback = false
-	cfg.DashboardPressureCooldownSec = 60
-	cfg.DashboardLastGoodTTLSec = 1800
-	cfg.DashboardRollupBackfill = true
-	cfg.DashboardRollupBackfillHours = 48
-
-	// Load-sensitive knobs: seeded at the controller floor. The tuning
-	// controller raises them while the backend is calm and cuts them under
-	// pressure. The values here are the connection-level safety floor used
-	// before the controller's first tick and as a fallback for non-dashboard
-	// queries.
-	cfg.DashboardQueryParallelism = 1
-	cfg.TelemetryQueryConcurrency = 1
-	cfg.ClickHouseMaxMemoryMiB = 64
-	cfg.ClickHouseExternalGroupByMiB = 16
-	cfg.ClickHouseExternalSortMiB = 16
-}
-
-func getEnvInt(key string, defaultVal int) int {
-	if val := os.Getenv(key); val != "" {
-		if i, err := strconv.Atoi(val); err == nil {
-			return i
-		}
-	}
-	return defaultVal
-}
-
-func getEnvCSV(key string, defaultVals []string) []string {
+func envCSV(key string, defaultVals []string) []string {
 	raw := os.Getenv(key)
-	if raw == "" {
+	if strings.TrimSpace(raw) == "" {
 		return defaultVals
 	}
 	parts := strings.Split(raw, ",")
-	out := make([]string, 0, len(parts))
+	values := make([]string, 0, len(parts))
 	for _, part := range parts {
 		value := strings.TrimSpace(part)
 		if value != "" {
-			out = append(out, value)
+			values = append(values, value)
 		}
 	}
-	if len(out) == 0 {
+	if len(values) == 0 {
 		return defaultVals
 	}
-	return out
+	return values
 }
 
-func getEnvBool(key string, defaultVal bool) bool {
-	if val := os.Getenv(key); val != "" {
-		if b, err := strconv.ParseBool(val); err == nil {
-			return b
-		}
+func generateEphemeralSecret() string {
+	buf := make([]byte, 32)
+	if _, err := rand.Read(buf); err != nil {
+		return "opendashly-ephemeral-auth-secret"
 	}
-	return defaultVal
+	return base64.RawURLEncoding.EncodeToString(buf)
+}
+
+// applyDefaults derives every non-secret operational knob locally. Environment
+// variables no longer participate in tuning: explicit env overrides caused the
+// deployed system to freeze on stale values instead of adapting to the machine.
+func (cfg *Config) applyDefaults() {
+	auto := Auto()
+
+	cfg.ServiceListTimeoutSec = auto.ServiceListTimeoutSec
+	cfg.CleanupIntervalMinutes = auto.CleanupIntervalMinutes
+	cfg.RetentionAdaptiveEnabled = auto.RetentionAdaptiveEnabled
+	cfg.MaxLogRetentionDays = auto.MaxLogRetentionDays
+	cfg.MaxTraceRetentionDays = auto.MaxTraceRetentionDays
+	cfg.RetentionStepDownDays = auto.RetentionStepDownDays
+	cfg.RetentionMaxLevel = auto.RetentionMaxLevel
+	cfg.RetentionMinTraceHours = auto.RetentionMinTraceHours
+	cfg.RetentionMinLogHours = auto.RetentionMinLogHours
+	cfg.RetentionPressureCooldownSec = auto.RetentionPressureCooldownSec
+	cfg.RetentionPressureMinSignals = auto.RetentionPressureMinSignals
+	cfg.RetentionPressureWindowSec = auto.RetentionPressureWindowSec
+	cfg.RetentionPressureErrorCount = auto.RetentionPressureErrorCount
+	cfg.RetentionPressureMemPct = auto.RetentionPressureMemPct
+	cfg.RetentionPressureMemBudgetMB = auto.RetentionPressureMemBudgetMB
+	cfg.RetentionPressureDiskPct = auto.RetentionPressureDiskPct
+	cfg.RetentionPreCount = auto.RetentionPreCount
+	cfg.ClickHouseTempDiskMiB = auto.ClickHouseTempDiskMiB
+	cfg.ClickHouseMaxExecSec = auto.ClickHouseMaxExecSec
+	cfg.ClickHouseMaxOpenConns = auto.ClickHouseMaxOpenConns
+	cfg.ClickHouseMaxIdleConns = auto.ClickHouseMaxIdleConns
+	cfg.ClickHouseDialTimeout = auto.ClickHouseDialTimeoutSec
+	cfg.ClickHouseReadTimeout = auto.ClickHouseReadTimeoutSec
+	cfg.DashboardFreshCacheTTLSec = auto.DashboardFreshCacheTTLSec
+	cfg.DashboardStaleCacheTTLSec = auto.DashboardStaleCacheTTLSec
+	cfg.DashboardRequestTimeoutSec = auto.DashboardRequestTimeoutSec
+	cfg.DashboardHalveOnOOM = auto.DashboardHalveOnOOM
+	cfg.DashboardRawFallback = auto.DashboardRawFallback
+	cfg.DashboardPressureCooldownSec = auto.DashboardPressureCooldownSec
+	cfg.DashboardLastGoodTTLSec = auto.DashboardLastGoodTTLSec
+	cfg.DashboardRollupBackfill = auto.DashboardRollupBackfill
+	cfg.DashboardRollupBackfillHours = auto.DashboardRollupBackfillHours
+
+	// Load-sensitive knobs start at the floor and are then owned by the runtime
+	// AIMD tuning controller.
+	cfg.DashboardQueryParallelism = auto.DashboardQueryParallelism
+	cfg.TelemetryQueryConcurrency = auto.TelemetryQueryConcurrency
+	cfg.ClickHouseMaxMemoryMiB = auto.ClickHouseMaxMemoryMiB
+	cfg.ClickHouseExternalGroupByMiB = auto.ClickHouseExternalGroupByMiB
+	cfg.ClickHouseExternalSortMiB = auto.ClickHouseExternalSortMiB
 }

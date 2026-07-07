@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"time"
 
+	"opendashly/backend/internal/infrastructure/config"
 	"opendashly/backend/internal/infrastructure/storage"
 )
 
@@ -103,11 +104,63 @@ func (s *Service) Summary(ctx context.Context) Summary {
 // Ping (or an untracked SELECT 1) succeeds even when the server's (total)
 // memory tracker is past its cap and every real query fails with code 241,
 // so the probe is a real query forced through the tracker.
-const databaseProbeQuery = `
+var databaseProbeQuery = buildDatabaseProbeQuery()
+
+var (
+	logsCountsQuery   = buildStatusCountsQuery("logs")
+	tracesCountsQuery = buildStatusCountsQuery("traces")
+	logsSeriesQuery   = buildStatusSeriesQuery("logs")
+	tracesSeriesQuery = buildStatusSeriesQuery("traces")
+)
+
+func buildDatabaseProbeQuery() string {
+	return fmt.Sprintf(`
 	SELECT count()
 	FROM numbers(65536)
-	SETTINGS max_untracked_memory = 0, max_threads = 1, max_memory_usage = 33554432, max_execution_time = 2
-`
+	SETTINGS max_untracked_memory = 0, max_threads = 1, max_memory_usage = 33554432, max_execution_time = %d
+`, config.Auto().StatusHealthMaxExecSec)
+}
+
+func buildStatusCountsQuery(signal string) string {
+	table := "telemetry.status_logs_1m"
+	totalTable := "telemetry.otel_logs"
+	if signal == "traces" {
+		table = "telemetry.status_traces_1m"
+		totalTable = "telemetry.otel_traces"
+	}
+	return fmt.Sprintf(`
+	WITH (
+		SELECT toUInt64(ifNull(sum(rows), 0))
+		FROM system.parts
+		WHERE active AND database = 'telemetry' AND table = '%s'
+	) AS total_rows
+	SELECT
+		total_rows AS total,
+		toUInt64(ifNull(sumIf(total, time_bucket >= now() - INTERVAL 5 MINUTE), 0)) AS last5m,
+		toUInt64(ifNull(sumIf(total, time_bucket >= now() - INTERVAL 10 MINUTE), 0)) AS last10m,
+		toUInt64(ifNull(sum(total), 0)) AS last60m
+	FROM %s
+	WHERE time_bucket >= now() - INTERVAL 60 MINUTE
+	SETTINGS max_execution_time = %d, max_threads = 1, max_memory_usage = 33554432
+`, totalTable, table, config.Auto().StatusHealthMaxExecSec)
+}
+
+func buildStatusSeriesQuery(signal string) string {
+	table := "telemetry.status_logs_1m"
+	if signal == "traces" {
+		table = "telemetry.status_traces_1m"
+	}
+	return fmt.Sprintf(`
+	SELECT
+		toStartOfInterval(time_bucket, INTERVAL 5 MINUTE) AS bucket,
+		toUInt64(sum(total)) AS count
+	FROM %s
+	WHERE time_bucket >= now() - INTERVAL 60 MINUTE
+	GROUP BY bucket
+	ORDER BY bucket
+	SETTINGS max_execution_time = %d, max_threads = 1, max_memory_usage = 33554432
+`, table, config.Auto().StatusHealthMaxExecSec)
+}
 
 func (s *Service) getDatabasePinger() func(context.Context) error {
 	if s.pingDatabase != nil {
@@ -117,7 +170,7 @@ func (s *Service) getDatabasePinger() func(context.Context) error {
 		if s.Storage == nil || s.Storage.Conn == nil {
 			return fmt.Errorf("storage not configured")
 		}
-		pingCtx, cancel := context.WithTimeout(ctx, 750*time.Millisecond)
+		pingCtx, cancel := context.WithTimeout(ctx, time.Duration(config.Auto().StatusPingTimeoutMS)*time.Millisecond)
 		defer cancel()
 		var probed uint64
 		return s.Storage.Conn.QueryRow(pingCtx, databaseProbeQuery).Scan(&probed)
@@ -129,7 +182,7 @@ func (s *Service) getCountsFetcher() func(context.Context, *storage.Client, stri
 		return s.countsFetcher
 	}
 	return func(ctx context.Context, store *storage.Client, query string) (TelemetryCounts, error) {
-		queryCtx, cancel := context.WithTimeout(ctx, 1200*time.Millisecond)
+		queryCtx, cancel := context.WithTimeout(ctx, time.Duration(config.Auto().StatusCountsTimeoutMS)*time.Millisecond)
 		defer cancel()
 		return fetchCounts(queryCtx, store, query)
 	}
@@ -140,7 +193,7 @@ func (s *Service) getSeriesFetcher() func(context.Context, *storage.Client, stri
 		return s.seriesFetcher
 	}
 	return func(ctx context.Context, store *storage.Client, query string, anchor time.Time, bucketMinutes int, pointCount int) ([]TelemetryPoint, error) {
-		queryCtx, cancel := context.WithTimeout(ctx, 1200*time.Millisecond)
+		queryCtx, cancel := context.WithTimeout(ctx, time.Duration(config.Auto().StatusSeriesTimeoutMS)*time.Millisecond)
 		defer cancel()
 		return fetchSeries(queryCtx, store, query, anchor, bucketMinutes, pointCount)
 	}
@@ -189,57 +242,3 @@ func fetchSeries(ctx context.Context, store *storage.Client, query string, ancho
 
 	return series, nil
 }
-
-const logsCountsQuery = `
-	WITH (
-		SELECT toUInt64(ifNull(sum(rows), 0))
-		FROM system.parts
-		WHERE active AND database = 'telemetry' AND table = 'otel_logs'
-	) AS total_rows
-	SELECT
-		total_rows AS total,
-		toUInt64(ifNull(sumIf(total, time_bucket >= now() - INTERVAL 5 MINUTE), 0)) AS last5m,
-		toUInt64(ifNull(sumIf(total, time_bucket >= now() - INTERVAL 10 MINUTE), 0)) AS last10m,
-		toUInt64(ifNull(sum(total), 0)) AS last60m
-	FROM telemetry.status_logs_1m
-	WHERE time_bucket >= now() - INTERVAL 60 MINUTE
-	SETTINGS max_execution_time = 2, max_threads = 1, max_memory_usage = 33554432
-`
-
-const tracesCountsQuery = `
-	WITH (
-		SELECT toUInt64(ifNull(sum(rows), 0))
-		FROM system.parts
-		WHERE active AND database = 'telemetry' AND table = 'otel_traces'
-	) AS total_rows
-	SELECT
-		total_rows AS total,
-		toUInt64(ifNull(sumIf(total, time_bucket >= now() - INTERVAL 5 MINUTE), 0)) AS last5m,
-		toUInt64(ifNull(sumIf(total, time_bucket >= now() - INTERVAL 10 MINUTE), 0)) AS last10m,
-		toUInt64(ifNull(sum(total), 0)) AS last60m
-	FROM telemetry.status_traces_1m
-	WHERE time_bucket >= now() - INTERVAL 60 MINUTE
-	SETTINGS max_execution_time = 2, max_threads = 1, max_memory_usage = 33554432
-`
-
-const logsSeriesQuery = `
-	SELECT
-		toStartOfInterval(time_bucket, INTERVAL 5 MINUTE) AS bucket,
-		toUInt64(sum(total)) AS count
-	FROM telemetry.status_logs_1m
-	WHERE time_bucket >= now() - INTERVAL 60 MINUTE
-	GROUP BY bucket
-	ORDER BY bucket
-	SETTINGS max_execution_time = 2, max_threads = 1, max_memory_usage = 33554432
-`
-
-const tracesSeriesQuery = `
-	SELECT
-		toStartOfInterval(time_bucket, INTERVAL 5 MINUTE) AS bucket,
-		toUInt64(sum(total)) AS count
-	FROM telemetry.status_traces_1m
-	WHERE time_bucket >= now() - INTERVAL 60 MINUTE
-	GROUP BY bucket
-	ORDER BY bucket
-	SETTINGS max_execution_time = 2, max_threads = 1, max_memory_usage = 33554432
-`

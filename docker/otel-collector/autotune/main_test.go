@@ -4,13 +4,10 @@ import "testing"
 
 // fakeEnv drives the sizing logic deterministically across platforms.
 type fakeEnv struct {
-	vars    map[string]string
 	files   map[string][]byte
 	hostRAM uint64
 	hasHost bool
 }
-
-func (e fakeEnv) getenv(k string) string { return e.vars[k] }
 
 func (e fakeEnv) readFile(p string) ([]byte, error) {
 	if data, ok := e.files[p]; ok {
@@ -68,20 +65,6 @@ func TestSizingCgroupV1Sentinel(t *testing.T) {
 	s := resolveMemorySizing(e)
 	if s.limitMiB != 768 {
 		t.Fatalf("limitMiB = %d, want 768", s.limitMiB)
-	}
-}
-
-func TestSizingExplicitOverrideWins(t *testing.T) {
-	e := fakeEnv{
-		vars:  map[string]string{"OTEL_MEMORY_LIMIT_MIB": "200"},
-		files: map[string][]byte{"/sys/fs/cgroup/memory.max": []byte("8589934592")},
-	}
-	s := resolveMemorySizing(e)
-	if s.limitMiB != 200 {
-		t.Fatalf("limitMiB = %d, want 200 (override)", s.limitMiB)
-	}
-	if s.spikeMiB != 40 { // 200 * 20%
-		t.Fatalf("spikeMiB = %d, want 40", s.spikeMiB)
 	}
 }
 

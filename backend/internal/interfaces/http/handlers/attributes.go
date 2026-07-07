@@ -8,14 +8,20 @@ import (
 	"time"
 
 	"opendashly/backend/internal/application/query"
+	"opendashly/backend/internal/infrastructure/config"
 )
 
 type AttributesHandler struct {
 	Service *query.Service
+	Timeout time.Duration
 }
 
 func (h *AttributesHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
+	timeout := h.Timeout
+	if timeout <= 0 {
+		timeout = time.Duration(config.Auto().QueryAttributesTimeoutSec) * time.Second
+	}
+	ctx, cancel := context.WithTimeout(r.Context(), timeout)
 	defer cancel()
 
 	search := r.URL.Query().Get("q")

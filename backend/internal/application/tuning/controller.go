@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"opendashly/backend/internal/application/pressure"
+	"opendashly/backend/internal/infrastructure/config"
 )
 
 // Bounds defines the floors, ceilings and step sizes the controller operates
@@ -38,16 +39,25 @@ type Bounds struct {
 // DefaultBounds is tuned to be safe on a ~1 vCPU / 1-2 GiB container while still
 // being able to grow into a larger host.
 func DefaultBounds() Bounds {
+	auto := config.Auto()
+	cpu := auto.Resources.CPUCores
+	if cpu <= 0 {
+		cpu = 1
+	}
+	mem := auto.Resources.MemoryMiB
+	if mem <= 0 {
+		mem = 1024
+	}
 	return Bounds{
 		ParallelismFloor: 1,
-		ParallelismCeil:  4,
+		ParallelismCeil:  clampInt(cpu, 1, 8),
 		ConcurrencyFloor: 1,
-		ConcurrencyCeil:  6,
-		CHMemFloorMiB:    64,
-		CHMemCeilMiB:     512,
+		ConcurrencyCeil:  clampInt(cpu*2, 1, 12),
+		CHMemFloorMiB:    auto.ClickHouseMaxMemoryMiB,
+		CHMemCeilMiB:     clampInt(mem/4, auto.ClickHouseMaxMemoryMiB, 512),
 		CHMemStepMiB:     32,
-		Interval:         20 * time.Second,
-		CalmWindow:       60 * time.Second,
+		Interval:         time.Duration(auto.TuningIntervalSec) * time.Second,
+		CalmWindow:       time.Duration(auto.TuningCalmWindowSec) * time.Second,
 	}
 }
 
@@ -200,4 +210,17 @@ func (c *Controller) applyLocked(np, nc, nm int, reason string) {
 
 func (c *Controller) syncLimiter() {
 	c.limiter.SetLimit(c.concurrency)
+}
+
+func clampInt(v, lo, hi int) int {
+	if hi < lo {
+		hi = lo
+	}
+	if v < lo {
+		return lo
+	}
+	if v > hi {
+		return hi
+	}
+	return v
 }

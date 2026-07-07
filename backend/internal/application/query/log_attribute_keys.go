@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strings"
 
+	"opendashly/backend/internal/infrastructure/config"
 	"opendashly/backend/internal/infrastructure/querysql"
 )
 
@@ -47,7 +48,7 @@ func buildLogAttributeKeysQuery(search string) string {
 		escaped := querysql.EscapeLiteral(search)
 		query += " AND key ILIKE '%" + escaped + "%'"
 	}
-	query += " ORDER BY key LIMIT 100 SETTINGS max_execution_time = 3, max_threads = 1, max_memory_usage = 33554432, max_bytes_before_external_sort = 8388608"
+	query += " ORDER BY key LIMIT 100 SETTINGS max_execution_time = " + fmt.Sprintf("%d", config.Auto().LogAttributeKeysMaxExecSec) + ", max_threads = 1, max_memory_usage = 33554432, max_bytes_before_external_sort = 8388608"
 	return query
 }
 

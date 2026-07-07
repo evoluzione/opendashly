@@ -6,6 +6,7 @@ import (
 	"math"
 	"time"
 
+	"opendashly/backend/internal/infrastructure/config"
 	"opendashly/backend/internal/infrastructure/querysql"
 	"opendashly/backend/internal/infrastructure/storage"
 
@@ -53,7 +54,7 @@ func (s *TraceSpansService) Spans(ctx context.Context, traceID string) ([]TraceS
 
 func buildTraceSpansQuery(traceID string) string {
 	escapedTraceID := querysql.EscapeTraceID(traceID)
-	return "SELECT TraceId AS traceId, SpanId AS spanId, ParentSpanId AS parentSpanId, SpanName AS name, ServiceName AS serviceName, ServiceName AS source, Timestamp AS startTime, Duration AS duration, StatusCode AS status, StatusMessage AS statusMessage, SpanKind AS spanKind, SpanAttributes AS attributes, `Events.Timestamp` AS eventTimestamps, `Events.Name` AS eventNames, `Events.Attributes` AS eventAttributes FROM telemetry.otel_traces WHERE TraceId = '" + escapedTraceID + "' ORDER BY Timestamp ASC SETTINGS max_execution_time = 8, max_threads = 1, max_memory_usage = 67108864, max_bytes_before_external_sort = 16777216"
+	return "SELECT TraceId AS traceId, SpanId AS spanId, ParentSpanId AS parentSpanId, SpanName AS name, ServiceName AS serviceName, ServiceName AS source, Timestamp AS startTime, Duration AS duration, StatusCode AS status, StatusMessage AS statusMessage, SpanKind AS spanKind, SpanAttributes AS attributes, `Events.Timestamp` AS eventTimestamps, `Events.Name` AS eventNames, `Events.Attributes` AS eventAttributes FROM telemetry.otel_traces WHERE TraceId = '" + escapedTraceID + "' ORDER BY Timestamp ASC SETTINGS max_execution_time = " + fmt.Sprintf("%d", config.Auto().ClickHouseMaxExecSec) + ", max_threads = 1, max_memory_usage = 67108864, max_bytes_before_external_sort = 16777216"
 }
 
 func fetchTraceSpans(ctx context.Context, conn driver.Conn, query string) ([]TraceSpanEntry, error) {
