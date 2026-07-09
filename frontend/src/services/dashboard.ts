@@ -130,10 +130,13 @@ export interface DashboardRequest {
   serviceName?: string;
 }
 
+const DASHBOARD_REQUEST_TIMEOUT_MS = 40000;
+
 export async function fetchDashboardMetrics(request: DashboardRequest): Promise<DashboardResponse> {
   const payload = await apiRequest<DashboardResponse>('/api/dashboard/metrics', {
     method: 'POST',
-    body: JSON.stringify(buildDashboardMetricsPayload(request))
+    body: JSON.stringify(buildDashboardMetricsPayload(request)),
+    timeoutMs: DASHBOARD_REQUEST_TIMEOUT_MS
   });
   return normalizeDashboardResponse(payload);
 }

@@ -1,5 +1,6 @@
+const FALLBACK_TIMEOUT_MS = 40000;
 const envBaseUrl = import.meta.env.VITE_API_BASE ?? '';
-const envTimeoutMs = Number(import.meta.env.VITE_API_TIMEOUT_MS ?? '10000');
+const envTimeoutMs = Number(import.meta.env.VITE_API_TIMEOUT_MS ?? String(FALLBACK_TIMEOUT_MS));
 
 export class ApiError extends Error {
   status: number;
@@ -22,7 +23,7 @@ export type ApiRequestOptions = RequestInit & {
   retryOnStatuses?: number[];
 };
 
-const DEFAULT_TIMEOUT_MS = Number.isFinite(envTimeoutMs) && envTimeoutMs > 0 ? envTimeoutMs : 10000;
+const DEFAULT_TIMEOUT_MS = Number.isFinite(envTimeoutMs) && envTimeoutMs > 0 ? envTimeoutMs : FALLBACK_TIMEOUT_MS;
 const DEFAULT_RETRY_STATUSES = [502, 503, 504];
 
 const baseUrl = (() => {

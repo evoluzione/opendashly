@@ -127,12 +127,14 @@ func deriveAutoSettings(r ResourceProfile) AutoSettings {
 	spill := 16
 	openConns := clampInt(cpu*2, 2, 8)
 	idleConns := clampInt(cpu, 1, openConns)
-	queryTimeout := 10
+	// Ad-hoc telemetry queries can legitimately need more than 10s on larger
+	// windows; keep the backend deadline above ClickHouse max_execution_time so
+	// the API/client do not abort first and surface a misleading 10s timeout.
+	queryTimeout := 30
 	dashboardTimeout := 20
 	if small {
 		openConns = 2
 		idleConns = 1
-		queryTimeout = 12
 		dashboardTimeout = 24
 	}
 
@@ -163,7 +165,7 @@ func deriveAutoSettings(r ResourceProfile) AutoSettings {
 		ClickHouseMaxOpenConns:       openConns,
 		ClickHouseMaxIdleConns:       idleConns,
 		ClickHouseDialTimeoutSec:     5,
-		ClickHouseReadTimeoutSec:     maxInt(30, dashboardTimeout+10),
+		ClickHouseReadTimeoutSec:     maxInt(30, maxInt(queryTimeout, dashboardTimeout)+10),
 		ClickHouseMaxMemoryMiB:       chMemFloor,
 		ClickHouseExternalGroupByMiB: spill,
 		ClickHouseExternalSortMiB:    spill,
@@ -200,7 +202,7 @@ func deriveAutoSettings(r ResourceProfile) AutoSettings {
 		StatusRollupBackfillMaxExecSec: 5,
 
 		APIReadTimeoutSec:  queryTimeout,
-		APIWriteTimeoutSec: maxInt(30, dashboardTimeout+6),
+		APIWriteTimeoutSec: maxInt(30, maxInt(queryTimeout, dashboardTimeout)+6),
 		APIIdleTimeoutSec:  60,
 
 		TuningIntervalSec:   20,

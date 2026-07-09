@@ -6,8 +6,8 @@
 
     const levels = [
         {
-            value: "Tutti",
-            label: "Tutti i livelli",
+            value: "",
+            label: "",
             color: "var(--color-slate-950)",
             bg: "var(--color-slate-50)",
         },
@@ -61,7 +61,7 @@
             class="badge"
             style="background: {selectedLevel.bg}; color: {selectedLevel.color}"
         >
-            {selectedLevel.label}
+            {selectedLevel.label || t($locale, "query.allLevels")}
         </span>
         <svg
             class="chevron"
@@ -91,7 +91,7 @@
                         class="option-badge"
                         style="background: {level.bg}; color: {level.color}"
                     >
-                        {level.label}
+                        {level.label || t($locale, "query.allLevels")}
                     </span>
                     {#if level.value === $servicesState.selectedLogLevel}
                         <svg

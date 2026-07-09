@@ -69,4 +69,34 @@ describe('query store', () => {
     expect(state.error).toBe('Request timed out after 10000ms');
     expect(state.warnings).toContain('refresh failed: Request timed out after 10000ms');
   });
+
+  it('conserva il risultato logs quando viene eseguita una query traces', async () => {
+    vi.mocked(runQuery).mockResolvedValueOnce({
+      ...baseResult,
+      runId: 'run-logs',
+      summary: { logCount: 1, traceCount: 0, metricCount: 0 },
+      results: {
+        logs: [{ body: 'log', timestamp: '2026-04-15T10:10:00.000Z' }],
+        traces: [],
+        metrics: []
+      }
+    } as any);
+    await executeQuery({ ...baseRequest, signals: ['logs'] } as any);
+
+    vi.mocked(runQuery).mockResolvedValueOnce({
+      ...baseResult,
+      runId: 'run-traces',
+      summary: { logCount: 0, traceCount: 1, metricCount: 0 },
+      results: {
+        logs: [],
+        traces: [{ traceId: 'trace-1', timestamp: '2026-04-15T10:11:00.000Z' }],
+        metrics: []
+      }
+    } as any);
+    await executeQuery({ ...baseRequest, signals: ['traces'] } as any);
+
+    const state = get(queryState);
+    expect(state.result?.results.logs).toHaveLength(1);
+    expect(state.result?.results.traces).toHaveLength(1);
+  });
 });

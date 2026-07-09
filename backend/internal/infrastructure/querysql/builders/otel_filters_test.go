@@ -1,6 +1,18 @@
 package builders
 
-import "testing"
+import (
+	"testing"
+	"time"
+)
+
+func TestBuildOtelClauses_SeverityAllValuesDoNotFilter(t *testing.T) {
+	for _, value := range []string{"", "Tutti", "All"} {
+		clauses := buildOtelClauses("Timestamp", map[string]string{"severity": value}, nil, time.Time{}, time.Time{}, "ServiceName", "TraceId", "SeverityText", []string{"LogAttributes"})
+		if len(clauses) != 0 {
+			t.Fatalf("severity %q produced clauses: %#v", value, clauses)
+		}
+	}
+}
 
 func TestFilterListForSignal_TracesSkipsLogOnlyKeys(t *testing.T) {
 	in := []FilterItem{
@@ -14,4 +26,3 @@ func TestFilterListForSignal_TracesSkipsLogOnlyKeys(t *testing.T) {
 		t.Fatalf("unexpected filtered output: %#v", out)
 	}
 }
-

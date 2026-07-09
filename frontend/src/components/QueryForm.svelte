@@ -1,9 +1,32 @@
 <script context="module" lang="ts">
-  let persistedStates: Record<string, any> | null = null;
+  const queryFormStateStorageKey = "opendashly.queryForm.tabStates.v1";
+
+  function loadPersistedTabStates(): Record<string, any> | null {
+    if (typeof localStorage === "undefined") return null;
+    try {
+      const raw = localStorage.getItem(queryFormStateStorageKey);
+      if (!raw) return null;
+      const parsed = JSON.parse(raw);
+      return parsed && typeof parsed === "object" ? parsed : null;
+    } catch {
+      return null;
+    }
+  }
+
+  function storePersistedTabStates(states: Record<string, any>) {
+    if (typeof localStorage === "undefined") return;
+    try {
+      localStorage.setItem(queryFormStateStorageKey, JSON.stringify(states));
+    } catch {
+      // Ignore storage errors: in-memory state still preserves filters during SPA navigation.
+    }
+  }
+
+  let persistedStates: Record<string, any> | null = loadPersistedTabStates();
 </script>
 
 <script lang="ts">
-  import { createEventDispatcher, onMount } from "svelte";
+  import { createEventDispatcher, onDestroy, onMount } from "svelte";
   import { page } from "$app/stores";
   import { goto } from "$app/navigation";
   import {
@@ -39,6 +62,8 @@
     logTextSearch: string;
     traceSearch: string;
     traceSearchExact: boolean;
+    selectedLogLevels: string[];
+    selectedService: string;
   }
 
   const defaultState: TabState = {
@@ -53,8 +78,9 @@
     logTextSearch: "",
     traceSearch: "",
     traceSearchExact: false,
+    selectedLogLevels: [],
+    selectedService: "",
   };
-
   let tabStates: Record<string, TabState> = persistedStates || {
     logs: { ...defaultState },
     metriche: { ...defaultState },
@@ -125,6 +151,11 @@
     all: null,
   };
 
+  function normalizeAllSelection(value: unknown): string {
+    const trimmed = String(value ?? "").trim();
+    return trimmed === "Tutti" || trimmed.toLowerCase() === "all" ? "" : trimmed;
+  }
+
   $: if (activeTab && activeTab !== previousTab) {
     const oldTab = previousTab;
     if (oldTab) saveState(oldTab);
@@ -142,7 +173,7 @@
   }
 
   $: syncUrlWithState();
-  $: activeAdvancedFiltersCount = getEffectiveAdvancedFilters().length;
+  $: activeAdvancedFiltersCount = Array.isArray(advancedFilters) ? advancedFilters.length : 0;
 
   function saveState(tab: string) {
     tabStates[tab] = {
@@ -157,7 +188,11 @@
       logTextSearch,
       traceSearch,
       traceSearchExact,
+      selectedLogLevels,
+      selectedService: normalizeAllSelection($servicesState.selectedService),
     };
+    persistedStates = tabStates;
+    storePersistedTabStates(tabStates);
   }
 
   function loadState(tab: string) {
@@ -166,13 +201,17 @@
     selectedRange = state.selectedRange || "30m";
     fromInput = state.fromInput || "";
     toInput = state.toInput || "";
-    advancedFilters = state.advancedFilters || [];
+    advancedFilters = Array.isArray(state.advancedFilters) ? state.advancedFilters : [];
     filterDurationOperator = state.filterDurationOperator || ">";
     filterDurationMs = state.filterDurationMs || "";
     traceErrorScope = state.traceErrorScope || "all";
     logTextSearch = state.logTextSearch || "";
     traceSearch = state.traceSearch || "";
     traceSearchExact = !!state.traceSearchExact;
+    selectedLogLevels = Array.isArray(state.selectedLogLevels)
+      ? state.selectedLogLevels.filter((value) => availableLogLevels.includes(value))
+      : [];
+    selectService(normalizeAllSelection(state.selectedService));
     rangeError = "";
   }
 
@@ -192,6 +231,10 @@
 
   function closeFilters() {
     showFilterModal = false;
+  }
+
+  function handleAdvancedFiltersChange(event: CustomEvent<FilterItem[]>) {
+    advancedFilters = Array.isArray(event.detail) ? [...event.detail] : [...advancedFilters];
   }
 
   function applyAdvancedFilters() {
@@ -390,7 +433,7 @@
 
   function applyTraceIdOverride(traceId: string) {
     if (!traceId) return;
-    selectService("Tutti");
+    selectService("");
     selectedLogLevels = [];
     advancedFilters = [];
     filterDurationOperator = ">";
@@ -454,8 +497,8 @@
     const params = new URLSearchParams();
     params.set("tab", activeTab);
 
-    const selectedService = $servicesState.selectedService;
-    if (selectedService && selectedService !== "Tutti") {
+    const selectedService = normalizeAllSelection($servicesState.selectedService);
+    if (selectedService) {
       params.set("service", selectedService);
     }
     if (selectedLogLevels.length > 0) {
@@ -479,12 +522,16 @@
     }
   }
 
+  function signalsForActiveTab(): string[] {
+    if (activeTab === "logs") return ["logs"];
+    if (activeTab === "tracce") return ["traces"];
+    return ["logs", "traces"];
+  }
+
   function submit() {
-    const selectedService = $servicesState.selectedService;
-    const serviceFilter =
-      selectedService && selectedService !== "Tutti"
-        ? { "service.name": selectedService }
-        : {};
+    saveState(activeTab);
+    const selectedService = normalizeAllSelection($servicesState.selectedService);
+    const serviceFilter = selectedService ? { "service.name": selectedService } : {};
 
     const manualFilters: Record<string, string> = { ...serviceFilter };
     if (activeTab === "logs" && selectedLogLevels.length > 0) {
@@ -572,7 +619,7 @@
 
     dispatch("run", {
       request: {
-        signals: ["logs", "traces"],
+        signals: signalsForActiveTab(),
         timeRange,
         filters: manualFilters,
         filterList: finalFilterList,
@@ -615,6 +662,12 @@
     }
   }
 
+  function persistCurrentFilters() {
+    if (activeTab) {
+      saveState(activeTab);
+    }
+  }
+
   onMount(() => {
     loadState(activeTab);
     applyUrlParams();
@@ -630,6 +683,8 @@
       toInput = "";
     }
     dispatch("modeChange", { mode: "manual" });
+    const handleBeforeUnload = () => persistCurrentFilters();
+    window.addEventListener("beforeunload", handleBeforeUnload);
     setTimeout(() => {
       suppressUrlSync = false;
       autoSubmitReady = autoSearch;
@@ -637,6 +692,13 @@
         submit();
       }
     }, 100);
+    return () => {
+      window.removeEventListener("beforeunload", handleBeforeUnload);
+    };
+  });
+
+  onDestroy(() => {
+    persistCurrentFilters();
   });
 
   export function resetFiltersToDefault() {
@@ -654,10 +716,11 @@
     showFilterModal = false;
     showCustomRangeModal = false;
     rangeError = "";
-    selectService("Tutti");
+    selectService("");
     selectedLogLevels = [];
     tabStates[activeTab] = { ...defaultState };
     persistedStates = tabStates;
+    storePersistedTabStates(tabStates);
     dispatch("modeChange", { mode: "manual" });
     submit();
   }
@@ -804,17 +867,9 @@
       </div>
 
       <div class="advanced-filters-trigger">
-        {#if activeAdvancedFiltersCount > 0}
-          <div class="advanced-filters-indicator" aria-live="polite">
-            <span class="indicator-dot" aria-hidden="true"></span>
-            <span>{t($locale, "query.activeAdvancedFilters", { count: activeAdvancedFiltersCount })}</span>
-          </div>
-        {/if}
-
         <button
           type="button"
           class="btn-secondary advanced-filters-btn"
-          class:active={activeAdvancedFiltersCount > 0}
           on:click={openFilters}
           aria-label={t($locale, "query.advancedFiltersAria", { count: activeAdvancedFiltersCount })}
         >
@@ -832,13 +887,13 @@
           >
           <span>{t($locale, "query.advancedFilters")}</span>
           {#if activeAdvancedFiltersCount > 0}
-            <span class="badge">{activeAdvancedFiltersCount}</span>
+            <span class="advanced-filter-count-badge" aria-label={t($locale, "query.activeAdvancedFilters", { count: activeAdvancedFiltersCount })}>{activeAdvancedFiltersCount}</span>
           {/if}
         </button>
       </div>
 
       <Modal open={showFilterModal} title={t($locale, "query.advancedFiltersTitle")} on:close={closeFilters}>
-        <FilterBuilder bind:filters={advancedFilters} />
+        <FilterBuilder bind:filters={advancedFilters} on:change={handleAdvancedFiltersChange} />
         <div class="modal-actions">
           <button class="btn-primary" on:click={applyAdvancedFilters}>{t($locale, "query.applyFilters")}</button>
         </div>
@@ -1109,33 +1164,23 @@
     width: 100%;
   }
 
-  .advanced-filters-indicator {
+  .advanced-filter-count-badge {
     display: inline-flex;
     align-items: center;
-    gap: 8px;
+    justify-content: center;
+    min-width: 20px;
+    height: 20px;
+    padding: 0 7px;
+    border-radius: 999px;
+    background: linear-gradient(180deg, #fde68a 0%, #facc15 100%);
+    color: #713f12;
+    border: 1px solid #f59e0b;
     font-size: 12px;
-    font-weight: 700;
-    color: var(--color-info-700);
-    background: #eff6ff;
-    border: 1px solid #bfdbfe;
-    border-radius: 999px;
-    padding: 6px 10px;
-    width: fit-content;
-  }
-
-  .indicator-dot {
-    width: 8px;
-    height: 8px;
-    border-radius: 999px;
-    background: var(--color-info-600);
-    box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.16);
-  }
-
-  .advanced-filters-btn.active {
-    border-color: var(--color-info-600);
-    background: #eff6ff;
-    color: #1e40af;
-    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
+    font-weight: 800;
+    line-height: 1;
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.55),
+      0 1px 3px rgba(146, 64, 14, 0.22);
   }
 
   .btn-secondary {

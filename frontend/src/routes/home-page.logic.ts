@@ -178,7 +178,7 @@ export function createPageSizeRequest(lastRequest: QueryRequest, pageSize: strin
   const limit = Number(pageSize) || 100;
   return {
     ...lastRequest,
-    signals: ['logs', 'traces'],
+    signals: lastRequest.signals?.length ? lastRequest.signals : ['logs', 'traces'],
     limit,
     page: 1,
     logsCursor: undefined,
@@ -191,18 +191,26 @@ export function storeNextCursors(args: {
   page: number;
   logsCursorByPage: Map<number, string>;
   tracesCursorByPage: Map<number, string>;
+  signals?: Array<'logs' | 'traces'>;
 }) {
   if (!args.pagination) return;
 
-  if (args.pagination.logs?.hasNext && args.pagination.logs.nextCursor) {
-    args.logsCursorByPage.set(args.page + 1, args.pagination.logs.nextCursor);
-  } else {
-    args.logsCursorByPage.delete(args.page + 1);
+  const updateLogs = !args.signals || args.signals.includes('logs');
+  const updateTraces = !args.signals || args.signals.includes('traces');
+
+  if (updateLogs) {
+    if (args.pagination.logs?.hasNext && args.pagination.logs.nextCursor) {
+      args.logsCursorByPage.set(args.page + 1, args.pagination.logs.nextCursor);
+    } else {
+      args.logsCursorByPage.delete(args.page + 1);
+    }
   }
 
-  if (args.pagination.traces?.hasNext && args.pagination.traces.nextCursor) {
-    args.tracesCursorByPage.set(args.page + 1, args.pagination.traces.nextCursor);
-  } else {
-    args.tracesCursorByPage.delete(args.page + 1);
+  if (updateTraces) {
+    if (args.pagination.traces?.hasNext && args.pagination.traces.nextCursor) {
+      args.tracesCursorByPage.set(args.page + 1, args.pagination.traces.nextCursor);
+    } else {
+      args.tracesCursorByPage.delete(args.page + 1);
+    }
   }
 }

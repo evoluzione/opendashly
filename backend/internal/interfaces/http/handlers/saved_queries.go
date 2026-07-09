@@ -1,11 +1,14 @@
 package handlers
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 	"opendashly/backend/internal/application/query"
+	"opendashly/backend/internal/infrastructure/config"
 )
 
 type SavedQueriesHandler struct {
@@ -65,8 +68,15 @@ func (h *SavedQueriesHandler) Run(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNotFound)
 		return
 	}
-	result, err := h.Runner.Run(r.Context(), item.Request)
+	ctx, cancel := context.WithTimeout(r.Context(), time.Duration(config.Auto().QueryRequestTimeoutSec)*time.Second)
+	defer cancel()
+
+	result, err := h.Runner.Run(ctx, item.Request)
 	if err != nil {
+		if ctx.Err() == context.DeadlineExceeded {
+			w.WriteHeader(http.StatusGatewayTimeout)
+			return
+		}
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}

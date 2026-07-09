@@ -16,7 +16,7 @@
 <div class="service-dropdown">
   <label for="service-select">{t($locale, 'serviceDropdown.label')}</label>
   <select id="service-select" on:change={handleChange}>
-    <option value="Tutti">{t($locale, 'serviceDropdown.all')}</option>
+    <option value="" selected={$servicesState.selectedService === ''}>{t($locale, 'serviceDropdown.all')}</option>
     {#each $servicesState.services as service}
       <option value={service} selected={service === $servicesState.selectedService}>{service}</option>
     {/each}

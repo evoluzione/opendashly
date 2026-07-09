@@ -54,6 +54,7 @@
   import SlowestEndpointsTable from "../components/dashboard/SlowestEndpointsTable.svelte";
   import ErrorHotspotsTable from "../components/dashboard/ErrorHotspotsTable.svelte";
   import type { DashboardHealth } from "../services/dashboard";
+  import type { QueryRequest } from "../services/query";
 
   const DASHBOARD_REFRESH_MIN_SPIN_MS = 700;
   const QUERY_REFRESH_MIN_SPIN_MS = 700;
@@ -142,24 +143,51 @@
     if (!dashboardToInput) dashboardToInput = defaults.toInput;
   }
 
-  let lastRequest: import("../services/query").QueryRequest | null = null;
+  type QuerySignal = "logs" | "traces";
+
+  let lastRequest: QueryRequest | null = null;
+  let lastLogRequest: QueryRequest | null = null;
+  let lastTraceRequest: QueryRequest | null = null;
   const logsCursorByPage = new Map<number, string>();
   const tracesCursorByPage = new Map<number, string>();
   let pageSize = "100";
   const pageSizeOptions = ["25", "50", "100", "200"];
   $: dashboardTimeRangeOptions = getDashboardTimeRangeOptions($locale);
 
+  function requestedResultSignals(request: QueryRequest): QuerySignal[] {
+    return (request.signals ?? []).filter(
+      (signal): signal is QuerySignal => signal === "logs" || signal === "traces",
+    );
+  }
+
+  function rememberLastRequests(request: QueryRequest, signals: QuerySignal[]) {
+    if (signals.includes("logs")) {
+      lastLogRequest = request;
+    }
+    if (signals.includes("traces")) {
+      lastTraceRequest = request;
+    }
+  }
+
+  function lastRequestForSignal(signal: QuerySignal): QueryRequest | null {
+    return signal === "logs" ? lastLogRequest ?? lastRequest : lastTraceRequest ?? lastRequest;
+  }
+
   async function handleRun(event: CustomEvent) {
     const { request } = event.detail;
-    logsCursorByPage.clear();
-    tracesCursorByPage.clear();
-    lastRequest = createInitialRunRequest(request);
-    await executeQuery(lastRequest);
+    const updated = createInitialRunRequest(request);
+    const signals = requestedResultSignals(updated);
+    if (signals.includes("logs")) logsCursorByPage.clear();
+    if (signals.includes("traces")) tracesCursorByPage.clear();
+    lastRequest = updated;
+    rememberLastRequests(updated, signals);
+    await executeQuery(updated);
     storeNextCursors({
       pagination: get(queryState).result?.pagination,
       page: 1,
       logsCursorByPage,
       tracesCursorByPage,
+      signals,
     });
     if (!get(queryState).error && get(queryState).result) {
       lastQueryRefresh = new Date();
@@ -167,12 +195,13 @@
   }
 
   async function handlePageChange(
-    signal: "logs" | "traces",
+    signal: QuerySignal,
     nextPage: number,
   ) {
-    if (!lastRequest) return;
+    const baseRequest = lastRequestForSignal(signal);
+    if (!baseRequest) return;
     const updated = createPageChangeRequest({
-      lastRequest,
+      lastRequest: baseRequest,
       signal,
       nextPage,
       logsCursorByPage,
@@ -180,12 +209,14 @@
     });
     const page = updated.page ?? 1;
     lastRequest = updated;
+    rememberLastRequests(updated, [signal]);
     await executeQuery(updated, { retainResult: true });
     storeNextCursors({
       pagination: get(queryState).result?.pagination,
       page,
       logsCursorByPage,
       tracesCursorByPage,
+      signals: [signal],
     });
     if (!get(queryState).error && get(queryState).result) {
       lastQueryRefresh = new Date();
@@ -193,17 +224,22 @@
   }
 
   async function handlePageSizeChange() {
-    if (!lastRequest) return;
-    logsCursorByPage.clear();
-    tracesCursorByPage.clear();
-    const updated = createPageSizeRequest(lastRequest, pageSize);
+    const signal = activeTab === "logs" || activeTab === "tracce" ? (activeTab === "logs" ? "logs" : "traces") : null;
+    const baseRequest = signal ? lastRequestForSignal(signal) : lastRequest;
+    if (!baseRequest) return;
+    if (signal === "logs") logsCursorByPage.clear();
+    if (signal === "traces") tracesCursorByPage.clear();
+    const updated = createPageSizeRequest(baseRequest, pageSize);
+    const signals = requestedResultSignals(updated);
     lastRequest = updated;
+    rememberLastRequests(updated, signals);
     await executeQuery(updated, { retainResult: true });
     storeNextCursors({
       pagination: get(queryState).result?.pagination,
       page: 1,
       logsCursorByPage,
       tracesCursorByPage,
+      signals,
     });
     if (!get(queryState).error && get(queryState).result) {
       lastQueryRefresh = new Date();

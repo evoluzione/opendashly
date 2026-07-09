@@ -67,6 +67,42 @@ export function mergeResult(
   };
 }
 
+export function replaceSingleSignalResult(
+  previous: QueryRunResult,
+  latest: QueryRunResult,
+  signal: QuerySignal
+): QueryRunResult {
+  const merged: QueryRunResult = {
+    ...previous,
+    runId: latest.runId,
+    status: latest.status,
+    summary: { ...previous.summary },
+    pagination: { ...previous.pagination },
+    results: { ...previous.results },
+    signalErrors: latest.signalErrors
+  };
+
+  if (signal === 'logs') {
+    merged.results.logs = latest.results.logs ?? [];
+    if (latest.pagination?.logs) {
+      merged.pagination = { ...merged.pagination, logs: latest.pagination.logs };
+    }
+    merged.summary.logCount = latest.summary?.logCount ?? merged.results.logs.length;
+    return merged;
+  }
+
+  if (signal === 'traces') {
+    merged.results.traces = latest.results.traces ?? [];
+    if (latest.pagination?.traces) {
+      merged.pagination = { ...merged.pagination, traces: latest.pagination.traces };
+    }
+    merged.summary.traceCount = latest.summary?.traceCount ?? merged.results.traces.length;
+    return merged;
+  }
+
+  return merged;
+}
+
 export function mergeSingleSignalResult(
   previous: QueryRunResult,
   latest: QueryRunResult,

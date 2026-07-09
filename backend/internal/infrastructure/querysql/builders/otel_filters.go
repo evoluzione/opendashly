@@ -196,13 +196,13 @@ func buildSingleClause(k, v, op string, serviceColumn, traceColumn, severityColu
 			return fmt.Sprintf("(Duration / 1000000.0) %s %s", sqlOp, strconv.FormatFloat(number, 'f', -1, 64))
 		}
 	case "severity":
-		if severityColumn != "" && v != "Tutti" {
+		if severityColumn != "" && !isAllSeverityValue(v) {
 			if op == "=" || op == "" {
 				parts := strings.Split(v, ",")
 				severityClauses := make([]string, 0, len(parts))
 				for _, part := range parts {
 					raw := strings.TrimSpace(part)
-					if raw == "" || strings.EqualFold(raw, "Tutti") {
+					if isAllSeverityValue(raw) {
 						continue
 					}
 					upperValue := strings.ToUpper(EscapeLiteral(raw))
@@ -267,6 +267,11 @@ func buildSingleClause(k, v, op string, serviceColumn, traceColumn, severityColu
 
 func formatDateTime64(value time.Time) string {
 	return "toDateTime64('" + value.UTC().Format("2006-01-02 15:04:05.000000000") + "', 9)"
+}
+
+func isAllSeverityValue(value string) bool {
+	trimmed := strings.TrimSpace(value)
+	return trimmed == "" || strings.EqualFold(trimmed, "all") || strings.EqualFold(trimmed, "tutti")
 }
 
 func EscapeLiteral(value string) string {

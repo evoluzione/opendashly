@@ -24,6 +24,11 @@ export function deleteQuery(id: string): Promise<void> {
   return apiRequest<void>(`/api/queries/${id}`, { method: 'DELETE' });
 }
 
+const SAVED_QUERY_RUN_TIMEOUT_MS = 40000;
+
 export function runSavedQuery(id: string) {
-  return apiRequest(`/api/queries/${id}/run`, { method: 'POST' });
+  return apiRequest(`/api/queries/${id}/run`, {
+    method: 'POST',
+    timeoutMs: SAVED_QUERY_RUN_TIMEOUT_MS
+  });
 }

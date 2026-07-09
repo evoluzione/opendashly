@@ -79,7 +79,7 @@
     tracesCursorByPage.clear();
     lastRequest = {
       ...lastRequest,
-      signals: ["logs", "traces"],
+      signals: lastRequest.signals?.length ? lastRequest.signals : ["logs", "traces"],
       limit,
       page: 1,
       logsCursor: undefined,
