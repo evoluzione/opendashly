@@ -3,7 +3,7 @@
     import { locale, t } from "../lib/i18n";
 
     const levels = [
-        "Tutti",
+        "",
         "TRACE",
         "DEBUG",
         "INFO",
@@ -64,7 +64,7 @@
                 <option
                     value={level}
                     selected={level === $servicesState.selectedLogLevel}
-                    style="color: {getLevelColor(level)}">{level}</option
+                    style="color: {getLevelColor(level)}">{level || t($locale, "query.allLevels")}</option
                 >
             {/each}
         </select>
@@ -75,7 +75,7 @@
                 $servicesState.selectedLogLevel,
             )}; color: {getLevelColor($servicesState.selectedLogLevel)}"
         >
-            {$servicesState.selectedLogLevel}
+            {$servicesState.selectedLogLevel || t($locale, "query.allLevels")}
         </div>
         <svg
             class="chevron"

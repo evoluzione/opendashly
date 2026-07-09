@@ -149,6 +149,32 @@ describe('home-page.logic', () => {
     expect(tracesMap.get(2)).toBe('n-trace');
   });
 
+  it('storeNextCursors può aggiornare solo il segnale richiesto', () => {
+    const logsMap = new Map<number, string>([[2, 'old-log']]);
+    const tracesMap = new Map<number, string>([[2, 'old-trace']]);
+
+    storeNextCursors({
+      pagination: {
+        logs: { page: 1, limit: 10, total: 10, totalPages: 1, hasNext: false },
+        traces: {
+          page: 1,
+          limit: 10,
+          total: 20,
+          totalPages: 2,
+          hasNext: true,
+          nextCursor: 'new-trace'
+        }
+      },
+      page: 1,
+      logsCursorByPage: logsMap,
+      tracesCursorByPage: tracesMap,
+      signals: ['traces']
+    });
+
+    expect(logsMap.get(2)).toBe('old-log');
+    expect(tracesMap.get(2)).toBe('new-trace');
+  });
+
   it('buildDashboardRequest preset all copre tutto storico', () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date('2026-03-15T12:00:00.000Z'));

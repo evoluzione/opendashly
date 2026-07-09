@@ -4,7 +4,8 @@ import {
   buildRollingRangeRequest,
   getMaxTimestamp,
   mergeResult,
-  mergeSingleSignalResult
+  mergeSingleSignalResult,
+  replaceSingleSignalResult
 } from '../../../src/lib/stores/query.domain';
 import type { QueryRequest, QueryRunResult } from '../../../src/services/query';
 
@@ -93,6 +94,35 @@ describe('query.domain', () => {
     expect(merged.results.logs).toHaveLength(2);
     expect(merged.results.traces).toHaveLength(1);
     expect(merged.results.metrics).toHaveLength(1);
+  });
+
+  it("replaceSingleSignalResult sostituisce il tab attivo e conserva l'altro", () => {
+    const previous = makeResult({
+      summary: { logCount: 1, traceCount: 1, metricCount: 1 },
+      results: {
+        logs: [{ timestamp: '1', traceId: 'a', spanId: 's1', body: 'x' }],
+        traces: [{ traceId: 't-old', timestamp: '1' }],
+        metrics: [{ k: 1 }]
+      }
+    });
+
+    const latest = makeResult({
+      runId: 'run-2',
+      summary: { logCount: 0, traceCount: 1, metricCount: 0 },
+      results: {
+        logs: [],
+        traces: [{ traceId: 't-new', timestamp: '2' }],
+        metrics: []
+      }
+    });
+
+    const replaced = replaceSingleSignalResult(previous, latest, 'traces');
+
+    expect(replaced.runId).toBe('run-2');
+    expect(replaced.results.logs).toEqual(previous.results.logs);
+    expect(replaced.results.traces).toEqual(latest.results.traces);
+    expect(replaced.summary.logCount).toBe(1);
+    expect(replaced.summary.traceCount).toBe(1);
   });
 
   it('buildRollingRangeRequest genera un intervallo temporale coerente', () => {

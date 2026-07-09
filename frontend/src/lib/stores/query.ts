@@ -5,7 +5,8 @@ import { fetchServices } from '../../services/services';
 import {
   buildAutoRefreshRequest,
   mergeResult,
-  mergeSingleSignalResult
+  mergeSingleSignalResult,
+  replaceSingleSignalResult
 } from './query.domain';
 
 type QueryState = {
@@ -42,16 +43,21 @@ export const queryState = writable<QueryState>(initial);
 
 const servicesInitial: ServiceState = {
   services: [],
-  selectedService: 'Tutti',
-  selectedLogLevel: 'Tutti',
+  selectedService: '',
+  selectedLogLevel: '',
   loading: false,
   error: null
 };
 
 export const servicesState = writable<ServiceState>(servicesInitial);
 
+function normalizeAllSelection(value: string): string {
+  const trimmed = String(value ?? '').trim();
+  return trimmed === 'Tutti' || trimmed.toLowerCase() === 'all' ? '' : trimmed;
+}
+
 export function selectLogLevel(value: string) {
-  servicesState.update((state) => ({ ...state, selectedLogLevel: value }));
+  servicesState.update((state) => ({ ...state, selectedLogLevel: normalizeAllSelection(value) }));
 }
 
 let refreshTimer: ReturnType<typeof setInterval> | null = null;
@@ -98,6 +104,9 @@ export async function executeQuery(
 ) {
   debugLog('query.execute.start', { retainResult: !!options.retainResult, isBackground: !!options.isBackground, request });
   const previousResult = get(queryState).result;
+  const requestedSignal = request.signals?.length === 1 ? request.signals[0] : null;
+  const singleSignal =
+    requestedSignal === 'logs' || requestedSignal === 'traces' ? requestedSignal : null;
 
   // Set loading only if NOT a background refresh
   if (!options.isBackground) {
@@ -106,7 +115,7 @@ export async function executeQuery(
       loading: true,
       error: null,
       warnings: [],
-      result: options.retainResult ? state.result : null,
+      result: options.retainResult || singleSignal ? state.result : null,
       lastRequest: request
     }));
   } else {
@@ -118,14 +127,12 @@ export async function executeQuery(
     const response = await runQuery(request);
     debugLog('query.execute.success', { runId: response.runId, status: response.status });
     const isRetained = !!options.retainResult || !!options.isBackground;
-    const singleSignal =
-      request.signals && request.signals.length === 1
-        ? (request.signals[0] as 'logs' | 'traces')
-        : null;
 
     let result = response;
     if (isRetained && previousResult && singleSignal) {
       result = mergeSingleSignalResult(previousResult, response, singleSignal, request);
+    } else if (!isRetained && previousResult && singleSignal) {
+      result = replaceSingleSignalResult(previousResult, response, singleSignal);
     } else if (
       isRetained &&
       previousResult &&
@@ -161,7 +168,7 @@ export async function executeQuery(
         !state.warnings.includes(refreshWarning)
           ? [...state.warnings, refreshWarning]
           : state.warnings,
-      result: options.retainResult || options.isBackground ? state.result : null
+      result: options.retainResult || options.isBackground || singleSignal ? state.result : null
     }));
   }
 }
@@ -183,7 +190,7 @@ export async function loadServices() {
 }
 
 export function selectService(value: string) {
-  servicesState.update((state) => ({ ...state, selectedService: value }));
+  servicesState.update((state) => ({ ...state, selectedService: normalizeAllSelection(value) }));
 }
 
 export function setAutoRefresh(seconds: number | null, rangeMinutes: number | null = null) {
