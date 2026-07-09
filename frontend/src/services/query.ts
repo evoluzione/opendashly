@@ -44,10 +44,13 @@ export type SmartQueryResponse = {
   warnings?: string[];
 };
 
+const QUERY_RUN_TIMEOUT_MS = 40000;
+
 export function runQuery(request: QueryRequest): Promise<QueryRunResult> {
   return apiRequest<QueryRunResult>('/api/query/run', {
     method: 'POST',
-    body: JSON.stringify(request)
+    body: JSON.stringify(request),
+    timeoutMs: QUERY_RUN_TIMEOUT_MS
   });
 }
 

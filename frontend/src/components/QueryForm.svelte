@@ -479,6 +479,12 @@
     }
   }
 
+  function signalsForActiveTab(): string[] {
+    if (activeTab === "logs") return ["logs"];
+    if (activeTab === "tracce") return ["traces"];
+    return ["logs", "traces"];
+  }
+
   function submit() {
     const selectedService = $servicesState.selectedService;
     const serviceFilter =
@@ -572,7 +578,7 @@
 
     dispatch("run", {
       request: {
-        signals: ["logs", "traces"],
+        signals: signalsForActiveTab(),
         timeRange,
         filters: manualFilters,
         filterList: finalFilterList,

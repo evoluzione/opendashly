@@ -103,6 +103,7 @@ describe('home-page.logic', () => {
       '200'
     );
 
+    expect(request.signals).toEqual(['logs']);
     expect(request.limit).toBe(200);
     expect(request.page).toBe(1);
     expect(request.logsCursor).toBeUndefined();

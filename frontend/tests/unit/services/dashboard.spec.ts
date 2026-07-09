@@ -64,7 +64,8 @@ describe('dashboard service', () => {
     expect(result).toEqual(payload);
     expect(apiRequest).toHaveBeenCalledWith('/api/dashboard/metrics', {
       method: 'POST',
-      body: JSON.stringify(request)
+      body: JSON.stringify(request),
+      timeoutMs: 40000
     });
   });
 

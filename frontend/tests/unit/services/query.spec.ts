@@ -35,7 +35,8 @@ describe('query service', () => {
     expect(result).toEqual(payload);
     expect(apiRequest).toHaveBeenCalledWith('/api/query/run', {
       method: 'POST',
-      body: JSON.stringify(request)
+      body: JSON.stringify(request),
+      timeoutMs: 40000
     });
   });
 
