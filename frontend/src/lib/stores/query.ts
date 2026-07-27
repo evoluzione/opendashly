@@ -115,7 +115,7 @@ export async function executeQuery(
       loading: true,
       error: null,
       warnings: [],
-      result: options.retainResult || singleSignal ? state.result : null,
+      result: options.retainResult ? state.result : null,
       lastRequest: request
     }));
   } else {
@@ -168,7 +168,7 @@ export async function executeQuery(
         !state.warnings.includes(refreshWarning)
           ? [...state.warnings, refreshWarning]
           : state.warnings,
-      result: options.retainResult || options.isBackground || singleSignal ? state.result : null
+      result: options.retainResult || options.isBackground ? state.result : null
     }));
   }
 }
