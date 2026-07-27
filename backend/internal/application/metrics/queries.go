@@ -76,6 +76,48 @@ func endpointSpanFilter() string {
 	return "(startsWith(SpanName, 'GET ') OR startsWith(SpanName, 'POST ') OR startsWith(SpanName, 'PUT ') OR startsWith(SpanName, 'PATCH ') OR startsWith(SpanName, 'DELETE ') OR startsWith(SpanName, 'OPTIONS ') OR startsWith(SpanName, 'HEAD '))"
 }
 
+func endpointLatencyBucketCountsExpression() string {
+	return `[
+						toUInt64(sum(latency_0_100)),
+						toUInt64(sum(latency_100_250)),
+						toUInt64(sum(latency_250_500)),
+						toUInt64(sum(latency_500_1000)),
+						toUInt64(sum(latency_1000_2000)),
+						toUInt64(sum(latency_2000_5000)),
+						toUInt64(sum(latency_5000_10000)),
+						toUInt64(sum(latency_10000_inf))
+					]`
+}
+
+func endpointLatencyBucketStartsExpression() string {
+	return "[toFloat64(0), toFloat64(100), toFloat64(250), toFloat64(500), toFloat64(1000), toFloat64(2000), toFloat64(5000), toFloat64(10000)]"
+}
+
+// endpointLatencyBucketEndsExpression returns the upper edge of each bucket.
+// The last bucket (>10s) is unbounded, so its end is capped at its own start:
+// percentiles landing there report that edge instead of extrapolating into
+// the open tail.
+func endpointLatencyBucketEndsExpression() string {
+	return "[toFloat64(100), toFloat64(250), toFloat64(500), toFloat64(1000), toFloat64(2000), toFloat64(5000), toFloat64(10000), toFloat64(10000)]"
+}
+
+// bucketPercentileExpression linearly interpolates the percentile value
+// within the histogram bucket that contains the target rank, instead of
+// snapping to a bucket edge. It intentionally avoids merging per-endpoint
+// TDigest states (see BuildSlowestEndpointsQuery) because that blows the
+// query memory budget when grouping by high-cardinality endpoints.
+func bucketPercentileExpression(factor string) string {
+	target := fmt.Sprintf("toUInt64(ceil(toFloat64(bucket_cnt) * %s))", factor)
+	rawIndex := fmt.Sprintf("arrayFirstIndex(x -> x >= %s, cumulative_counts)", target)
+	index := fmt.Sprintf("if(%s = 0, length(bucket_counts), %s)", rawIndex, rawIndex)
+	prevCum := fmt.Sprintf("if(%s = 1, 0, cumulative_counts[%s - 1])", index, index)
+	inBucket := fmt.Sprintf("bucket_counts[%s]", index)
+	start := fmt.Sprintf("bucket_starts[%s]", index)
+	end := fmt.Sprintf("bucket_ends[%s]", index)
+	fraction := fmt.Sprintf("if(%s > 0, (toFloat64(%s) - toFloat64(%s)) / toFloat64(%s), 0)", inBucket, target, prevCum, inBucket)
+	return fmt.Sprintf("if(bucket_cnt > 0, %s + %s * (%s - %s), 0)", start, fraction, end, start)
+}
+
 func timeBucketInterval(from, to time.Time) string {
 	duration := to.Sub(from)
 	interval := "1 MINUTE"
@@ -121,35 +163,52 @@ func BuildLatencyDistributionQuery(from, to time.Time, serviceName string) strin
 }
 
 // BuildSlowestEndpointsQuery builds a query to get the slowest endpoints by P95.
-// It merges the per-minute TDigest states so percentiles are interpolated
-// from the raw distribution rather than snapped to fixed latency buckets.
+// It uses fixed latency buckets (instead of merging high-cardinality TDigest
+// states) and linearly interpolates within the bucket that holds each
+// percentile's target rank, so values aren't snapped to the bucket edges.
 func BuildSlowestEndpointsQuery(from, to time.Time, serviceName string, limit int) string {
+	p50Expr := bucketPercentileExpression("0.50")
+	p95Expr := bucketPercentileExpression("0.95")
+	p99Expr := bucketPercentileExpression("0.99")
+
 	return fmt.Sprintf(`
 			SELECT
 				endpoint,
 				service,
 				if(cnt > 0, duration_sum_ms / cnt, 0) AS avg_ms,
-				toFloat64(qs[1]) AS p50,
-				toFloat64(qs[2]) AS p95,
-				toFloat64(qs[3]) AS p99,
+				%s AS p50,
+				%s AS p95,
+				%s AS p99,
 				cnt
 			FROM (
 				SELECT
-					Endpoint AS endpoint,
-					ServiceName AS service,
-					sum(duration_sum_ms) AS duration_sum_ms,
-					toUInt64(sum(request_count)) AS cnt,
-					quantilesTDigestMerge(0.5, 0.95, 0.99)(duration_quantiles_state) AS qs
-				FROM %s
-				WHERE time_bucket >= '%s' AND time_bucket <= '%s'
-					%s
-				GROUP BY endpoint, service
+					endpoint,
+					service,
+					duration_sum_ms,
+					cnt,
+					bucket_counts,
+					toUInt64(arraySum(bucket_counts)) AS bucket_cnt,
+					arrayCumSum(bucket_counts) AS cumulative_counts,
+					%s AS bucket_starts,
+					%s AS bucket_ends
+				FROM (
+					SELECT
+						Endpoint AS endpoint,
+						ServiceName AS service,
+						sum(duration_sum_ms) AS duration_sum_ms,
+						toUInt64(sum(request_count)) AS cnt,
+						%s AS bucket_counts
+					FROM %s
+					WHERE time_bucket >= '%s' AND time_bucket <= '%s'
+						%s
+					GROUP BY endpoint, service
+				)
 			)
 			WHERE cnt >= 5
 			ORDER BY p95 DESC
 			LIMIT %d
 			%s
-			`, traceEndpointRollupTable, formatTime(from), formatTime(to), serviceFilter(serviceName), limit, querySettings)
+			`, p50Expr, p95Expr, p99Expr, endpointLatencyBucketStartsExpression(), endpointLatencyBucketEndsExpression(), endpointLatencyBucketCountsExpression(), traceEndpointRollupTable, formatTime(from), formatTime(to), serviceFilter(serviceName), limit, querySettings)
 }
 
 // BuildErrorHotspotsQuery builds a query to get endpoints with highest error rates.
