@@ -1,6 +1,7 @@
 <script lang="ts">
   import type { EndpointThroughput } from '../../services/dashboard';
   import InfoTooltip from '../common/InfoTooltip.svelte';
+  import MarqueeText from '../common/MarqueeText.svelte';
   import { locale, t, getLocaleTag } from '../../lib/i18n';
 
   export let data: EndpointThroughput[] = [];
@@ -33,7 +34,7 @@
           {#each data as row}
             <tr>
               <td class="col-endpoint">
-                <span class="endpoint-name" title={row.endpoint}>{row.endpoint}</span>
+                <MarqueeText text={row.endpoint} class="endpoint-name" />
               </td>
               <td class="col-service">
                 <span class="service-badge">{row.service}</span>
@@ -131,11 +132,7 @@
     max-width: 0;
   }
 
-  .endpoint-name {
-    display: block;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+  :global(.endpoint-name) {
     font-family: 'SF Mono', Monaco, 'Cascadia Code', monospace;
     font-size: 12px;
   }
