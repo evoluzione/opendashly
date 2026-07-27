@@ -7,6 +7,7 @@
   import QueryForm from "../components/QueryForm.svelte";
   import LogResultsTable from "../components/LogResultsTable.svelte";
   import TraceResultsList from "../components/TraceResultsList.svelte";
+  import LoadingState from "../components/LoadingState.svelte";
   import {
     executeQuery,
     queryState,
@@ -768,21 +769,19 @@
             {/each}
           </div>
         {:else if $dashboardState.loading && !$dashboardState.data}
-          <div class="status">{t($locale, "home.loadingDashboard")}</div>
+          <LoadingState message={t($locale, "home.loadingDashboard")} />
         {:else if $dashboardState.error}
           <div class="status error">{$dashboardState.error}</div>
         {:else}
-          <div class="status">{t($locale, "home.loadingMetrics")}</div>
+          <LoadingState message={t($locale, "home.loadingMetrics")} />
         {/if}
       {:else if !$queryState.result}
         {#if $queryState.error}
           <div class="status error">{$queryState.error}</div>
+        {:else if $queryState.loading}
+          <LoadingState message={t($locale, "home.loadingResults")} />
         {:else}
-          <div class="status">
-            {$queryState.loading
-              ? t($locale, "home.loadingResults")
-              : t($locale, "home.startQuery")}
-          </div>
+          <div class="status">{t($locale, "home.startQuery")}</div>
         {/if}
       {:else}
         {#if $queryState.warnings.length > 0}
