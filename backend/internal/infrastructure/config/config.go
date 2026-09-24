@@ -60,7 +60,6 @@ type Config struct {
 	AuthCookieName               string
 	CleanupIntervalMinutes       int
 	ServiceListTimeoutSec        int
-	RetentionPreCount            bool
 	CORSAllowedOrigins           []string
 	DebugQuery                   bool
 }
@@ -136,7 +135,6 @@ func (cfg *Config) applyDefaults() {
 	cfg.RetentionPressureMemPct = auto.RetentionPressureMemPct
 	cfg.RetentionPressureMemBudgetMB = auto.RetentionPressureMemBudgetMB
 	cfg.RetentionPressureDiskPct = auto.RetentionPressureDiskPct
-	cfg.RetentionPreCount = auto.RetentionPreCount
 	cfg.ClickHouseTempDiskMiB = auto.ClickHouseTempDiskMiB
 	cfg.ClickHouseMaxExecSec = auto.ClickHouseMaxExecSec
 	cfg.ClickHouseMaxOpenConns = auto.ClickHouseMaxOpenConns

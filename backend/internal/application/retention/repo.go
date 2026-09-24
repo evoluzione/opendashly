@@ -14,7 +14,6 @@ type Repository interface {
 	GetSettingBySignal(ctx context.Context, signalType string) (*RetentionSetting, error)
 	UpdateSetting(ctx context.Context, signalType string, retentionDays uint32, updatedBy string) error
 	CreateCleanupJob(ctx context.Context, job CleanupJob) error
-	UpdateCleanupJob(ctx context.Context, jobID string, status string, recordsDeleted uint64, errorMsg string) error
 	ListCleanupJobs(ctx context.Context, limit int) ([]CleanupJob, error)
 	CountCleanupJobs(ctx context.Context) (uint64, error)
 }
@@ -120,22 +119,14 @@ func (r *Repo) CreateCleanupJob(ctx context.Context, job CleanupJob) error {
 	return nil
 }
 
-func (r *Repo) UpdateCleanupJob(ctx context.Context, jobID string, status string, recordsDeleted uint64, errorMsg string) error {
-	query := `ALTER TABLE telemetry.cleanup_jobs
-	          UPDATE completed_at = ?, status = ?, records_deleted = ?, error_message = ?
-	          WHERE job_id = ?`
-
-	err := r.Conn.Exec(ctx, query, time.Now(), status, recordsDeleted, errorMsg, jobID)
-	if err != nil {
-		return fmt.Errorf("update cleanup job: %w", err)
-	}
-
-	return nil
-}
+// visibleJobsFilter hides legacy no-op rows (old automatic runs recorded 0
+// deleted records every interval) so the history shows real deletions/failures.
+const visibleJobsFilter = "(records_deleted > 0 OR status = 'failed')"
 
 func (r *Repo) ListCleanupJobs(ctx context.Context, limit int) ([]CleanupJob, error) {
 	base := `SELECT job_id, job_type, signal_type, service_name, started_at, completed_at, status, records_deleted, error_message
 	          FROM telemetry.cleanup_jobs
+	          WHERE ` + visibleJobsFilter + `
 	          ORDER BY started_at DESC`
 	var rows driver.Rows
 	var err error
@@ -163,7 +154,7 @@ func (r *Repo) ListCleanupJobs(ctx context.Context, limit int) ([]CleanupJob, er
 
 func (r *Repo) CountCleanupJobs(ctx context.Context) (uint64, error) {
 	var count uint64
-	err := r.Conn.QueryRow(ctx, "SELECT count() FROM telemetry.cleanup_jobs").Scan(&count)
+	err := r.Conn.QueryRow(ctx, "SELECT count() FROM telemetry.cleanup_jobs WHERE "+visibleJobsFilter).Scan(&count)
 	if err != nil {
 		return 0, fmt.Errorf("count cleanup jobs: %w", err)
 	}

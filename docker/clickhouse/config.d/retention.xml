@@ -1,0 +1,7 @@
+<clickhouse>
+  <!--
+    Retention drops whole day partitions. The default 50 GB guard would make
+    the drop fail exactly when the disk is filling up; disable it.
+  -->
+  <max_partition_size_to_drop>0</max_partition_size_to_drop>
+</clickhouse>
