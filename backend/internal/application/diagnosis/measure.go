@@ -238,22 +238,21 @@ func (r *Runner) measureReport(ctx context.Context, scope Scope, m Measure, t te
 	if total.Count == 0 {
 		// Nothing in this window: offer windows that may have data.
 		if !scope.Today {
-			sugs.add(p.pick("Oggi", "Today"), p.pick("e oggi?", "and today?"))
+			sugs.add(Suggestion{Label: p.pick("oggi", "today"), Prompt: p.pick("e oggi?", "and today?"), Kind: sugRerun})
 		}
-		sugs.add(p.pick("Ultime 24 ore", "Last 24 hours"), p.pick("e nelle ultime 24 ore?", "and in the last 24 hours?"))
+		sugs.add(Suggestion{Label: p.pick("ultime 24 ore", "last 24 hours"), Prompt: p.pick("e nelle ultime 24 ore?", "and in the last 24 hours?"), Kind: sugRerun})
 	}
 	if !detail && len(routes) > 1 {
-		d := p.detailsSuggestion()
-		sugs.add(d.Label, d.Prompt)
+		sugs.add(p.detailsSuggestion())
 	}
-	sugs.add(p.pick("Cosa non va qui?", "What's wrong here?"), p.windowPrompt(scope.Service, scope.window())+p.pick(" problemi", " problems"))
+	sugs.add(Suggestion{Label: p.pick("Cosa non va qui?", "What's wrong here?"), Prompt: p.windowPrompt(scope.Service, scope.window()) + p.pick(" problemi", " problems")})
 	if m.Metric != metricLatency {
-		sugs.add(p.pick("E la latenza?", "And latency?"), p.pick("e la latenza media?", "and the average latency?"))
+		sugs.add(Suggestion{Label: p.pick("E la latenza?", "And latency?"), Prompt: p.pick("e la latenza media?", "and the average latency?")})
 	}
 	if m.Metric != metricErrors {
-		sugs.add(p.pick("E gli errori?", "And errors?"), p.pick("e quanti errori?", "and how many errors?"))
+		sugs.add(Suggestion{Label: p.pick("E gli errori?", "And errors?"), Prompt: p.pick("e quanti errori?", "and how many errors?")})
 	}
-	return &Report{Answer: answer, Steps: steps, Suggestions: sugs, Context: out}
+	return &Report{Answer: answer, Steps: steps, Suggestions: sugs, Context: out, Links: p.measureLinks(scope, m), Rows: p.rows(scope, items)}
 }
 
 func (p phrasing) metricName(m Measure) string {

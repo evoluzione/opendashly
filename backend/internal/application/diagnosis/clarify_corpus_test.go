@@ -72,6 +72,8 @@ func checkClarify(c clarifyCase, now time.Time) []string {
 		got = "new"
 	case req.action == actUnsupported:
 		got = "unsupported"
+	case req.action == actLinks:
+		got = "links"
 	default:
 		got = "unclear" // references with nothing to point at
 	}

@@ -490,6 +490,21 @@
     const toParam = params.get("to");
     if (fromParam) fromInput = fromParam;
     if (toParam) toInput = toParam;
+
+    // Links from the assistant: only error traces, and a text to search for.
+    const errorsParam = params.get("errors");
+    if (errorsParam === "with_errors" || errorsParam === "without_errors") {
+      traceErrorScope = errorsParam;
+    }
+    const searchParam = params.get("search");
+    if (searchParam && !traceParam) {
+      if (activeTab === "tracce") {
+        traceSearch = searchParam;
+        traceSearchExact = false;
+      } else {
+        logTextSearch = searchParam;
+      }
+    }
   }
 
   function syncUrlWithState() {
@@ -511,8 +526,16 @@
       if (toInput) params.set("to", toInput);
     }
 
-    if (traceSearch) {
+    if (traceSearch && traceSearchExact) {
       params.set("traceId", traceSearch);
+    } else if (activeTab === "tracce" && traceSearch) {
+      params.set("search", traceSearch);
+    }
+    if (activeTab === "logs" && logTextSearch) {
+      params.set("search", logTextSearch);
+    }
+    if (activeTab === "tracce" && traceErrorScope !== "all") {
+      params.set("errors", traceErrorScope);
     }
 
     const current = $page.url.searchParams.toString();
@@ -670,6 +693,9 @@
 
   onMount(() => {
     loadState(activeTab);
+    if (autoRun && !initialTraceId) {
+      clearFilters();
+    }
     applyUrlParams();
     if (forceMode) {
       searchMode = forceMode;
@@ -701,8 +727,9 @@
     persistCurrentFilters();
   });
 
-  export function resetFiltersToDefault() {
-    searchMode = "manual";
+  // clearFilters drops every filter without running the query: a link opened
+  // from the assistant must show exactly its filters, not the saved ones.
+  function clearFilters() {
     selectedRange = defaultState.selectedRange;
     fromInput = defaultState.fromInput;
     toInput = defaultState.toInput;
@@ -713,11 +740,16 @@
     filterDurationMs = defaultState.filterDurationMs;
     traceErrorScope = defaultState.traceErrorScope;
     advancedFilters = [];
+    selectService("");
+    selectedLogLevels = [];
+  }
+
+  export function resetFiltersToDefault() {
+    searchMode = "manual";
+    clearFilters();
     showFilterModal = false;
     showCustomRangeModal = false;
     rangeError = "";
-    selectService("");
-    selectedLogLevels = [];
     tabStates[activeTab] = { ...defaultState };
     persistedStates = tabStates;
     storePersistedTabStates(tabStates);

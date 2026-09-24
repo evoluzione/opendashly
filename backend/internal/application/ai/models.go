@@ -13,6 +13,10 @@ type AssistantMessage struct {
 	Context json.RawMessage `json:"context,omitempty"`
 	// Suggestions are the follow-up buttons of an answer, shown again after a reload.
 	Suggestions json.RawMessage `json:"suggestions,omitempty"`
+	// Links open or download the data behind an answer.
+	Links json.RawMessage `json:"links,omitempty"`
+	// Rows are the actions of each numbered item of an answer.
+	Rows json.RawMessage `json:"rows,omitempty"`
 }
 
 type AssistantSession struct {

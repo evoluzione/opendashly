@@ -24,6 +24,7 @@ func BuildTracesQuery(filters map[string]string, filterList []FilterItem, from, 
 	traceErrorScope, effectiveFilterList := extractTraceErrorScope(filteredForTraces)
 	base := "SELECT TraceId AS traceId, argMin(SpanName, Timestamp) AS name, argMin(ServiceName, Timestamp) AS service, count() AS spanCount, countIf(" + traceErrorStatusExpr + ") AS errorCount, max(Timestamp) AS lastSeen, max(Duration) / 1000000 AS durationMs FROM telemetry.otel_traces"
 	clauses := buildOtelClauses("Timestamp", filters, effectiveFilterList, from, to, "ServiceName", "TraceId", "", []string{"ResourceAttributes", "SpanAttributes"})
+	clauses = withErrorTracePrefilter(traceErrorScope, clauses)
 	query := base
 	if len(clauses) > 0 {
 		query += " WHERE " + strings.Join(clauses, " AND ")
@@ -62,6 +63,7 @@ func BuildTracesCountQuery(filters map[string]string, filterList []FilterItem, f
 	traceErrorScope, effectiveFilterList := extractTraceErrorScope(filteredForTraces)
 	base := "SELECT TraceId, countIf(" + traceErrorStatusExpr + ") AS errorCount FROM telemetry.otel_traces"
 	clauses := buildOtelClauses("Timestamp", filters, effectiveFilterList, from, to, "ServiceName", "TraceId", "", []string{"ResourceAttributes", "SpanAttributes"})
+	clauses = withErrorTracePrefilter(traceErrorScope, clauses)
 	query := base
 	if len(clauses) > 0 {
 		query += " WHERE " + strings.Join(clauses, " AND ")
@@ -98,4 +100,16 @@ func extractTraceErrorScope(filterList []FilterItem) (string, []FilterItem) {
 		filtered = append(filtered, f)
 	}
 	return scope, filtered
+}
+
+// withErrorTracePrefilter narrows a "with errors" search to the traces that
+// have an errored span matching the same filters, before grouping. Grouping
+// every trace of a long window and dropping the clean ones afterwards
+// (HAVING) exceeds the per-query memory budget; the result is the same.
+func withErrorTracePrefilter(scope string, clauses []string) []string {
+	if scope != "with_errors" {
+		return clauses
+	}
+	inner := append(append([]string{}, clauses...), traceErrorStatusExpr)
+	return append(clauses, "TraceId IN (SELECT TraceId FROM telemetry.otel_traces WHERE "+strings.Join(inner, " AND ")+")")
 }

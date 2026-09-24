@@ -40,6 +40,16 @@ type Report struct {
 	Context *Context `json:"context,omitempty"`
 	// Lang is the language of the answer ("it" or "en"), so the UI labels match it.
 	Lang string `json:"lang,omitempty"`
+	// Links open the data behind the answer in the search page or download it.
+	Links []Link `json:"links,omitempty"`
+	// Rows are the actions of each numbered item in the answer, in order.
+	Rows []Row `json:"rows,omitempty"`
+}
+
+// Row lets the UI analyze or open one item of the answer's numbered list.
+type Row struct {
+	Prompt string `json:"prompt"`
+	Link   *Link  `json:"link,omitempty"`
 }
 
 // Suggestion is a follow-up the UI offers as a button: Prompt is written so
@@ -47,7 +57,16 @@ type Report struct {
 type Suggestion struct {
 	Label  string `json:"label"`
 	Prompt string `json:"prompt"`
+	// Kind places the button: inline ones act on the answer and sit inside
+	// it, rerun ones repeat the analysis on another window or service (the UI
+	// prefixes them with "Ripeti per:"), the others are plain next questions.
+	Kind string `json:"kind,omitempty"`
 }
+
+const (
+	sugInline = "inline"
+	sugRerun  = "rerun"
+)
 
 type Scope struct {
 	From    time.Time
@@ -105,7 +124,7 @@ func (r *Runner) answer(ctx context.Context, prompt string, services []string, n
 	case actNoMatch:
 		if req.scope.Service != "" && prev != nil {
 			w := prev.scopeAt(now)
-			sug := Suggestion{Label: p.pick("Analizza ", "Analyze ") + req.scope.Service, Prompt: p.windowPrompt(req.scope.Service, w.window())}
+			sug := Suggestion{Label: p.pick("Analizza ", "Analyze ") + req.scope.Service, Prompt: p.windowPrompt(req.scope.Service, w.window()), Kind: sugInline}
 			return &Report{Answer: p.noItemFor(req.scope.Service), Suggestions: []Suggestion{sug}, Context: prev}, nil
 		}
 		n := 0
@@ -118,7 +137,7 @@ func (r *Runner) answer(ctx context.Context, prompt string, services []string, n
 		sugs := []Suggestion{}
 		for i, idx := range req.refCandidates {
 			nums[i] = fmt.Sprint(idx + 1)
-			sugs = append(sugs, Suggestion{Label: fmt.Sprintf(p.pick("Apri il %d", "Open #%d"), idx+1), Prompt: fmt.Sprintf(p.pick("apri il %d", "open #%d"), idx+1)})
+			sugs = append(sugs, Suggestion{Label: fmt.Sprintf(p.pick("Apri il %d", "Open #%d"), idx+1), Prompt: fmt.Sprintf(p.pick("apri il %d", "open #%d"), idx+1), Kind: sugInline})
 		}
 		answer := fmt.Sprintf(p.pick("Più punti corrispondono (%s): quale apro?", "Several items match (%s): which one should I open?"), strings.Join(nums, ", "))
 		return &Report{Answer: answer, Suggestions: sugs, Context: prev}, nil
@@ -145,6 +164,13 @@ func (r *Runner) answer(ctx context.Context, prompt string, services []string, n
 		}
 		rep.Steps = append([]string{fmt.Sprintf(p.stepOpenItemText(), idx+1)}, rep.Steps...)
 		return rep, nil
+	case actLinks:
+		if req.scope.TraceID == "" {
+			if q := p.askMissing(req, services, prev); q != nil {
+				return q, nil
+			}
+		}
+		return p.linksReport(req, prev), nil
 	case actMeasure:
 		if q := p.askMissing(req, services, prev); q != nil {
 			return q, nil
@@ -180,6 +206,9 @@ type analysis struct {
 	// metricsBusy: the rollup queries failed (usually the backend is under
 	// memory pressure); the answer says so instead of showing zeros.
 	metricsBusy bool
+	// errorLogs / errorTraces: how many were found, so links never lead to
+	// an empty search page.
+	errorLogs, errorTraces int
 }
 
 func (r *Runner) analyze(ctx context.Context, scope Scope, t texts) analysis {
@@ -212,6 +241,7 @@ func (r *Runner) analyze(ctx context.Context, scope Scope, t texts) analysis {
 	baseLogs, errBase := r.errorLogs(ctx, scope.Service, baseFrom, baseTo)
 	if errCur == nil && errBase == nil {
 		noBase := a.base != nil && a.base.Satisfaction.Throughput.TotalRequests == 0 && len(baseLogs) == 0
+		a.errorLogs = len(curLogs)
 		found := logFindings(curLogs, baseLogs, noBase)
 		a.findings = append(a.findings, found...)
 		a.steps = append(a.steps, fmt.Sprintf(t.stepLogs, len(curLogs), len(found)))
@@ -222,6 +252,7 @@ func (r *Runner) analyze(ctx context.Context, scope Scope, t texts) analysis {
 	traces, err := r.errorTraces(ctx, scope)
 	if err == nil {
 		spans := map[string][]query.TraceSpanEntry{}
+		a.errorTraces = len(traces)
 		for _, id := range traces {
 			if s, err := r.Spans.Spans(ctx, id); err == nil {
 				spans[id] = s
@@ -257,12 +288,13 @@ func (r *Runner) windowReport(ctx context.Context, scope Scope, t texts, p phras
 	if infraNote {
 		answer = p.infraNoteText() + "\n\n" + answer
 	}
+	links := p.focusLinks(scope, focus, a.errorLogs > 0, a.errorTraces > 0)
 	sugs := windowSuggestions(p, scope, out.Items, detail)
 	if a.cur != nil && a.cur.Satisfaction.Throughput.TotalRequests == 0 && len(a.findings) == 0 {
-		sugs = []Suggestion{{Label: p.pick("Oggi", "Today"), Prompt: p.pick("e oggi?", "and today?")},
-			{Label: p.pick("Ultime 24 ore", "Last 24 hours"), Prompt: p.pick("e nelle ultime 24 ore?", "and in the last 24 hours?")}}
+		sugs = []Suggestion{{Label: p.pick("oggi", "today"), Prompt: p.pick("e oggi?", "and today?"), Kind: sugRerun},
+			{Label: p.pick("ultime 24 ore", "last 24 hours"), Prompt: p.pick("e nelle ultime 24 ore?", "and in the last 24 hours?"), Kind: sugRerun}}
 	}
-	return &Report{Answer: answer, Steps: a.steps, Suggestions: sugs, Context: out}
+	return &Report{Answer: answer, Steps: a.steps, Suggestions: sugs, Context: out, Links: links, Rows: p.rows(scope, out.Items)}
 }
 
 func (r *Runner) traceReport(ctx context.Context, traceID string, now time.Time, t texts, p phrasing, detail bool) *Report {
@@ -300,7 +332,8 @@ func (r *Runner) traceReport(ctx context.Context, traceID string, now time.Time,
 	if hasRoot {
 		out.Service = root.Service
 	}
-	return &Report{Answer: answer, Steps: steps, Suggestions: traceSuggestions(p, root, hasRoot, detail), Context: out}
+	return &Report{Answer: answer, Steps: steps, Suggestions: traceSuggestions(p, root, hasRoot, detail), Context: out,
+		Links: []Link{p.traceLink(traceID)}}
 }
 
 func (r *Runner) errorLogs(ctx context.Context, service string, from, to time.Time) ([]query.LogEntry, error) {
