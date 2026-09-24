@@ -1,17 +1,13 @@
 package query
 
 import (
-	"context"
 	"fmt"
 	"regexp"
 	"strconv"
 	"strings"
 	"time"
 
-	"opendashly/backend/internal/application/ai"
 	"opendashly/backend/internal/infrastructure/querysql"
-
-	openai "github.com/sashabaranov/go-openai"
 )
 
 type SmartQueryResponse struct {
@@ -20,7 +16,7 @@ type SmartQueryResponse struct {
 	Warnings []string     `json:"warnings,omitempty"`
 }
 
-func BuildSmartQuery(prompt, contextType string, settings *ai.Settings, now time.Time) (*SmartQueryResponse, error) {
+func BuildSmartQuery(prompt string, now time.Time) (*SmartQueryResponse, error) {
 	trimmed := strings.TrimSpace(prompt)
 	if trimmed == "" {
 		return nil, fmt.Errorf("prompt vuoto")
@@ -29,84 +25,7 @@ func BuildSmartQuery(prompt, contextType string, settings *ai.Settings, now time
 		return nil, fmt.Errorf("prompt troppo lungo")
 	}
 
-	// Use AI if API key is present
-	if settings.Enabled && settings.APIKey != "" {
-		return generateSQLWithAI(trimmed, contextType, settings, now)
-	}
-
-	// Fallback to regex-based (legacy)
 	return buildLegacySmartQuery(trimmed, now)
-}
-
-func generateSQLWithAI(prompt, contextType string, settings *ai.Settings, now time.Time) (*SmartQueryResponse, error) {
-	client := openai.NewClient(settings.APIKey)
-
-	var schemaDesc string
-	switch contextType {
-	case "logs":
-		schemaDesc = LogsSchemaDescription
-	case "traces":
-		schemaDesc = TracesSchemaDescription
-	default: // "auto" or empty
-		schemaDesc = fmt.Sprintf("LOGS SCHEMA:\n%s\n\nTRACES SCHEMA:\n%s", LogsSchemaDescription, TracesSchemaDescription)
-	}
-
-	systemPrompt := fmt.Sprintf(`You are a ClickHouse SQL expert for OpenTelemetry data.
-Your goal is to generate a VALID ClickHouse SQL query based on the user request.
-Return ONLY the SQL string. No markdown, no explanations.
-
-Current Time: %s
-
-Schema Context:
-%s
-
-Rules:
-1. Use the provided table names.
-2. For specific time ranges, use appropriate WHERE clauses with now() or specific timestamps.
-3. If no time range is specified, default to the last 15 minutes.
-4. Text comparisons should be case-insensitive if appropriate (ilike).
-5. Determine if the user is asking for logs or traces and use the appropriate table.
-6. Return ONLY SQL.
-`, now.Format(time.RFC3339), schemaDesc)
-
-	resp, err := client.CreateChatCompletion(
-		context.Background(),
-		openai.ChatCompletionRequest{
-			Model: openai.GPT3Dot5Turbo,
-			Messages: []openai.ChatCompletionMessage{
-				{
-					Role:    openai.ChatMessageRoleSystem,
-					Content: systemPrompt,
-				},
-				{
-					Role:    openai.ChatMessageRoleUser,
-					Content: prompt,
-				},
-			},
-			Temperature: 0.2, // Low temperature for deterministic code generation
-		},
-	)
-
-	if err != nil {
-		return nil, fmt.Errorf("errore AI: %v", err)
-	}
-
-	sql := strings.TrimSpace(resp.Choices[0].Message.Content)
-	sql = strings.TrimPrefix(sql, "```sql")
-	sql = strings.TrimPrefix(sql, "```")
-	sql = strings.TrimSuffix(sql, "```")
-	sql = strings.TrimSpace(sql)
-
-	return &SmartQueryResponse{
-		SQL: sql,
-		Request: QueryRequest{
-			// AI queries might be complex, so we might not be able to reconstruct the full structured request object easily.
-			// For now, we return empty structured request or partial.
-			// The frontend should rely on the SQL for execution.
-			Page:  1,
-			Limit: 100,
-		},
-	}, nil
 }
 
 func buildLegacySmartQuery(prompt string, now time.Time) (*SmartQueryResponse, error) {

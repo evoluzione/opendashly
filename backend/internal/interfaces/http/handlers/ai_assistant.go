@@ -1,39 +1,30 @@
 package handlers
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"time"
 
 	"opendashly/backend/internal/application/ai"
 	"opendashly/backend/internal/application/auth"
-	"opendashly/backend/internal/application/query"
+	"opendashly/backend/internal/application/diagnosis"
 )
 
-type AIAvailabilityHandler struct {
-	Service *ai.Service
-}
-
-func (h *AIAvailabilityHandler) Get(w http.ResponseWriter, r *http.Request) {
-	settings, err := h.Service.GetSettings(r.Context(), "default")
-	if err != nil {
-		http.Error(w, "unable to read ai settings", http.StatusInternalServerError)
-		return
-	}
-	enabled := settings.Enabled && settings.APIKey != ""
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]bool{"enabled": enabled})
-}
-
+// AIAssistantChatHandler runs the deterministic diagnosis on the prompt.
 type AIAssistantChatHandler struct {
-	AIService    *ai.Service
-	QueryService *query.Service
+	Runner *diagnosis.Runner
 }
 
 type aiAssistantChatRequest struct {
-	Prompt   string                   `json:"prompt"`
-	Messages []query.AssistantMessage `json:"messages"`
+	Prompt string `json:"prompt"`
+	Locale string `json:"locale"`
+	// Context is the previous answer's context, echoed back by the UI.
+	Context *diagnosis.Context `json:"context"`
 }
+
+// diagnosisTimeout stays below the server WriteTimeout (at least 30s).
+const diagnosisTimeout = 25 * time.Second
 
 func (h *AIAssistantChatHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	var req aiAssistantChatRequest
@@ -42,24 +33,9 @@ func (h *AIAssistantChatHandler) ServeHTTP(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	settings, err := h.AIService.GetSettings(r.Context(), "default")
-	if err != nil {
-		http.Error(w, "unable to read ai settings", http.StatusInternalServerError)
-		return
-	}
-	if !settings.Enabled || settings.APIKey == "" {
-		http.Error(w, "Assistente AI non disponibile: abilita Smart Search e configura API Key", http.StatusForbidden)
-		return
-	}
-
-	resp, err := query.RunAssistantChat(
-		r.Context(),
-		settings,
-		h.QueryService,
-		req.Prompt,
-		req.Messages,
-		time.Now().UTC(),
-	)
+	ctx, cancel := context.WithTimeout(r.Context(), diagnosisTimeout)
+	defer cancel()
+	resp, err := h.Runner.Run(ctx, req.Prompt, req.Locale, time.Now().UTC(), req.Context)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
@@ -73,7 +49,7 @@ func (h *AIAssistantChatHandler) ServeHTTP(w http.ResponseWriter, r *http.Reques
 }
 
 type aiAssistantSessionPayload struct {
-	Messages []query.AssistantMessage `json:"messages"`
+	Messages []ai.AssistantMessage `json:"messages"`
 }
 
 type AIAssistantSessionHandler struct {
@@ -95,10 +71,10 @@ func (h *AIAssistantSessionHandler) Get(w http.ResponseWriter, r *http.Request) 
 
 	var payload aiAssistantSessionPayload
 	if err := json.Unmarshal([]byte(session.MessagesJSON), &payload.Messages); err != nil {
-		payload.Messages = []query.AssistantMessage{}
+		payload.Messages = []ai.AssistantMessage{}
 	}
 	if payload.Messages == nil {
-		payload.Messages = []query.AssistantMessage{}
+		payload.Messages = []ai.AssistantMessage{}
 	}
 
 	w.Header().Set("Content-Type", "application/json")
@@ -118,7 +94,7 @@ func (h *AIAssistantSessionHandler) Put(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 	if payload.Messages == nil {
-		payload.Messages = []query.AssistantMessage{}
+		payload.Messages = []ai.AssistantMessage{}
 	}
 
 	raw, err := json.Marshal(payload.Messages)
