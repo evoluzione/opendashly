@@ -301,6 +301,20 @@ func parseWindow(norm string, now time.Time) (window time.Duration, explicit, me
 	return window, true, true
 }
 
+var sinceYesterdayRe = regexp.MustCompile(`\b(da ieri|dall ieri|since yesterday|from yesterday)\b`)
+
+func durationsHits(norm string) []durationHit {
+	hits, _ := durationsIn(tokens(norm))
+	return hits
+}
+
+// yesterdayBounds returns yesterday's midnight-to-midnight window.
+func yesterdayBounds(now time.Time) (time.Time, time.Time) {
+	y, mo, d := now.Date()
+	midnight := time.Date(y, mo, d, 0, 0, 0, 0, now.Location())
+	return midnight.Add(-unitDay), midnight
+}
+
 func sinceMidnight(now time.Time) time.Duration {
 	y, mo, d := now.Date()
 	return now.Sub(time.Date(y, mo, d, 0, 0, 0, 0, now.Location()))
@@ -507,6 +521,7 @@ var (
 		`not working`, `doesn t work`, `isn t working`, `stopped working`, `or everything`, `o tutto`,
 		`is (it|prod|production|the system|everything) (up|down|ok|healthy|working|alive)`,
 		`come (sta|stanno|va|vanno|procede|procedono|sta andando|butta)\b.{0,30}\b(sistema|servizi|servizio|prod|produzione|infra|piattaforma|app|cose|situazione)`,
+		`(is|are) (the )?[a-z-]+ (ok|okay|up|down|healthy|fine|alright|working|broken)`, `[a-z-]+ (e|va|sta|funziona|gira) (ok|bene|giu|male)`,
 		`com e la situazione`, `come siamo messi`, `situazione`,
 		`how (is|are|s) (prod|production|the system|things|everything|the services)`,
 	)
@@ -937,6 +952,11 @@ func parseScope(prompt string, services []string, now time.Time) Scope {
 		scope.Explicit, scope.WindowMentioned = true, true
 		scope.From = now.Add(-window)
 		scope.Today = window == sinceMidnight(now) && todayRe.MatchString(norm)
+		// "ieri" is yesterday's calendar day; "da ieri" / "since yesterday" stays a rolling window.
+		if window == unitDay && yesterdayRe.MatchString(norm) && !sinceYesterdayRe.MatchString(norm) && len(durationsHits(norm)) == 0 {
+			scope.From, scope.To = yesterdayBounds(now)
+			scope.Yesterday = true
+		}
 	} else {
 		scope.WindowMentioned = mentioned
 	}

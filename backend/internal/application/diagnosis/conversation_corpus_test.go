@@ -60,7 +60,7 @@ func (c convCase) context(now time.Time) *Context {
 var actionNames = map[action]string{
 	actNew: "new", actOpenItem: "open_item", actDetails: "details", actFollowUp: "follow_up",
 	actNoContextRef: "no_context_ref", actUnsupported: "unsupported", actMeasure: "measure",
-	actNoMatch: "unclear",
+	actNoMatch: "unclear", actAmbiguousRef: "unclear",
 }
 
 func gotAction(req request) string {
@@ -100,6 +100,18 @@ func checkConv(c convCase, now time.Time) []string {
 		return diffs
 	}
 	scope, focus := req.scope, req.focus
+	// A complete question without its own window or service is now asked for
+	// them (Run -> askMissing) instead of inheriting them: only compare what
+	// the message itself stated.
+	asked := (req.action == actNew || req.action == actMeasure) && req.scope.TraceID == "" && (!req.windowSet || !req.serviceSet)
+	if asked {
+		if !req.windowSet {
+			c.Window = nil
+		}
+		if !req.serviceSet {
+			c.Service = nil
+		}
+	}
 	switch req.action {
 	case actOpenItem:
 		idx := resolveRef(req.ref, prev.Items)

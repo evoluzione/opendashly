@@ -294,10 +294,12 @@ func rootCauseFindings(traces map[string][]query.TraceSpanEntry) []Finding {
 			continue
 		}
 		detail := spanErrorDetail(span)
-		key := span.Service + "|" + span.Name + "|" + normalizePattern(detail)
+		// Group by route, so "GET /orders/ORD-1" and "GET /orders/ORD-2" are one problem.
+		route := shortEndpoint(span.Name)
+		key := span.Service + "|" + route + "|" + normalizePattern(detail)
 		f, ok := groups[key]
 		if !ok {
-			f = &Finding{Severity: SeverityWarning, Kind: KindRootCause, Service: span.Service, Endpoint: span.Name, Detail: detail}
+			f = &Finding{Severity: SeverityWarning, Kind: KindRootCause, Service: span.Service, Endpoint: route, Detail: detail}
 			groups[key] = f
 			order = append(order, key)
 		}

@@ -9,6 +9,7 @@ export type AssistantMessage = {
   role: 'user' | 'assistant';
   content: string;
   context?: AssistantContext;
+  suggestions?: AssistantSuggestion[];
 };
 
 export type AssistantSuggestion = {
@@ -21,6 +22,7 @@ export type AssistantChatResponse = {
   steps?: string[];
   suggestions?: AssistantSuggestion[];
   context?: AssistantContext;
+  lang?: 'it' | 'en';
 };
 
 export function sendAssistantMessage(payload: {

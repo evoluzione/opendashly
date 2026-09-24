@@ -11,6 +11,8 @@ type AssistantMessage struct {
 	// Context is the diagnosis context of an assistant answer, kept so that
 	// follow-ups still work after the chat is reloaded.
 	Context json.RawMessage `json:"context,omitempty"`
+	// Suggestions are the follow-up buttons of an answer, shown again after a reload.
+	Suggestions json.RawMessage `json:"suggestions,omitempty"`
 }
 
 type AssistantSession struct {

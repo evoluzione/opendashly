@@ -781,21 +781,7 @@ func (s *Service) getLatencyDistribution(ctx context.Context, req DashboardReque
 }
 
 func (s *Service) getSlowestEndpoints(ctx context.Context, req DashboardRequest) ([]EndpointLatency, error) {
-	return s.slowestEndpoints(ctx, req, 10)
-}
-
-// EndpointLatencies returns latency stats for up to limit endpoints, slowest
-// p95 first. The diagnosis chat uses it to answer "average latency of the
-// GET endpoints of X" beyond the dashboard's top 10.
-func (s *Service) EndpointLatencies(ctx context.Context, req DashboardRequest, limit int) ([]EndpointLatency, error) {
-	if s.Storage == nil {
-		return []EndpointLatency{}, nil
-	}
-	return s.slowestEndpoints(ctx, req, limit)
-}
-
-func (s *Service) slowestEndpoints(ctx context.Context, req DashboardRequest, limit int) ([]EndpointLatency, error) {
-	query := BuildSlowestEndpointsQuery(req.From, req.To, req.ServiceName, limit)
+	query := BuildSlowestEndpointsQuery(req.From, req.To, req.ServiceName, 10)
 	log.Printf("metrics.service.getSlowestEndpoints: executing query")
 
 	rows, err := s.Storage.Query(ctx, query)
@@ -834,19 +820,7 @@ func (s *Service) slowestEndpoints(ctx context.Context, req DashboardRequest, li
 }
 
 func (s *Service) getErrorHotspots(ctx context.Context, req DashboardRequest) ([]ErrorHotspot, error) {
-	return s.errorHotspots(ctx, req, 10)
-}
-
-// EndpointErrors returns error counts for up to limit endpoints that had errors.
-func (s *Service) EndpointErrors(ctx context.Context, req DashboardRequest, limit int) ([]ErrorHotspot, error) {
-	if s.Storage == nil {
-		return []ErrorHotspot{}, nil
-	}
-	return s.errorHotspots(ctx, req, limit)
-}
-
-func (s *Service) errorHotspots(ctx context.Context, req DashboardRequest, limit int) ([]ErrorHotspot, error) {
-	query := BuildErrorHotspotsQuery(req.From, req.To, req.ServiceName, limit)
+	query := BuildErrorHotspotsQuery(req.From, req.To, req.ServiceName, 10)
 	log.Printf("metrics.service.getErrorHotspots: executing query")
 
 	rows, err := s.Storage.Query(ctx, query)
@@ -1214,4 +1188,68 @@ func emptyResponse() *DashboardResponse {
 		Health:   DashboardHealth{Status: "ok", Source: "empty"},
 		Warnings: []string{},
 	}
+}
+
+// RouteStats is the latency and error summary of one route, or of everything
+// matching a filter when Route is empty.
+type RouteStats struct {
+	Route   string
+	Service string
+	AvgMs   float64
+	P50     float64
+	P95     float64
+	P99     float64
+	Count   int64
+	Errors  int64
+}
+
+// RouteFilter narrows RouteStatsFor to a service, an HTTP method and a path fragment.
+type RouteFilter struct {
+	Service string
+	Method  string
+	Path    string
+}
+
+// RouteStatsFor returns the totals for the filter and its busiest routes
+// (up to limit). The diagnosis chat uses it for questions such as "average
+// latency of the catalog GET endpoints".
+func (s *Service) RouteStatsFor(ctx context.Context, from, to time.Time, f RouteFilter, limit int) (RouteStats, []RouteStats, error) {
+	if s.Storage == nil {
+		return RouteStats{}, []RouteStats{}, nil
+	}
+	totals, err := s.scanRouteStats(ctx, BuildRouteStatsQuery(from, to, f.Service, f.Method, f.Path, false, 1))
+	if err != nil {
+		return RouteStats{}, nil, err
+	}
+	routes, err := s.scanRouteStats(ctx, BuildRouteStatsQuery(from, to, f.Service, f.Method, f.Path, true, limit))
+	if err != nil {
+		return RouteStats{}, nil, err
+	}
+	var total RouteStats
+	if len(totals) > 0 {
+		total = totals[0]
+	}
+	return total, routes, nil
+}
+
+func (s *Service) scanRouteStats(ctx context.Context, query string) ([]RouteStats, error) {
+	rows, err := s.Storage.Query(ctx, query)
+	if err != nil {
+		return nil, fmt.Errorf("query: %w", err)
+	}
+	defer rows.Close()
+	out := []RouteStats{}
+	for rows.Next() {
+		var r RouteStats
+		var count, errors uint64
+		if err := rows.Scan(&r.Route, &r.Service, &r.AvgMs, &r.P50, &r.P95, &r.P99, &count, &errors); err != nil {
+			return nil, fmt.Errorf("scan: %w", err)
+		}
+		r.Count, r.Errors = int64(count), int64(errors)
+		out = append(out, r)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate: %w", err)
+	}
+	return out, nil
 }

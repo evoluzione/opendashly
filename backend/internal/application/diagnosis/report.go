@@ -33,7 +33,7 @@ var textsIT = texts{
 	scopeService:   "Periodo **%s**, servizio **%s**, confrontato con %s.",
 	found:          "### Problemi trovati (%d)",
 	none:           "Nessuna anomalia rispetto al periodo precedente.",
-	summary:        "Richieste: **%d** · error rate **%.2f%%** · p95 peggiore **%.0f ms**",
+	summary:        "Richieste: **%s** · error rate **%s** · p95 peggiore **%s**",
 	advice:         "### Cosa controllare",
 	more:           "… e altri %d",
 	partial:        "Controlli non completati: %s.",
@@ -77,18 +77,18 @@ var textsIT = texts{
 	replyUnclear:  "Non ho capito cosa vuoi che controlli. Posso analizzare un periodo, un servizio o una trace: prova con `payment-service ultime 2 ore` oppure scegli da qui.",
 	noBaseline:    "Nel periodo di confronto non ci sono dati: mostro lo stato attuale senza confronto.",
 	findingNoBase: map[string]string{
-		KindErrorRate:  "Error rate al **%.2f%%**",
-		KindHotspot:    "`%s`: **%.0f errori** su %d richieste",
-		KindLogPattern: "Log di errore ripetuto **%.0f volte**: `%s`",
+		KindErrorRate:  "Error rate al **%s**",
+		KindHotspot:    "`%s`: **%s errori** su %s richieste",
+		KindLogPattern: "Log di errore ripetuto **%s volte**: `%s`",
 	},
 	severity: map[string]string{SeverityCritical: "🔴", SeverityWarning: "🟠", SeverityInfo: "🔵"},
 	finding: map[string]string{
-		KindErrorRate:   "Error rate al **%.2f%%** (prima %.2f%%)",
-		KindNoTraffic:   "**Nessuna richiesta** ricevuta (prima %.0f)",
-		KindTrafficDrop: "Traffico calato a **%.0f** richieste (prima %.0f)",
-		KindLatency:     "Latenza p95 di `%s` salita a **%.0f ms** (prima %.0f ms)",
-		KindHotspot:     "`%s`: **%.0f errori** (prima %.0f)",
-		KindLogPattern:  "Log di errore ripetuto **%.0f volte** (prima %.0f): `%s`",
+		KindErrorRate:   "Error rate al **%s** (prima %s)",
+		KindNoTraffic:   "**Nessuna richiesta** ricevuta (prima %s)",
+		KindTrafficDrop: "Traffico calato a **%s** richieste (prima %s)",
+		KindLatency:     "Latenza p95 di `%s` salita a **%s** (prima %s)",
+		KindHotspot:     "`%s`: **%s errori** (prima %s)",
+		KindLogPattern:  "Log di errore ripetuto **%s volte** (prima %s): `%s`",
 		KindRootCause:   "Errore originato in `%s`: %s",
 	},
 	hint: map[string]string{
@@ -114,7 +114,7 @@ var textsEN = texts{
 	scopeService:   "Window **%s**, service **%s**, compared with %s.",
 	found:          "### Problems found (%d)",
 	none:           "No anomalies compared with the previous window.",
-	summary:        "Requests: **%d** · error rate **%.2f%%** · worst p95 **%.0f ms**",
+	summary:        "Requests: **%s** · error rate **%s** · worst p95 **%s**",
 	advice:         "### What to check",
 	more:           "… and %d more",
 	partial:        "Checks not completed: %s.",
@@ -158,18 +158,18 @@ var textsEN = texts{
 	replyUnclear:  "I did not understand what you want me to check. I can analyze a time window, a service or a trace: try `payment-service last 2 hours` or pick one of these.",
 	noBaseline:    "The comparison window has no data: showing the current state without comparison.",
 	findingNoBase: map[string]string{
-		KindErrorRate:  "Error rate at **%.2f%%**",
-		KindHotspot:    "`%s`: **%.0f errors** out of %d requests",
-		KindLogPattern: "Error log repeated **%.0f times**: `%s`",
+		KindErrorRate:  "Error rate at **%s**",
+		KindHotspot:    "`%s`: **%s errors** out of %s requests",
+		KindLogPattern: "Error log repeated **%s times**: `%s`",
 	},
 	severity: textsIT.severity,
 	finding: map[string]string{
-		KindErrorRate:   "Error rate at **%.2f%%** (was %.2f%%)",
-		KindNoTraffic:   "**No requests** received (was %.0f)",
-		KindTrafficDrop: "Traffic dropped to **%.0f** requests (was %.0f)",
-		KindLatency:     "p95 latency of `%s` rose to **%.0f ms** (was %.0f ms)",
-		KindHotspot:     "`%s`: **%.0f errors** (was %.0f)",
-		KindLogPattern:  "Error log repeated **%.0f times** (was %.0f): `%s`",
+		KindErrorRate:   "Error rate at **%s** (was %s)",
+		KindNoTraffic:   "**No requests** received (was %s)",
+		KindTrafficDrop: "Traffic dropped to **%s** requests (was %s)",
+		KindLatency:     "p95 latency of `%s` rose to **%s** (was %s)",
+		KindHotspot:     "`%s`: **%s errors** (was %s)",
+		KindLogPattern:  "Error log repeated **%s times** (was %s): `%s`",
 		KindRootCause:   "Error originated in `%s`: %s",
 	},
 	hint: map[string]string{
@@ -204,37 +204,37 @@ func formatRange(from, to time.Time) string {
 	return from.UTC().Format(layout) + "–" + to.UTC().Format(layout) + " UTC"
 }
 
-func formatFinding(t texts, f Finding) string {
-	format := t.finding[f.Kind]
+func formatFinding(t texts, p phrasing, f Finding) string {
+	n := func(v float64) string { return p.count(int64(v)) }
+	ep := shortEndpoint(f.Endpoint)
 	var line string
 	if nb, ok := t.findingNoBase[f.Kind]; ok && f.NoBaseline {
 		switch f.Kind {
 		case KindErrorRate:
-			line = fmt.Sprintf(nb, f.Current)
+			line = fmt.Sprintf(nb, p.pct(f.Current))
 		case KindHotspot:
-			line = fmt.Sprintf(nb, f.Endpoint, f.Current, f.Count)
+			line = fmt.Sprintf(nb, ep, n(f.Current), p.count(int64(f.Count)))
 		case KindLogPattern:
-			line = fmt.Sprintf(nb, f.Current, f.Detail)
+			line = fmt.Sprintf(nb, n(f.Current), f.Detail)
 		}
-		format = ""
-	}
-	switch f.Kind {
-	case KindErrorRate, KindTrafficDrop:
-		if format != "" {
-			line = fmt.Sprintf(format, f.Current, f.Baseline)
+	} else {
+		format := t.finding[f.Kind]
+		switch f.Kind {
+		case KindErrorRate:
+			line = fmt.Sprintf(format, p.pct(f.Current), p.pct(f.Baseline))
+		case KindTrafficDrop:
+			line = fmt.Sprintf(format, n(f.Current), n(f.Baseline))
+		case KindNoTraffic:
+			line = fmt.Sprintf(format, n(f.Baseline))
+		case KindLatency:
+			line = fmt.Sprintf(format, ep, p.ms(f.Current), p.ms(f.Baseline))
+		case KindHotspot:
+			line = fmt.Sprintf(format, ep, n(f.Current), n(f.Baseline))
+		case KindLogPattern:
+			line = fmt.Sprintf(format, n(f.Current), n(f.Baseline), f.Detail)
+		case KindRootCause:
+			line = fmt.Sprintf(format, ep, f.Detail)
 		}
-	case KindNoTraffic:
-		line = fmt.Sprintf(format, f.Baseline)
-	case KindLatency, KindHotspot:
-		if format != "" {
-			line = fmt.Sprintf(format, f.Endpoint, f.Current, f.Baseline)
-		}
-	case KindLogPattern:
-		if format != "" {
-			line = fmt.Sprintf(format, f.Current, f.Baseline, f.Detail)
-		}
-	case KindRootCause:
-		line = fmt.Sprintf(format, f.Endpoint, f.Detail)
 	}
 	if f.Service != "" {
 		line += " · " + f.Service
@@ -249,7 +249,7 @@ func formatFinding(t texts, f Finding) string {
 	return t.severity[f.Severity] + " " + line
 }
 
-func renderWindow(t texts, scope Scope, findings []Finding, cur *metrics.DashboardResponse, failed []string) string {
+func renderWindow(t texts, p phrasing, scope Scope, findings []Finding, cur *metrics.DashboardResponse, failed []string) string {
 	var b strings.Builder
 	baseFrom, baseTo := scope.baseline()
 	b.WriteString(t.title + "\n\n")
@@ -265,7 +265,7 @@ func renderWindow(t texts, scope Scope, findings []Finding, cur *metrics.Dashboa
 				worst = e.P95
 			}
 		}
-		fmt.Fprintf(&b, t.summary+"\n\n", cur.Satisfaction.Throughput.TotalRequests, cur.Satisfaction.ErrorRate, worst)
+		fmt.Fprintf(&b, t.summary+"\n\n", p.count(cur.Satisfaction.Throughput.TotalRequests), p.pct(cur.Satisfaction.ErrorRate), p.ms(worst))
 		if hasNoBaseline(findings) {
 			b.WriteString(t.noBaseline + "\n\n")
 		}
@@ -284,7 +284,7 @@ func renderWindow(t texts, scope Scope, findings []Finding, cur *metrics.Dashboa
 				fmt.Fprintf(&b, t.more+"\n", len(findings)-maxFindings)
 				break
 			}
-			fmt.Fprintf(&b, "%d. %s\n", i+1, formatFinding(t, f))
+			fmt.Fprintf(&b, "%d. %s\n", i+1, formatFinding(t, p, f))
 			if !seen[f.Kind] {
 				seen[f.Kind] = true
 				hints = append(hints, t.hint[f.Kind])
@@ -301,14 +301,14 @@ func renderWindow(t texts, scope Scope, findings []Finding, cur *metrics.Dashboa
 	return b.String()
 }
 
-func renderTrace(t texts, traceID string, spans []query.TraceSpanEntry, logs []query.LogEntry, failed []string) string {
+func renderTrace(t texts, p phrasing, traceID string, spans []query.TraceSpanEntry, logs []query.LogEntry, failed []string) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, t.traceTitle+"\n\n", traceID)
 	if len(spans) == 0 {
 		b.WriteString(t.traceNotFound + "\n")
 	} else {
 		if root, ok := rootCauseSpan(spans); ok {
-			fmt.Fprintf(&b, t.traceRoot+"\n\n", root.Name, root.Service, spanErrorDetail(root))
+			fmt.Fprintf(&b, t.traceRoot+"\n\n", shortEndpoint(root.Name), root.Service, spanErrorDetail(root))
 		} else {
 			b.WriteString(t.traceNoError + "\n\n")
 		}
@@ -318,7 +318,7 @@ func renderTrace(t texts, traceID string, spans []query.TraceSpanEntry, logs []q
 			if isErrorStatus(s.Status) {
 				mark = " 🔴"
 			}
-			fmt.Fprintf(&b, "- `%s` · %s · **%.1f ms**%s\n", s.Name, s.Service, float64(s.Duration)/1e6, mark)
+			fmt.Fprintf(&b, "- `%s` · %s · **%s**%s\n", shortEndpoint(s.Name), s.Service, p.ms(float64(s.Duration)/1e6), mark)
 		}
 	}
 	if len(logs) > 0 {

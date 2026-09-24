@@ -533,3 +533,64 @@ func buildLogLevelBackfillQuery(from, to time.Time) string {
 		%s
 	`, logLevelRollupTable, formatTime(from), formatTime(to), querySettings)
 }
+
+// routeIDPattern matches path segments that carry ids ("SKU-7503", "12345")
+// while keeping short version segments such as "v1".
+const routeIDPattern = `/(?:[0-9][^/ ]{2,}|[^/ ][0-9][^/ ]+|[^/ ]{2,}[0-9][^/ ]*)`
+
+// BuildRouteStatsQuery aggregates the endpoint rollup per route (ids in paths
+// collapsed to "…") with optional HTTP method and path filters. With byRoute
+// false it returns one row with the totals, percentiles included, computed
+// from the summed latency histograms.
+func BuildRouteStatsQuery(from, to time.Time, serviceName, method, path string, byRoute bool, limit int) string {
+	p50Expr := bucketPercentileExpression("0.50")
+	p95Expr := bucketPercentileExpression("0.95")
+	p99Expr := bucketPercentileExpression("0.99")
+	filters := serviceFilter(serviceName)
+	if method != "" {
+		filters += fmt.Sprintf(" AND match(Endpoint, '(^|\\\\s)%s(\\\\s|$)')", strings.ToUpper(strings.ReplaceAll(method, "'", "")))
+	}
+	if path != "" {
+		filters += fmt.Sprintf(" AND positionCaseInsensitive(Endpoint, '%s') > 0", strings.ReplaceAll(strings.ReplaceAll(path, `\`, `\\`), "'", `\'`))
+	}
+	keys, groupBy, order := "'' AS route, '' AS service", "", ""
+	if byRoute {
+		keys = fmt.Sprintf("replaceRegexpAll(Endpoint, '%s', '/…') AS route, ServiceName AS service", routeIDPattern)
+		groupBy = "GROUP BY route, service"
+		order = fmt.Sprintf("ORDER BY cnt DESC LIMIT %d", limit)
+	}
+	return fmt.Sprintf(`
+		SELECT
+			route,
+			service,
+			if(cnt > 0, duration_sum_ms / cnt, 0) AS avg_ms,
+			%s AS p50,
+			%s AS p95,
+			%s AS p99,
+			cnt,
+			errors
+		FROM (
+			SELECT
+				route, service, duration_sum_ms, cnt, errors, bucket_counts,
+				toUInt64(arraySum(bucket_counts)) AS bucket_cnt,
+				arrayCumSum(bucket_counts) AS cumulative_counts,
+				%s AS bucket_starts,
+				%s AS bucket_ends
+			FROM (
+				SELECT
+					%s,
+					sum(duration_sum_ms) AS duration_sum_ms,
+					toUInt64(sum(request_count)) AS cnt,
+					toUInt64(sum(error_count)) AS errors,
+					%s AS bucket_counts
+				FROM %s
+				WHERE time_bucket >= '%s' AND time_bucket <= '%s'
+					%s
+				%s
+			)
+		)
+		%s
+		%s
+		`, p50Expr, p95Expr, p99Expr, endpointLatencyBucketStartsExpression(), endpointLatencyBucketEndsExpression(),
+		keys, endpointLatencyBucketCountsExpression(), traceEndpointRollupTable, formatTime(from), formatTime(to), filters, groupBy, order, querySettings)
+}

@@ -11,14 +11,16 @@ import (
 // the next message so that follow-ups ("il primo", "dettagli", "e ieri?")
 // refer to that answer. It comes from the client, so sanitize() validates it.
 type Context struct {
-	From    time.Time     `json:"from"`
-	To      time.Time     `json:"to"`
-	Service string        `json:"service,omitempty"`
-	TraceID string        `json:"traceId,omitempty"`
-	Focus   string        `json:"focus,omitempty"`
-	Today   bool          `json:"today,omitempty"`
-	Measure *Measure      `json:"measure,omitempty"`
-	Items   []ContextItem `json:"items,omitempty"`
+	From    time.Time `json:"from"`
+	To      time.Time `json:"to"`
+	Service string    `json:"service,omitempty"`
+	TraceID string    `json:"traceId,omitempty"`
+	Focus   string    `json:"focus,omitempty"`
+	Today   bool      `json:"today,omitempty"`
+	// Yesterday is the previous calendar day (midnight to midnight).
+	Yesterday bool          `json:"yesterday,omitempty"`
+	Measure   *Measure      `json:"measure,omitempty"`
+	Items     []ContextItem `json:"items,omitempty"`
 	// Pending is set when the assistant asked for a missing detail ("window"
 	// or "service") before analyzing; the fields above hold what is known.
 	Pending    string   `json:"pending,omitempty"`
@@ -63,7 +65,7 @@ func (c *Context) sanitize(services []string) *Context {
 	for _, s := range services {
 		known[s] = true
 	}
-	out := &Context{From: c.From, To: c.To, Today: c.Today, Measure: c.Measure.sanitize(),
+	out := &Context{From: c.From, To: c.To, Today: c.Today, Yesterday: c.Yesterday, Measure: c.Measure.sanitize(),
 		WindowSet: c.WindowSet, ServiceSet: c.ServiceSet, Detail: c.Detail}
 	if c.Pending == slotWindow || c.Pending == slotService {
 		out.Pending = c.Pending
@@ -107,6 +109,15 @@ func (c *Context) sanitize(services []string) *Context {
 	return out
 }
 
+// scopeAtOrNil is scopeAt for a context that may be nil.
+func (c *Context) scopeAtOrNil(now time.Time) *Scope {
+	if c == nil {
+		return nil
+	}
+	s := c.scopeAt(now)
+	return &s
+}
+
 // scopeAt re-anchors the previous window to now, keeping its length and service.
 func (c *Context) scopeAt(now time.Time) Scope {
 	d := c.To.Sub(c.From)
@@ -115,6 +126,10 @@ func (c *Context) scopeAt(now time.Time) Scope {
 	}
 	if c.Today {
 		d = sinceMidnight(now)
+	}
+	if c.Yesterday {
+		from, to := yesterdayBounds(now)
+		return Scope{From: from, To: to, Service: c.Service, TraceID: c.TraceID, Explicit: true, WindowMentioned: true, Yesterday: true}
 	}
 	return Scope{From: now.Add(-d), To: now, Service: c.Service, TraceID: c.TraceID, Explicit: true, WindowMentioned: true, Today: c.Today}
 }
@@ -133,6 +148,7 @@ const (
 	actUnsupported                // something the assistant cannot do
 	actMeasure                    // a precise number ("latenza media delle GET")
 	actNoMatch                    // refers to an item the previous answer does not have
+	actAmbiguousRef               // matches several items: ask which one
 )
 
 type request struct {
@@ -147,9 +163,10 @@ type request struct {
 	measure     Measure
 	// windowSet / serviceSet tell whether the user stated them: an analysis
 	// only starts once both are known (see Run).
-	windowSet  bool
-	serviceSet bool
-	candidates []string
+	windowSet     bool
+	serviceSet    bool
+	candidates    []string
+	refCandidates []int // 0-based items matching an ambiguous reference
 }
 
 const (
@@ -177,19 +194,11 @@ func understand(prompt string, services []string, now time.Time, prev *Context) 
 		detail:    detailRe.MatchString(plain) || fuzzyDetail(plain),
 		infraNote: infraRe.MatchString(plain),
 	}
-	hasItems := prev != nil && len(prev.Items) > 0
-	ref, byContent := parseRef(plain, scope, prev)
 	measure, isMeasure := parseMeasure(prompt, plain)
-	measureFollowUp := prev != nil && prev.Measure != nil && ref == 0 && in != intentHelp && in != intentThanks &&
-		(followUpStartRe.MatchString(plain) || len(tokens(plain)) <= 4) &&
-		(measure.Metric != "" || measure.Stat != "" || measure.Method != "" || measure.Path != "" || scope.Mentions > 0 || scope.Explicit || allEndpointsRe.MatchString(plain))
 	// An HTTP method in capitals ("le DELETE") is a filter, not a request to delete.
 	unsupported := unsupportedReason(plain)
 	if unsupported == unsupportedAction && measure.Method != "" && methodUpperRe.MatchString(prompt) {
 		unsupported = ""
-	}
-	if !isMeasure && detectFocus(norm) == focusLogs {
-		isMeasure = false
 	}
 
 	if scope.Mentions > 1 {
@@ -204,16 +213,41 @@ func understand(prompt string, services []string, now time.Time, prev *Context) 
 			return r
 		}
 		prev = nil // the message does not answer the question: treat it as new
-		hasItems = false
 	}
+	hasItems := prev != nil && len(prev.Items) > 0
+	ref, byContent, refCandidates := parseRef(plain, scope, prev)
 	req.serviceSet = scope.Mentions == 1 || allServicesRe.MatchString(plain)
 	req.windowSet = scope.Explicit
 	topic := req.focus != focusGeneral || req.detail || causeRe.MatchString(plain) || statusPhraseRe.MatchString(plain) || statusWordRe.MatchString(plain)
+	explicitFollowUp := followUpStartRe.MatchString(plain) || followUpEndRe.MatchString(plain) || followUpAnyRe.MatchString(plain) ||
+		rerunRe.MatchString(plain) || reuseRe.MatchString(plain)
+	measureParts := measure.Metric != "" || measure.Stat != "" || measure.Method != "" || measure.Path != ""
+	// A measure is continued by "e le POST?", "e il p95?", "e su cart?"; a new
+	// question with its own topic ("is payment ok?") is not.
+	measureFollowUp := prev != nil && prev.Measure != nil && ref == 0 && in != intentHelp && in != intentThanks &&
+		(explicitFollowUp || (len(tokens(plain)) <= 4 && measureParts && !statusPhraseRe.MatchString(plain))) &&
+		(measureParts || scope.Mentions > 0 || scope.Explicit || allEndpointsRe.MatchString(plain))
 	selfContained := (scope.Mentions > 0 || allServicesRe.MatchString(plain)) && scope.Explicit && topic && !reuseRe.MatchString(plain)
+	// Only a message shaped as a follow-up reuses the previous scope: "e ieri?",
+	// "rifai", "stessa cosa per…", or a short elliptic one ("la latenza?",
+	// "payment?"). A complete question is a new request and asks what it lacks.
+	// A status question ("is payment ok?") is a new question even when short.
+	elliptic := len(tokens(plain)) <= 4 && (req.focus != focusGeneral || scope.Mentions > 0 || scope.Explicit) &&
+		!statusPhraseRe.MatchString(plain) && !statusWordRe.MatchString(plain)
+	// Only the scope changes ("the last hour on payment", "guarda il gateway").
+	scopeOnly := (scope.Mentions > 0 || scope.Explicit) && !topic
+	// The same topic asked again ("fammi vedere tutti i log" after a logs answer).
+	sameTopic := prev != nil && req.focus != focusGeneral && req.focus == prev.Focus && scope.Mentions == 0 && !scope.Explicit
+	followUpShape := followUpStartRe.MatchString(plain) || followUpEndRe.MatchString(plain) || followUpAnyRe.MatchString(plain) ||
+		rerunRe.MatchString(plain) || reuseRe.MatchString(plain) || elliptic || scopeOnly || sameTopic ||
+		(allServicesRe.MatchString(plain) && scope.Mentions == 0)
 	candidateFollowUp := prev != nil && in != intentHelp && in != intentThanks && in != intentGreeting &&
-		!selfContained && (in == intentDiagnose || req.focus != focusGeneral || scope.Mentions > 0 || scope.Explicit ||
-		rerunRe.MatchString(plain) || allServicesRe.MatchString(plain) || followUpStartRe.MatchString(plain))
+		!selfContained && followUpShape
 
+	// "perché?" / "why?" alone after a list: explain its first (most severe) item.
+	if ref == 0 && !byContent && hasItems && bareCauseRe.MatchString(plain) {
+		ref = 1
+	}
 	switch {
 	case scope.TraceID != "":
 		req.action = actNew
@@ -223,6 +257,8 @@ func understand(prompt string, services []string, now time.Time, prev *Context) 
 		switch {
 		case prev == nil:
 			req.action = actNoContextRef
+		case byContent && len(refCandidates) > 1:
+			req.action, req.refCandidates = actAmbiguousRef, refCandidates
 		case !hasItems || resolveRef(ref, prev.Items) < 0:
 			req.action = actNoMatch
 		default:
@@ -232,10 +268,12 @@ func understand(prompt string, services []string, now time.Time, prev *Context) 
 		req.action = actMeasure
 		req.measure = mergeMeasure(*prev.Measure, measure, plain)
 		req.scope = mergeScope(prev.scopeAt(now), scope, plain)
+		req.windowSet, req.serviceSet = true, true // inherited from the previous answer
 	case isMeasure && !(in == intentHelp && scope.Mentions == 0 && !scope.Explicit):
 		req.action, req.measure = actMeasure, measure
-		if prev != nil && !selfContained {
+		if prev != nil && !selfContained && followUpShape {
 			req.scope = mergeScope(prev.scopeAt(now), scope, plain)
+			req.windowSet, req.serviceSet = true, true
 		}
 	case req.detail && in != intentHelp && !thanksForDetailsRe.MatchString(plain) && scope.Mentions == 0 && !scope.WindowMentioned:
 		switch {
@@ -298,7 +336,7 @@ func fillPending(req request, plain string, now time.Time, prev *Context) (reque
 	}
 	out.windowSet = prev.WindowSet
 	if scope.Explicit {
-		out.scope.From, out.scope.To, out.scope.Today = scope.From, scope.To, scope.Today
+		out.scope.From, out.scope.To, out.scope.Today, out.scope.Yesterday = scope.From, scope.To, scope.Today, scope.Yesterday
 		out.windowSet = true
 	}
 	out.scope.Explicit = true
@@ -361,14 +399,14 @@ var (
 // parseRef finds a reference to an item of the previous answer: the 1-based
 // index (-1 = last, -2 = second to last), or byContent when the message picks
 // an item by what it is about ("quello del carrello", "the slow one").
-func parseRef(plain string, scope Scope, prev *Context) (ref int, byContent bool) {
+func parseRef(plain string, scope Scope, prev *Context) (ref int, byContent bool, candidates []int) {
 	toks := tokens(plain)
 	if secondToLastRe.MatchString(plain) {
-		return -2, false
+		return -2, false, nil
 	}
 	// A bare number right after a numbered list: "2".
 	if len(toks) == 1 && len(toks[0]) == 1 && toks[0] >= "1" && toks[0] <= "9" && prev != nil && len(prev.Items) > 0 {
-		return int(toks[0][0] - '0'), false
+		return int(toks[0][0] - '0'), false, nil
 	}
 	type hit struct{ n, pos int }
 	var hits []hit
@@ -415,7 +453,7 @@ func parseRef(plain string, scope Scope, prev *Context) (ref int, byContent bool
 				}
 			}
 		}
-		return best.n, false
+		return best.n, false, nil
 	}
 	if m := numberedRe.FindStringSubmatch(plain); m != nil {
 		for _, g := range m[1:] {
@@ -423,30 +461,31 @@ func parseRef(plain string, scope Scope, prev *Context) (ref int, byContent bool
 				continue
 			}
 			if n, ok := spelledNumbers[g]; ok {
-				return n, false
+				return n, false, nil
 			}
 			if n, _ := strconv.Atoi(g); n > 0 {
-				return n, false
+				return n, false, nil
 			}
 		}
 	}
 	if prev != nil && len(prev.Items) > 0 && contentRefRe.MatchString(plain) {
-		if idx := matchItem(plain, scope, prev.Items); idx >= 0 {
-			return idx + 1, false
+		matches := matchItems(plain, scope, prev.Items)
+		if len(matches) == 1 {
+			return matches[0] + 1, false, nil
 		}
-		return 0, true
+		return 0, true, matches
 	}
 	if deicticRe.MatchString(plain) {
 		if prev != nil && traceWordRe.MatchString(plain) {
 			for i, it := range prev.Items {
 				if it.TraceID != "" {
-					return i + 1, false
+					return i + 1, false, nil
 				}
 			}
 		}
-		return 1, false
+		return 1, false, nil
 	}
-	return 0, false
+	return 0, false, nil
 }
 
 func startsWithDigit(s string) bool { return s != "" && s[0] >= '0' && s[0] <= '9' }
@@ -466,11 +505,14 @@ var (
 	}
 )
 
-// matchItem scores items against the message: the service it names, a kind
-// word ("slow", "log") and words of the endpoint ("refresh token").
-func matchItem(plain string, scope Scope, items []ContextItem) int {
+// matchItems scores items against the message: the service it names, a kind
+// word ("slow", "log") and words of the endpoint ("refresh token"). It returns
+// the best-scoring items: one when the reference is clear, several when it is
+// ambiguous, none when nothing matches.
+func matchItems(plain string, scope Scope, items []ContextItem) []int {
 	toks := tokens(plain)
-	best, bestScore, tie := -1, 0, false
+	var best []int
+	bestScore := 0
 	for i, it := range items {
 		score := 0
 		if scope.Service != "" && it.Service == scope.Service {
@@ -490,13 +532,13 @@ func matchItem(plain string, scope Scope, items []ContextItem) int {
 		}
 		switch {
 		case score > bestScore:
-			best, bestScore, tie = i, score, false
+			best, bestScore = []int{i}, score
 		case score == bestScore && score > 0:
-			tie = true
+			best = append(best, i)
 		}
 	}
-	if bestScore < 2 || tie {
-		return -1
+	if bestScore < 2 {
+		return nil
 	}
 	return best
 }
@@ -530,7 +572,11 @@ var (
 	statusWordRe       = phrases(`come va`, `come sta`, `come stanno`, `come vanno`, `how s`, `hows`, `how is`, `how are`, `stato`, `status`, `situazione`, `salute`, `health`, `panoramica`, `overview`)
 	thanksForDetailsRe = phrases(`(grazie|thanks|thank you|thx) (per|for) (i |the |tutti i )?(dettagli|details)`)
 	followUpStartRe    = regexp.MustCompile(`^(e|and|what about|how about|invece|anche|also|same for|stessa cosa|idem|ripeti|repeat|do it again|rifallo|rifai|now|ora|poi|then|solo|only|just|e ora|and now|e adesso|adesso|e invece|e per|e su|e sul|e sulla|e con|e il|e la|e i|e le|e gli|e l)\b`)
-	followUpEndRe      = regexp.MustCompile(`\b(invece|instead|anche|too|as well)$`)
+	// A cause question with nothing else: "perché?", "why?", "come mai?".
+	bareCauseRe = regexp.MustCompile(`^(e |and |ma |but |ok )?(perche|why|come mai|how come|cause|causa|il motivo|the reason|what caused it|cosa l ha causato|da cosa dipende)( succede| happens| is that| questo| it| mai)?$`)
+	// Follow-up phrasing anywhere in the message.
+	followUpAnyRe = phrases(`what about`, `how about`, `and what about`, `switch to`, `keep the rest`, `passa a`, `passiamo a`, `prova (con|su|sul|sulla)`, `try (the|with|on)`, `ma su`, `ma per`, `ma negli`, `ma nelle`, `ma ultim\w*`, `but (for|on|in|the|last)`, `e invece`, `lo stesso`, `la stessa`)
+	followUpEndRe = regexp.MustCompile(`\b(invece|instead|anche|too|as well)$`)
 	// servicesAllRe names all services explicitly; allServicesRe also accepts
 	// looser words ("everything", "in generale") that can mean "the whole report".
 	servicesAllRe = phrases(`tutti i servizi`, `all services`, `every service`, `each service`, `ogni servizio`, `tutto il sistema`, `whole system`, `entire system`, `intero sistema`)
@@ -563,7 +609,7 @@ func isFollowUp(plain string, scope Scope, in intent, focus string) bool {
 func mergeScope(prev, cur Scope, plain string) Scope {
 	out := prev
 	if cur.Explicit {
-		out.From, out.To, out.Today = cur.From, cur.To, cur.Today
+		out.From, out.To, out.Today, out.Yesterday = cur.From, cur.To, cur.Today, cur.Yesterday
 	}
 	switch {
 	case cur.Service != "":

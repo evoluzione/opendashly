@@ -18,11 +18,12 @@
     steps?: string[];
     stepsShown?: number;
     suggestions?: AssistantSuggestion[];
+    lang?: "it" | "en";
   };
 
-  const STEP_DELAY_MS = 550;
+  const STEP_DELAY_MS = 300;
   const TYPE_FRAME_MS = 16;
-  const TYPE_FRAMES = 90;
+  const TYPE_FRAMES = 60;
 
   let open = false;
   let expanded = false;
@@ -30,7 +31,11 @@
   let inputEl: HTMLTextAreaElement | null = null;
   let historyLoaded = false;
   let prompt = "";
+  // sending: waiting for the backend. playing: an answer is being replayed;
+  // a new message fast-forwards it instead of being ignored.
   let sending = false;
+  let playing: Promise<void> | null = null;
+  let fastForward = false;
   let messages: ChatMessage[] = [];
   let error = "";
   let confirmResetOpen = false;
@@ -80,6 +85,7 @@
           role: m.role,
           content: String(m.content ?? ""),
           context: m.context,
+          suggestions: Array.isArray(m.suggestions) ? m.suggestions : undefined,
         }));
     } catch {
       messages = [];
@@ -91,7 +97,7 @@
   async function persistHistory() {
     const compact = messages
       .filter((m) => !m.loading)
-      .map((m) => ({ role: m.role, content: m.content, context: m.context }));
+      .map((m) => ({ role: m.role, content: m.content, context: m.context, suggestions: m.suggestions }));
     try {
       await saveAssistantSession({ messages: compact });
     } catch {
@@ -103,6 +109,8 @@
     open = !open;
     updateDockOffset();
     if (open) {
+      // Show the latest messages, not the oldest ones.
+      void scrollToBottom();
       void focusInput();
     }
   }
@@ -154,17 +162,17 @@
 
   // Replays the steps the diagnosis really performed, then types the answer,
   // so the user can follow what was read and decided before the result.
-  async function playResponse(id: string, steps: string[], answer: string, suggestions: AssistantSuggestion[], context?: AssistantContext) {
+  async function playResponse(id: string, steps: string[], answer: string, suggestions: AssistantSuggestion[], context?: AssistantContext, lang?: "it" | "en") {
     const animate = !prefersReducedMotion();
-    patchMessage(id, { steps, stepsShown: 0, content: "" });
-    for (let i = 1; i <= steps.length && animate && !destroyed; i += 1) {
+    patchMessage(id, { steps, stepsShown: 0, content: "", lang });
+    for (let i = 1; i <= steps.length && animate && !destroyed && !fastForward; i += 1) {
       patchMessage(id, { stepsShown: i });
       await scrollToBottom();
       await wait(STEP_DELAY_MS);
     }
     patchMessage(id, { stepsShown: steps.length });
     const chunk = Math.max(3, Math.ceil(answer.length / TYPE_FRAMES));
-    for (let n = chunk; n < answer.length && animate && !destroyed; n += chunk) {
+    for (let n = chunk; n < answer.length && animate && !destroyed && !fastForward; n += chunk) {
       patchMessage(id, { content: answer.slice(0, n) });
       await scrollToBottom();
       await wait(TYPE_FRAME_MS);
@@ -208,6 +216,11 @@
 
   async function sendMessage(display = prompt.trim(), request = display) {
     if (!display || sending) return;
+    if (playing) {
+      fastForward = true;
+      await playing;
+    }
+    fastForward = false;
 
     const context = lastContext();
     sending = true;
@@ -231,13 +244,17 @@
     prompt = "";
     void scrollToBottom();
 
+    let current: Promise<void> | null = null;
     try {
       const response = await sendAssistantMessage({
         prompt: request,
         locale: $locale,
         context,
       });
-      await playResponse(placeholder.id, response.steps ?? [], response.answer, response.suggestions ?? [], response.context);
+      sending = false;
+      current = playResponse(placeholder.id, response.steps ?? [], response.answer, response.suggestions ?? [], response.context, response.lang);
+      playing = current;
+      await current;
       await persistHistory();
     } catch (err) {
       error = err instanceof Error ? err.message : t($locale, "assistant.errorGeneric");
@@ -249,6 +266,9 @@
       await persistHistory();
     } finally {
       sending = false;
+      if (playing === current) {
+        playing = null;
+      }
       void focusInput();
     }
   }
@@ -434,7 +454,7 @@
                     </ol>
                   {:else}
                     <details class="steps-summary">
-                      <summary>{t($locale, "assistant.stepsDone", { count: message.steps.length })}</summary>
+                      <summary>{t(message.lang ?? $locale, "assistant.stepsDone", { count: message.steps.length })}</summary>
                       <ol class="steps">
                         {#each message.steps as step}
                           <li class="done"><span class="step-icon" aria-hidden="true"></span>{step}</li>

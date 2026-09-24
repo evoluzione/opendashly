@@ -18,7 +18,7 @@ func runTurn(prompt string, prev *Context) (*Report, request) {
 	if (req.action != actNew && req.action != actMeasure) || req.scope.TraceID != "" {
 		return nil, req
 	}
-	return phrasingFor("it").askMissing(req, corpusServices), req
+	return phrasingFor("it").askMissing(req, corpusServices, prev), req
 }
 
 func TestClarificationFlow(t *testing.T) {

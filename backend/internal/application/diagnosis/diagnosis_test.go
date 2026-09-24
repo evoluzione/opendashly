@@ -141,7 +141,7 @@ func TestRender(t *testing.T) {
 		{Severity: SeverityCritical, Kind: KindRootCause, Service: "payments", Endpoint: "charge", Count: 2, Detail: "TimeoutError", TraceIDs: []string{"t1", "t2"}},
 	}
 	sortFindings(findings)
-	out := renderWindow(textsFor("it"), scope, findings, dash(10, 1, nil, nil), []string{"log di errore"})
+	out := renderWindow(textsFor("it"), phrasingFor("it"), scope, findings, dash(10, 1, nil, nil), []string{"log di errore"})
 	for _, want := range []string{"Problemi trovati (2)", "`t1`", "Cosa controllare", "Controlli non completati", "1. 🔴"} {
 		if !strings.Contains(out, want) {
 			t.Errorf("report missing %q:\n%s", want, out)
@@ -150,7 +150,7 @@ func TestRender(t *testing.T) {
 	if strings.Index(out, "TimeoutError") > strings.Index(out, "`x`") {
 		t.Errorf("critical finding should come first:\n%s", out)
 	}
-	if !strings.Contains(renderWindow(textsFor("en-US"), scope, nil, nil, nil), "No anomalies") {
+	if !strings.Contains(renderWindow(textsFor("en-US"), phrasingFor("en-US"), scope, nil, nil, nil), "No anomalies") {
 		t.Error("english empty report")
 	}
 }
@@ -237,5 +237,22 @@ func TestRunRouting(t *testing.T) {
 	chart, _ := r.Run(ctx, "fammi un grafico della latenza", "it", testNow, nil)
 	if !strings.Contains(chart.Answer, "grafici") {
 		t.Errorf("unsupported chart: %q", chart.Answer)
+	}
+}
+
+func TestYesterdayAndRouteWords(t *testing.T) {
+	s := parseScope("errori di ieri", corpusServices, testNow)
+	midnight := time.Date(2026, 9, 24, 0, 0, 0, 0, time.UTC)
+	if !s.Yesterday || !s.To.Equal(midnight) || s.window() != 24*time.Hour {
+		t.Fatalf("ieri = %+v", s)
+	}
+	if s := parseScope("errori da ieri", corpusServices, testNow); s.Yesterday || !s.To.Equal(testNow) {
+		t.Fatalf("da ieri must stay a rolling window: %+v", s)
+	}
+	if m, ok := parseMeasure("quanto è lenta la ricerca del catalogo?", normalize("quanto è lenta la ricerca del catalogo")); !ok || m.Path != "/search" {
+		t.Fatalf("route word = %+v %v", m, ok)
+	}
+	if got := phrasingFor("it").window(s); got != "Ieri" {
+		t.Errorf("window label = %q", got)
 	}
 }

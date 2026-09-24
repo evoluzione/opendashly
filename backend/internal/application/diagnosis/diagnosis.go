@@ -7,6 +7,7 @@ package diagnosis
 import (
 	"context"
 	"fmt"
+	"sort"
 	"strings"
 	"time"
 
@@ -37,6 +38,8 @@ type Report struct {
 	Suggestions []Suggestion `json:"suggestions,omitempty"`
 	// Context lets the next message refer to this answer.
 	Context *Context `json:"context,omitempty"`
+	// Lang is the language of the answer ("it" or "en"), so the UI labels match it.
+	Lang string `json:"lang,omitempty"`
 }
 
 // Suggestion is a follow-up the UI offers as a button: Prompt is written so
@@ -57,8 +60,9 @@ type Scope struct {
 	WindowMentioned bool
 	// Mentions counts the services named; Service is set only when it is one.
 	Mentions int
-	// Today marks a "since midnight" window.
-	Today bool
+	// Today marks a "since midnight" window, Yesterday the previous calendar day.
+	Today     bool
+	Yesterday bool
 }
 
 func (s Scope) window() time.Duration { return s.To.Sub(s.From) }
@@ -83,6 +87,14 @@ func (r *Runner) Run(ctx context.Context, prompt, locale string, now time.Time, 
 		locale = lang
 	}
 	t, p := textsFor(locale), phrasingFor(locale)
+	rep, err := r.answer(ctx, prompt, services, now, prev, t, p)
+	if rep != nil {
+		rep.Lang = p.pick("it", "en")
+	}
+	return rep, err
+}
+
+func (r *Runner) answer(ctx context.Context, prompt string, services []string, now time.Time, prev *Context, t texts, p phrasing) (*Report, error) {
 	req := understand(prompt, services, now, prev)
 
 	switch req.action {
@@ -91,11 +103,25 @@ func (r *Runner) Run(ctx context.Context, prompt, locale string, now time.Time, 
 	case actUnsupported:
 		return &Report{Answer: p.unsupportedText(req.unsupported), Suggestions: starterSuggestions(p, intentUnclear), Context: prev}, nil
 	case actNoMatch:
+		if req.scope.Service != "" && prev != nil {
+			w := prev.scopeAt(now)
+			sug := Suggestion{Label: p.pick("Analizza ", "Analyze ") + req.scope.Service, Prompt: p.windowPrompt(req.scope.Service, w.window())}
+			return &Report{Answer: p.noItemFor(req.scope.Service), Suggestions: []Suggestion{sug}, Context: prev}, nil
+		}
 		n := 0
 		if prev != nil {
 			n = len(prev.Items)
 		}
 		return &Report{Answer: p.noItem(n), Suggestions: detailSuggestions(p), Context: prev}, nil
+	case actAmbiguousRef:
+		nums := make([]string, len(req.refCandidates))
+		sugs := []Suggestion{}
+		for i, idx := range req.refCandidates {
+			nums[i] = fmt.Sprint(idx + 1)
+			sugs = append(sugs, Suggestion{Label: fmt.Sprintf(p.pick("Apri il %d", "Open #%d"), idx+1), Prompt: fmt.Sprintf(p.pick("apri il %d", "open #%d"), idx+1)})
+		}
+		answer := fmt.Sprintf(p.pick("Più punti corrispondono (%s): quale apro?", "Several items match (%s): which one should I open?"), strings.Join(nums, ", "))
+		return &Report{Answer: answer, Suggestions: sugs, Context: prev}, nil
 	case actNoContextRef:
 		return &Report{Answer: p.noContextText(), Suggestions: starterSuggestions(p, intentUnclear)}, nil
 	case actOpenItem:
@@ -107,6 +133,9 @@ func (r *Runner) Run(ctx context.Context, prompt, locale string, now time.Time, 
 		var rep *Report
 		if item.TraceID != "" {
 			rep = r.traceReport(ctx, item.TraceID, now, t, p, req.detail)
+			// Keep the analysis window, so "e la latenza?" stays on it.
+			w := prev.scopeAt(now)
+			rep.Context.From, rep.Context.To, rep.Context.Today, rep.Context.Yesterday = w.From, w.To, w.Today, w.Yesterday
 		} else {
 			scope := prev.scopeAt(now)
 			if item.Service != "" {
@@ -117,7 +146,7 @@ func (r *Runner) Run(ctx context.Context, prompt, locale string, now time.Time, 
 		rep.Steps = append([]string{fmt.Sprintf(p.stepOpenItemText(), idx+1)}, rep.Steps...)
 		return rep, nil
 	case actMeasure:
-		if q := p.askMissing(req, services); q != nil {
+		if q := p.askMissing(req, services, prev); q != nil {
 			return q, nil
 		}
 		return r.measureReport(ctx, req.scope, req.measure, t, p, req.detail), nil
@@ -135,7 +164,7 @@ func (r *Runner) Run(ctx context.Context, prompt, locale string, now time.Time, 
 	if req.scope.TraceID != "" {
 		return r.traceReport(ctx, req.scope.TraceID, now, t, p, req.detail), nil
 	}
-	if q := p.askMissing(req, services); q != nil {
+	if q := p.askMissing(req, services, prev); q != nil {
 		return q, nil
 	}
 	return r.windowReport(ctx, req.scope, t, p, req.focus, req.detail, req.infraNote), nil
@@ -148,8 +177,8 @@ type analysis struct {
 	base     *metrics.DashboardResponse
 	failed   []string
 	steps    []string
-	// metricsBusy: the rollups answered with no data because the backend
-	// is under pressure; zeros would be misleading.
+	// metricsBusy: the rollup queries failed (usually the backend is under
+	// memory pressure); the answer says so instead of showing zeros.
 	metricsBusy bool
 }
 
@@ -159,24 +188,23 @@ func (r *Runner) analyze(ctx context.Context, scope Scope, t texts) analysis {
 	a.steps = []string{fmt.Sprintf(t.stepScope, formatRange(scope.From, scope.To), serviceLabel(t, scope.Service))}
 
 	if r.Metrics != nil {
-		cur, errCur := r.Metrics.GetDashboard(ctx, metrics.DashboardRequest{From: scope.From, To: scope.To, ServiceName: scope.Service})
-		base, errBase := r.Metrics.GetDashboard(ctx, metrics.DashboardRequest{From: baseFrom, To: baseTo, ServiceName: scope.Service})
+		// Route-level rollups (ids in paths collapsed) are lighter than the full
+		// dashboard and group the same endpoint called with different ids.
+		filter := metrics.RouteFilter{Service: scope.Service}
+		curTotal, curRoutes, errCur := r.Metrics.RouteStatsFor(ctx, scope.From, scope.To, filter, routeStatsLimit)
+		baseTotal, baseRoutes, errBase := r.Metrics.RouteStatsFor(ctx, baseFrom, baseTo, filter, routeStatsLimit)
 		a.steps = append(a.steps, fmt.Sprintf(t.stepMetrics, formatRange(baseFrom, baseTo)))
-		busy := errCur == nil && cur.Health.Status != "" && cur.Health.Status != "ok" && cur.Satisfaction.Throughput.TotalRequests == 0
-		switch {
-		case busy:
-			a.metricsBusy = true
-		case errCur == nil && errBase == nil:
-			a.cur, a.base = cur, base
-			found := dashboardFindings(cur, base, scope.window())
+		if errCur == nil && errBase == nil {
+			a.cur, a.base = routeDashboard(curTotal, curRoutes), routeDashboard(baseTotal, baseRoutes)
+			found := dashboardFindings(a.cur, a.base, scope.window())
 			a.findings = append(a.findings, found...)
 			if len(found) > 0 {
 				a.steps = append(a.steps, fmt.Sprintf(t.stepMetricsBad, len(found)))
 			} else {
 				a.steps = append(a.steps, t.stepMetricsOk)
 			}
-		default:
-			a.failed = append(a.failed, t.checkMetrics)
+		} else {
+			a.metricsBusy = true
 		}
 	}
 
@@ -218,10 +246,10 @@ func (r *Runner) analyze(ctx context.Context, scope Scope, t texts) analysis {
 
 func (r *Runner) windowReport(ctx context.Context, scope Scope, t texts, p phrasing, focus string, detail, infraNote bool) *Report {
 	a := r.analyze(ctx, scope, t)
-	out := &Context{From: scope.From, To: scope.To, Service: scope.Service, Focus: focus, Today: scope.Today}
+	out := &Context{From: scope.From, To: scope.To, Service: scope.Service, Focus: focus, Today: scope.Today, Yesterday: scope.Yesterday}
 	var answer string
 	if detail {
-		answer = renderWindow(t, scope, a.findings, a.cur, a.failed)
+		answer = renderWindow(t, p, scope, a.findings, a.cur, a.failed)
 		out.Items = contextItems(a.findings, maxFindings)
 	} else {
 		answer, out.Items = conciseWindow(p, scope, focus, a)
@@ -229,7 +257,12 @@ func (r *Runner) windowReport(ctx context.Context, scope Scope, t texts, p phras
 	if infraNote {
 		answer = p.infraNoteText() + "\n\n" + answer
 	}
-	return &Report{Answer: answer, Steps: a.steps, Suggestions: windowSuggestions(p, scope, out.Items, detail), Context: out}
+	sugs := windowSuggestions(p, scope, out.Items, detail)
+	if a.cur != nil && a.cur.Satisfaction.Throughput.TotalRequests == 0 && len(a.findings) == 0 {
+		sugs = []Suggestion{{Label: p.pick("Oggi", "Today"), Prompt: p.pick("e oggi?", "and today?")},
+			{Label: p.pick("Ultime 24 ore", "Last 24 hours"), Prompt: p.pick("e nelle ultime 24 ore?", "and in the last 24 hours?")}}
+	}
+	return &Report{Answer: answer, Steps: a.steps, Suggestions: sugs, Context: out}
 }
 
 func (r *Runner) traceReport(ctx context.Context, traceID string, now time.Time, t texts, p phrasing, detail bool) *Report {
@@ -261,7 +294,7 @@ func (r *Runner) traceReport(ctx context.Context, traceID string, now time.Time,
 	steps = append(steps, t.stepTraceSlow)
 	answer := conciseTrace(p, spans, logs, failed)
 	if detail {
-		answer = renderTrace(t, traceID, spans, logs, failed)
+		answer = renderTrace(t, p, traceID, spans, logs, failed)
 	}
 	out := &Context{From: now.Add(-defaultWindow), To: now, TraceID: traceID}
 	if hasRoot {
@@ -312,4 +345,40 @@ func isErrorSeverity(s string) bool {
 		return true
 	}
 	return false
+}
+
+// routeDashboard shapes route stats like the dashboard response the rules read:
+// totals, the slowest routes by p95 and the routes with errors.
+func routeDashboard(total metrics.RouteStats, routes []metrics.RouteStats) *metrics.DashboardResponse {
+	d := &metrics.DashboardResponse{Health: metrics.DashboardHealth{Status: "ok"}}
+	d.Satisfaction.Throughput.TotalRequests = total.Count
+	d.Satisfaction.Throughput.TotalErrors = total.Errors
+	if total.Count > 0 {
+		d.Satisfaction.ErrorRate = float64(total.Errors) / float64(total.Count) * 100
+	}
+	slow := append([]metrics.RouteStats(nil), routes...)
+	sort.SliceStable(slow, func(i, j int) bool { return slow[i].P95 > slow[j].P95 })
+	for i, r := range slow {
+		if i == 10 {
+			break
+		}
+		d.Hotspots.SlowestEndpoints = append(d.Hotspots.SlowestEndpoints, metrics.EndpointLatency{
+			Endpoint: r.Route, Service: r.Service, AvgMs: r.AvgMs, P50: r.P50, P95: r.P95, P99: r.P99, Count: r.Count})
+	}
+	hot := []metrics.RouteStats{}
+	for _, r := range routes {
+		if r.Errors > 0 {
+			hot = append(hot, r)
+		}
+	}
+	sort.SliceStable(hot, func(i, j int) bool { return hot[i].Errors > hot[j].Errors })
+	for i, r := range hot {
+		if i == 10 {
+			break
+		}
+		d.Hotspots.ErrorHotspots = append(d.Hotspots.ErrorHotspots, metrics.ErrorHotspot{
+			Endpoint: r.Route, Service: r.Service, ErrorCount: r.Errors, TotalCount: r.Count,
+			ErrorRate: float64(r.Errors) / float64(max(r.Count, 1)) * 100})
+	}
+	return d
 }

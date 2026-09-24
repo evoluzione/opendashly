@@ -81,6 +81,9 @@ func (p phrasing) window(s Scope) string {
 	if s.Today {
 		return p.pick("Oggi", "Today")
 	}
+	if s.Yesterday {
+		return p.pick("Ieri", "Yesterday")
+	}
 	m := int(math.Round(s.window().Minutes()))
 	switch {
 	case m == 60:
@@ -128,6 +131,11 @@ func (p phrasing) reply(in intent) string {
 	return p.pick(
 		"Non ho capito la richiesta. Posso dirti cosa non va (errori, latenza, traffico, log), darti un numero preciso o analizzare una trace: prova con `payment ultime 2 ore` o `latenza media delle GET del catalogo`.",
 		"I did not understand the request. I can tell you what is wrong (errors, latency, traffic, logs), give you a precise number or analyze a trace: try `payment last 2 hours` or `average latency of the catalog GET endpoints`.")
+}
+
+// noItemFor answers a reference to an item about a service the list lacks.
+func (p phrasing) noItemFor(service string) string {
+	return fmt.Sprintf(p.pick("Nell'ultima risposta non c'è un punto su **%s**. Vuoi che lo analizzi?", "The last answer has no item about **%s**. Should I analyze it?"), service)
 }
 
 func (p phrasing) noItem(n int) string {
@@ -215,10 +223,15 @@ func shortError(detail string) string {
 	return strings.Join(out, ", ")
 }
 
-func (p phrasing) line(f Finding) string {
+// line writes one finding on one line. scoped is the service the user asked
+// about: a problem found in another service is labeled as called by it.
+func (p phrasing) line(f Finding, scoped string) string {
 	icon := map[string]string{SeverityCritical: "🔴", SeverityWarning: "🟠", SeverityInfo: "🔵"}[f.Severity]
 	who := ""
-	if f.Service != "" {
+	switch {
+	case f.Service != "" && scoped != "" && f.Service != scoped:
+		who = "**" + f.Service + "**" + fmt.Sprintf(p.pick(" (chiamato da %s): ", " (called by %s): "), scoped)
+	case f.Service != "":
 		who = "**" + f.Service + "**: "
 	}
 	before := func(format string, v string) string {
@@ -297,20 +310,26 @@ func conciseWindow(p phrasing, scope Scope, focus string, a analysis) (string, [
 
 	switch focus {
 	case focusErrors:
-		if cur != nil {
+		if cur != nil && cur.Satisfaction.ErrorRate < 0.01 && len(shown) > 0 && scope.Service != "" {
+			fmt.Fprintf(&b, p.pick("%s le risposte di **%s** non hanno errori (%s richieste), ma alcune chiamate che fa verso altri servizi falliscono:",
+				"%s **%s** answers without errors (%s requests), but some of the calls it makes to other services fail:"),
+				win, scope.Service, p.count(cur.Satisfaction.Throughput.TotalRequests))
+		} else if cur != nil {
 			fmt.Fprintf(&b, p.pick("%s l'error rate%s è **%s** su %s richieste", "%s the error rate%s is **%s** over %s requests"),
 				win, p.of(scope.Service), p.pct(cur.Satisfaction.ErrorRate), p.count(cur.Satisfaction.Throughput.TotalRequests))
 			if a.base != nil && a.base.Satisfaction.Throughput.TotalRequests > 0 {
 				fmt.Fprintf(&b, p.pick(" (prima %s)", " (was %s)"), p.pct(a.base.Satisfaction.ErrorRate))
 			}
 			b.WriteString(".")
+			if len(shown) > 0 {
+				b.WriteString(p.pick(" Da dove vengono:", " Where they come from:"))
+			} else {
+				b.WriteString(p.pick(" Nessuna fonte di errore anomala.", " No unusual error source."))
+			}
+		} else if len(shown) > 0 {
+			fmt.Fprintf(&b, p.pick("%s ho trovato queste fonti di errore%s:", "%s I found these error sources%s:"), win, p.where(scope.Service))
 		} else {
-			b.WriteString(win + p.pick(", errori", ", errors") + p.of(scope.Service) + ".")
-		}
-		if len(shown) > 0 {
-			b.WriteString(p.pick(" Da dove vengono:", " Where they come from:"))
-		} else {
-			b.WriteString(p.pick(" Nessuna fonte di errore anomala.", " No unusual error source."))
+			fmt.Fprintf(&b, p.pick("%s non ho trovato fonti di errore anomale%s.", "%s I found no unusual error sources%s."), win, p.where(scope.Service))
 		}
 	case focusLatency:
 		worst := worstEndpoint(cur)
@@ -320,10 +339,21 @@ func conciseWindow(p phrasing, scope Scope, focus string, a analysis) (string, [
 		} else {
 			b.WriteString(win + p.pick(" non ho dati di latenza", " I have no latency data") + p.of(scope.Service) + ".")
 		}
-		if len(shown) > 0 {
+		hasBase := a.base != nil && a.base.Satisfaction.Throughput.TotalRequests > 0
+		switch {
+		case len(shown) > 0:
 			b.WriteString(p.pick(" Sono peggiorati:", " These got slower:"))
-		} else if cur != nil && len(cur.Hotspots.SlowestEndpoints) > 1 {
-			b.WriteString(p.pick(" Nessun peggioramento rispetto a prima. I più lenti:", " No slowdown compared with before. The slowest:"))
+		case hasBase && (cur == nil || len(cur.Hotspots.SlowestEndpoints) <= 1):
+			b.WriteString(p.pick(" Non è peggiorato rispetto al periodo precedente.", " It did not get slower than in the previous window."))
+		case !hasBase && worst != nil:
+			b.WriteString(p.pick(" Non ho dati del periodo precedente per dire se è peggiorato.", " I have no data for the previous window to tell whether it got slower."))
+		}
+		if len(shown) == 0 && cur != nil && len(cur.Hotspots.SlowestEndpoints) > 1 {
+			if hasBase {
+				b.WriteString(p.pick(" Nessun peggioramento rispetto al periodo precedente. I più lenti:", " No slowdown compared with the previous window. The slowest:"))
+			} else {
+				b.WriteString(p.pick(" I più lenti:", " The slowest:"))
+			}
 			items := []ContextItem{}
 			b.WriteString("\n")
 			for i, e := range cur.Hotspots.SlowestEndpoints {
@@ -356,11 +386,19 @@ func conciseWindow(p phrasing, scope Scope, focus string, a analysis) (string, [
 		if len(selected) == 0 {
 			b.WriteString(win + p.pick(" non ci sono log di errore insoliti", " there are no unusual error logs") + p.of(scope.Service) + ".")
 		} else {
-			fmt.Fprintf(&b, p.pick("%s ci sono %s nei log di errore%s:", "%s there are %s in the error logs%s:"), win,
+			verb := p.pick("ci sono", "there are")
+			if len(selected) == 1 {
+				verb = p.pick("c'è", "there is")
+			}
+			fmt.Fprintf(&b, p.pick("%s %s %s nei log di errore%s:", "%s %s %s in the error logs%s:"), win, verb,
 				pluralize(p, len(selected), "messaggio ricorrente", "messaggi ricorrenti", "recurring message", "recurring messages"), p.of(scope.Service))
 		}
 	default:
-		if len(selected) == 0 && (len(a.failed) > 0 || a.metricsBusy) {
+		if len(selected) == 0 && cur != nil && cur.Satisfaction.Throughput.TotalRequests == 0 && len(a.failed) == 0 {
+			// No traffic at all is not "everything normal".
+			fmt.Fprintf(&b, p.pick("%s non ci sono dati%s: il servizio non ha ricevuto richieste o la telemetria non era attiva. Prova con un altro periodo.",
+				"%s there is no data%s: no requests were received or telemetry was off. Try another window."), win, p.where(scope.Service))
+		} else if len(selected) == 0 && (len(a.failed) > 0 || a.metricsBusy) {
 			// Some checks could not run: say so instead of "all good".
 			fmt.Fprintf(&b, p.pick("%s nei dati che ho potuto leggere non vedo problemi%s.", "%s I see no problems in the data I could read%s."), win, p.where(scope.Service))
 		} else if len(selected) == 0 {
@@ -378,7 +416,7 @@ func conciseWindow(p phrasing, scope Scope, focus string, a analysis) (string, [
 	if len(shown) > 0 {
 		b.WriteString("\n")
 		for i, f := range shown {
-			fmt.Fprintf(&b, "%d. %s\n", i+1, p.line(f))
+			fmt.Fprintf(&b, "%d. %s\n", i+1, p.line(f, scope.Service))
 		}
 		if extra := len(selected) - len(shown); extra > 0 {
 			fmt.Fprintf(&b, p.pick("…e altri %d.\n", "…and %d more.\n"), extra)
@@ -565,8 +603,10 @@ func worstP95(cur *metrics.DashboardResponse) float64 {
 // askMissing returns the question to ask when an analysis lacks its time
 // window or its service filter, or nil when everything is known. What was
 // understood so far travels in the context and is completed by the answer.
-func (p phrasing) askMissing(req request, services []string) *Report {
-	ctx := &Context{From: req.scope.From, To: req.scope.To, Today: req.scope.Today, Service: req.scope.Service,
+func (p phrasing) askMissing(req request, services []string, prev *Context) *Report {
+	// The previous answer's window and service are one click away.
+	answered := prev != nil && prev.Pending == ""
+	ctx := &Context{From: req.scope.From, To: req.scope.To, Today: req.scope.Today, Yesterday: req.scope.Yesterday, Service: req.scope.Service,
 		Focus: req.focus, WindowSet: req.windowSet, ServiceSet: req.serviceSet, Detail: req.detail}
 	if req.action == actMeasure {
 		m := req.measure
@@ -585,20 +625,36 @@ func (p phrasing) askMissing(req request, services []string) *Report {
 	case !req.windowSet:
 		ctx.Pending = slotWindow
 		question = p.pick("Su che periodo?", "Which time window?")
-		sugs = []Suggestion{
+		if w := prev.scopeAtOrNil(req.scope.To); answered && w != nil && !isPresetWindow(*w) {
+			prompt := p.windowPrompt("", w.window())
+			if w.Today {
+				prompt = p.pick("oggi", "today")
+			}
+			if w.Yesterday {
+				prompt = p.pick("ieri", "yesterday")
+			}
+			sugs = append(sugs, Suggestion{Label: p.pick("Come prima (", "Same as before (") + strings.ToLower(p.window(*w)) + ")", Prompt: prompt})
+		}
+		sugs = append(sugs, []Suggestion{
 			{Label: p.pick("Ultimi 15 minuti", "Last 15 minutes"), Prompt: p.pick("ultimi 15 minuti", "last 15 minutes")},
 			{Label: p.pick("Ultima ora", "Last hour"), Prompt: p.pick("ultima ora", "last hour")},
 			{Label: p.pick("Ultime 24 ore", "Last 24 hours"), Prompt: p.pick("ultime 24 ore", "last 24 hours")},
 			{Label: p.pick("Oggi", "Today"), Prompt: p.pick("oggi", "today")},
 			{Label: p.pick("Ultimi 7 giorni", "Last 7 days"), Prompt: p.pick("ultimi 7 giorni", "last 7 days")},
-		}
+		}...)
 	case !req.serviceSet:
 		ctx.Pending = slotService
 		question = p.pick("Su quali servizi? Tutti o uno in particolare?", "Which services? All of them or a specific one?")
 		sugs = []Suggestion{{Label: p.pick("Tutti i servizi", "All services"), Prompt: p.pick("tutti i servizi", "all services")}}
-		for i, s := range services {
-			if i == 6 {
+		if answered && prev.Service != "" {
+			sugs = append(sugs, Suggestion{Label: prev.Service, Prompt: prev.Service})
+		}
+		for _, s := range services {
+			if len(sugs) == 7 {
 				break
+			}
+			if answered && s == prev.Service {
+				continue
 			}
 			sugs = append(sugs, Suggestion{Label: s, Prompt: s})
 		}
@@ -641,4 +697,16 @@ func (p phrasing) understood(req request) string {
 		what += " (" + strings.ToLower(p.window(req.scope)) + ")"
 	}
 	return what + "."
+}
+
+// isPresetWindow reports whether a window is already one of the window buttons.
+func isPresetWindow(s Scope) bool {
+	if s.Today {
+		return true
+	}
+	switch s.window() {
+	case 15 * time.Minute, time.Hour, 24 * time.Hour, maxWindow:
+		return true
+	}
+	return false
 }
