@@ -13,7 +13,6 @@
     "/settings/dashboard",
     "/settings/users",
     "/settings/retention",
-    "/settings/ai",
     "/settings/status",
   ];
 
@@ -33,7 +32,6 @@
           { href: "/settings/dashboard", label: t($locale, "common.dashboard") },
           { href: "/settings/users", label: t($locale, "sidebar.userManagement") },
           { href: "/settings/retention", label: t($locale, "sidebar.retentionCleanup") },
-          { href: "/settings/ai", label: t($locale, "sidebar.aiSettings") },
           { href: "/settings/status", label: t($locale, "sidebar.systemMonitor") },
         ]
       : []),

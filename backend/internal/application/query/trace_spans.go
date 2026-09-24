@@ -176,3 +176,45 @@ func statusLabel(code int64) string {
 		return fmt.Sprintf("%d", code)
 	}
 }
+
+// RecentErrorTraceIDs returns the ids of the most recent traces with an
+// errored span. It reads spans directly instead of aggregating whole traces,
+// so it stays within the per-query memory budget on large windows.
+func (s *TraceSpansService) RecentErrorTraceIDs(ctx context.Context, from, to time.Time, service string, limit int) ([]string, error) {
+	if s.Storage == nil || limit <= 0 {
+		return []string{}, nil
+	}
+	conn := s.Storage.Conn
+	rows, err := conn.Query(ctx, buildRecentErrorTracesQuery(from, to, service, limit*10))
+	if err != nil {
+		return nil, fmt.Errorf("query error traces: %w", err)
+	}
+	defer rows.Close()
+	seen := map[string]bool{}
+	ids := []string{}
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			return nil, fmt.Errorf("scan error traces: %w", err)
+		}
+		if id != "" && !seen[id] && len(ids) < limit {
+			seen[id] = true
+			ids = append(ids, id)
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate error traces: %w", err)
+	}
+	return ids, nil
+}
+
+func buildRecentErrorTracesQuery(from, to time.Time, service string, limit int) string {
+	layout := "2006-01-02 15:04:05.000000000"
+	where := fmt.Sprintf("Timestamp >= toDateTime64('%s', 9) AND Timestamp <= toDateTime64('%s', 9) AND toString(StatusCode) IN ('Error', '2', 'STATUS_CODE_ERROR')",
+		from.UTC().Format(layout), to.UTC().Format(layout))
+	if service != "" {
+		where += " AND ServiceName = '" + querysql.EscapeLiteral(service) + "'"
+	}
+	return fmt.Sprintf("SELECT TraceId FROM telemetry.otel_traces WHERE %s ORDER BY Timestamp DESC LIMIT %d SETTINGS max_execution_time = %d, max_threads = 1, max_memory_usage = 67108864",
+		where, limit, config.Auto().ClickHouseMaxExecSec)
+}
