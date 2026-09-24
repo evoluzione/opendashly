@@ -60,7 +60,7 @@ func (c convCase) context(now time.Time) *Context {
 var actionNames = map[action]string{
 	actNew: "new", actOpenItem: "open_item", actDetails: "details", actFollowUp: "follow_up",
 	actNoContextRef: "no_context_ref", actUnsupported: "unsupported", actMeasure: "measure",
-	actNoMatch: "unclear", actAmbiguousRef: "unclear",
+	actNoMatch: "unclear", actAmbiguousRef: "unclear", actLinks: "links",
 }
 
 func gotAction(req request) string {

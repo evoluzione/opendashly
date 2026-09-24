@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"net/http"
 	"time"
+	// The alpine image has no zoneinfo: embed it for the viewer's time zone.
+	_ "time/tzdata"
 
 	"opendashly/backend/internal/application/ai"
 	"opendashly/backend/internal/application/auth"
@@ -21,6 +23,9 @@ type aiAssistantChatRequest struct {
 	Locale string `json:"locale"`
 	// Context is the previous answer's context, echoed back by the UI.
 	Context *diagnosis.Context `json:"context"`
+	// TimeZone is the viewer's IANA zone ("Europe/Rome"): "oggi" and "ieri"
+	// start at the viewer's midnight, and times are shown in that zone.
+	TimeZone string `json:"timeZone"`
 }
 
 // diagnosisTimeout stays below the server WriteTimeout (at least 30s).
@@ -35,7 +40,11 @@ func (h *AIAssistantChatHandler) ServeHTTP(w http.ResponseWriter, r *http.Reques
 
 	ctx, cancel := context.WithTimeout(r.Context(), diagnosisTimeout)
 	defer cancel()
-	resp, err := h.Runner.Run(ctx, req.Prompt, req.Locale, time.Now().UTC(), req.Context)
+	now := time.Now().UTC()
+	if loc, err := time.LoadLocation(req.TimeZone); err == nil && req.TimeZone != "" {
+		now = now.In(loc)
+	}
+	resp, err := h.Runner.Run(ctx, req.Prompt, req.Locale, now, req.Context)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return

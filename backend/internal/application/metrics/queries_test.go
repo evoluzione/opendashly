@@ -149,3 +149,10 @@ func TestDashboardRateQueries_UseTwoStepAggregation(t *testing.T) {
 		})
 	}
 }
+
+func TestFormatTimeIsUTC(t *testing.T) {
+	rome := time.FixedZone("CEST", 2*3600)
+	if got := formatTime(time.Date(2026, 9, 24, 2, 0, 0, 0, rome)); got != "2026-09-24 00:00:00" {
+		t.Errorf("formatTime = %q", got)
+	}
+}

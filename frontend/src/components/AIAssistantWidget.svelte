@@ -9,7 +9,10 @@
     type AssistantMessage,
     type AssistantSuggestion,
     type AssistantContext,
+    type AssistantLink,
+    type AssistantRow,
   } from "../services/assistant";
+  import { downloadLink, linkUrl, DOWNLOAD_LIMIT } from "../services/assistantLinks";
   import { locale, t } from "../lib/i18n";
 
   type ChatMessage = AssistantMessage & {
@@ -19,6 +22,8 @@
     stepsShown?: number;
     suggestions?: AssistantSuggestion[];
     lang?: "it" | "en";
+    links?: AssistantLink[];
+    rows?: AssistantRow[];
   };
 
   const STEP_DELAY_MS = 300;
@@ -86,6 +91,8 @@
           content: String(m.content ?? ""),
           context: m.context,
           suggestions: Array.isArray(m.suggestions) ? m.suggestions : undefined,
+          links: Array.isArray(m.links) ? m.links : undefined,
+          rows: Array.isArray(m.rows) ? m.rows : undefined,
         }));
     } catch {
       messages = [];
@@ -97,7 +104,7 @@
   async function persistHistory() {
     const compact = messages
       .filter((m) => !m.loading)
-      .map((m) => ({ role: m.role, content: m.content, context: m.context, suggestions: m.suggestions }));
+      .map((m) => ({ role: m.role, content: m.content, context: m.context, suggestions: m.suggestions, links: m.links, rows: m.rows }));
     try {
       await saveAssistantSession({ messages: compact });
     } catch {
@@ -162,7 +169,7 @@
 
   // Replays the steps the diagnosis really performed, then types the answer,
   // so the user can follow what was read and decided before the result.
-  async function playResponse(id: string, steps: string[], answer: string, suggestions: AssistantSuggestion[], context?: AssistantContext, lang?: "it" | "en") {
+  async function playResponse(id: string, steps: string[], answer: string, suggestions: AssistantSuggestion[], context?: AssistantContext, lang?: "it" | "en", links?: AssistantLink[], rows?: AssistantRow[]) {
     const animate = !prefersReducedMotion();
     patchMessage(id, { steps, stepsShown: 0, content: "", lang });
     for (let i = 1; i <= steps.length && animate && !destroyed && !fastForward; i += 1) {
@@ -177,7 +184,7 @@
       await scrollToBottom();
       await wait(TYPE_FRAME_MS);
     }
-    patchMessage(id, { content: answer, loading: false, suggestions, context });
+    patchMessage(id, { content: answer, loading: false, suggestions, context, links, rows });
     await scrollToBottom();
   }
 
@@ -210,8 +217,66 @@
     ];
   }
 
+  // downloading holds the key of the link being downloaded, to show progress.
+  let downloading = "";
+
+  async function download(messageId: string, index: number, link: AssistantLink) {
+    const key = `${messageId}:${index}`;
+    if (downloading) return;
+    downloading = key;
+    error = "";
+    try {
+      await downloadLink(link);
+    } catch {
+      error = t($locale, "assistant.downloadError");
+    } finally {
+      downloading = "";
+    }
+  }
+
   function pick(suggestion: AssistantSuggestion) {
     void sendMessage(suggestion.label, suggestion.prompt);
+  }
+
+  // Follow-ups are offered on the latest answer only: they run on its context.
+  $: isLast = (index: number) => index === messages.length - 1 && !sending;
+  const inline = (s?: AssistantSuggestion[]) => (s ?? []).filter((x) => x.kind === "inline");
+  const reruns = (s?: AssistantSuggestion[]) => (s ?? []).filter((x) => x.kind === "rerun");
+  const others = (s?: AssistantSuggestion[]) => (s ?? []).filter((x) => x.kind !== "inline" && x.kind !== "rerun");
+
+  // rowActions adds "Analizza" and "Apri ↗" to each item of the answer's
+  // numbered list: the markdown comes in as HTML, so the rows are found in the
+  // DOM once it is rendered. Row i matches the i-th item of the first list.
+  function rowActions(node: HTMLElement, params: { rows?: AssistantRow[]; lang: Parameters<typeof t>[0]; content: string }) {
+    function apply({ rows, lang }: typeof params) {
+      node.querySelectorAll(".row-actions").forEach((el) => el.remove());
+      if (!rows?.length) return;
+      const items = node.querySelector("ol")?.querySelectorAll(":scope > li") ?? [];
+      items.forEach((li, i) => {
+        const row = rows[i];
+        if (!row) return;
+        const box = document.createElement("span");
+        box.className = "row-actions";
+        const analyze = document.createElement("button");
+        analyze.type = "button";
+        analyze.textContent = t(lang, "assistant.analyzeRow");
+        analyze.title = row.prompt;
+        analyze.addEventListener("click", () => void sendMessage(row.prompt));
+        box.append(analyze);
+        if (row.link) {
+          const a = document.createElement("a");
+          a.href = linkUrl(row.link);
+          a.target = "_blank";
+          a.rel = "noopener";
+          a.textContent = `${t(lang, "assistant.openRow")} ↗`;
+          a.title = t(lang, "assistant.openInSearch");
+          box.append(a);
+        }
+        li.append(box);
+      });
+    }
+    apply(params);
+    return { update: apply };
   }
 
   async function sendMessage(display = prompt.trim(), request = display) {
@@ -252,7 +317,7 @@
         context,
       });
       sending = false;
-      current = playResponse(placeholder.id, response.steps ?? [], response.answer, response.suggestions ?? [], response.context, response.lang);
+      current = playResponse(placeholder.id, response.steps ?? [], response.answer, response.suggestions ?? [], response.context, response.lang, response.links, response.rows);
       playing = current;
       await current;
       await persistHistory();
@@ -465,7 +530,10 @@
                 {/if}
                 {#if message.role === "assistant"}
                   {#if message.content}
-                    <div class="md-content">{@html renderAssistantMarkdown(message.content)}</div>
+                    <div
+                      class="md-content"
+                      use:rowActions={{ rows: message.loading ? undefined : message.rows, lang: message.lang ?? $locale, content: message.content }}
+                    >{@html renderAssistantMarkdown(message.content)}</div>
                   {/if}
                 {:else}
                   <p>{message.content}</p>
@@ -473,14 +541,55 @@
                 {#if message.loading && message.content}
                   <span class="caret" aria-hidden="true"></span>
                 {/if}
-                {#if index === messages.length - 1 && !sending && message.suggestions?.length}
-                  <div class="suggestions">
-                    {#each message.suggestions as suggestion}
-                      <button type="button" on:click={() => pick(suggestion)}>{suggestion.label}</button>
-                    {/each}
+                {#if !message.loading && ((isLast(index) && inline(message.suggestions).length) || message.links?.length)}
+                  {@const lang = message.lang ?? $locale}
+                  <div class="bubble-footer">
+                    {#if isLast(index)}
+                      {#each inline(message.suggestions) as suggestion}
+                        <button type="button" class="inline-action" title={suggestion.prompt} on:click={() => pick(suggestion)}>{suggestion.label}</button>
+                      {/each}
+                    {/if}
+                    {#if message.links?.length}
+                      <details class="more">
+                        <summary title={t(lang, "assistant.more")} aria-label={t(lang, "assistant.more")}>⋯</summary>
+                        <div class="more-menu">
+                          {#each message.links as link, i}
+                            <a href={linkUrl(link)} target="_blank" rel="noopener" title={t(lang, "assistant.openInSearch")}
+                              >{t(lang, "assistant.openLink")} {link.label.toLowerCase()} ↗</a>
+                            <button type="button" disabled={downloading !== ""} on:click={() => download(message.id, i, link)}>
+                              {downloading === `${message.id}:${i}`
+                                ? "…"
+                                : link.kind === "trace"
+                                  ? t(lang, "assistant.downloadJson")
+                                  : t(lang, "assistant.downloadCsv", { count: DOWNLOAD_LIMIT })}
+                            </button>
+                          {/each}
+                        </div>
+                      </details>
+                    {/if}
                   </div>
                 {/if}
               </article>
+              {#if isLast(index) && !message.loading && (reruns(message.suggestions).length || others(message.suggestions).length)}
+                {@const lang = message.lang ?? $locale}
+                <div class="next">
+                  {#if reruns(message.suggestions).length}
+                    <div class="chips">
+                      <span class="chips-lead">↻ {t(lang, "assistant.rerunFor")}</span>
+                      {#each reruns(message.suggestions) as suggestion}
+                        <button type="button" title={suggestion.prompt} on:click={() => pick(suggestion)}>{suggestion.label}</button>
+                      {/each}
+                    </div>
+                  {/if}
+                  {#if others(message.suggestions).length}
+                    <div class="chips">
+                      {#each others(message.suggestions) as suggestion}
+                        <button type="button" title={suggestion.prompt} on:click={() => pick(suggestion)}>{suggestion.label}</button>
+                      {/each}
+                    </div>
+                  {/if}
+                </div>
+              {/if}
             {/each}
           {/if}
         </div>
@@ -690,6 +799,175 @@
     color: var(--brand-slate-500);
     font-size: 13px;
     text-align: center;
+  }
+
+  .bubble-footer {
+    display: flex;
+    align-items: center;
+    gap: 4px 12px;
+    flex-wrap: wrap;
+    margin-top: 8px;
+    padding-top: 6px;
+    border-top: 1px solid var(--brand-slate-200);
+    font-size: 12px;
+  }
+
+  .inline-action,
+  .md-content :global(.row-actions button),
+  .md-content :global(.row-actions a) {
+    border: none;
+    background: none;
+    padding: 0;
+    color: var(--brand-indigo);
+    font: inherit;
+    font-size: 12px;
+    font-weight: 600;
+    text-decoration: none;
+    cursor: pointer;
+  }
+
+  .inline-action:hover,
+  .md-content :global(.row-actions button:hover),
+  .md-content :global(.row-actions a:hover) {
+    text-decoration: underline;
+  }
+
+  /* Row actions float over the right end of the row being pointed at, so
+     they never take room in the text; on touch screens they sit inline. */
+  .md-content :global(ol > li) {
+    position: relative;
+  }
+
+  .md-content :global(.row-actions) {
+    position: absolute;
+    top: -4px;
+    right: 0;
+    display: none;
+    gap: 10px;
+    padding: 2px 8px;
+    background: var(--color-white);
+    border: 1px solid var(--brand-slate-200);
+    border-radius: 6px;
+    box-shadow: 0 2px 8px rgba(30, 41, 59, 0.12);
+  }
+
+  .md-content :global(li:hover > .row-actions),
+  .md-content :global(li:focus-within > .row-actions) {
+    display: inline-flex;
+  }
+
+  @media (hover: none) {
+    .md-content :global(.row-actions) {
+      position: static;
+      display: inline-flex;
+      margin-left: 8px;
+      padding: 0;
+      border: none;
+      box-shadow: none;
+      background: none;
+    }
+  }
+
+  .more {
+    position: relative;
+    margin-left: auto;
+  }
+
+  .more summary {
+    list-style: none;
+    cursor: pointer;
+    padding: 0 6px;
+    border-radius: 6px;
+    color: var(--brand-slate-500);
+    font-size: 16px;
+    line-height: 20px;
+  }
+
+  .more summary::-webkit-details-marker {
+    display: none;
+  }
+
+  .more summary:hover,
+  .more[open] summary {
+    background: var(--color-slate-100);
+    color: var(--brand-slate-900);
+  }
+
+  .more-menu {
+    position: absolute;
+    right: 0;
+    bottom: calc(100% + 4px);
+    z-index: 2;
+    display: grid;
+    grid-template-columns: auto auto;
+    gap: 6px 14px;
+    padding: 8px 10px;
+    white-space: nowrap;
+    background: var(--color-white);
+    border: 1px solid var(--brand-slate-200);
+    border-radius: 8px;
+    box-shadow: 0 6px 18px rgba(30, 41, 59, 0.14);
+  }
+
+  .more-menu a,
+  .more-menu button {
+    border: none;
+    background: none;
+    padding: 0;
+    font: inherit;
+    font-size: 12px;
+    text-align: left;
+    color: var(--brand-indigo);
+    text-decoration: none;
+    cursor: pointer;
+  }
+
+  .more-menu button {
+    color: var(--brand-slate-600);
+  }
+
+  .more-menu a:hover,
+  .more-menu button:hover:not(:disabled) {
+    text-decoration: underline;
+  }
+
+  .more-menu button:disabled {
+    cursor: progress;
+  }
+
+  .next {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    max-width: 88%;
+    margin: -2px 0 4px 4px;
+  }
+
+  .chips {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .chips-lead {
+    font-size: 12px;
+    color: var(--brand-slate-500);
+  }
+
+  .chips button {
+    border: 1px solid var(--color-slate-300);
+    background: var(--color-white);
+    color: var(--brand-slate-800);
+    border-radius: 999px;
+    padding: 3px 10px;
+    font-size: 12px;
+    cursor: pointer;
+  }
+
+  .chips button:hover {
+    border-color: rgba(var(--rgb-primary-600), 0.5);
+    color: var(--brand-indigo);
   }
 
   .suggestions {

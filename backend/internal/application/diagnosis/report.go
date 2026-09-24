@@ -13,7 +13,7 @@ import (
 const maxFindings = 6
 
 type texts struct {
-	title, scopeAll, scopeService, found, none, summary, advice, more, partial, degraded string
+	title, scopeAll, scopeService, found, none, summary, more, partial, degraded string
 	checkMetrics, checkLogs, checkTraces                                                 string
 	stepScope, stepMetrics, stepMetricsBad, stepMetricsOk, stepLogs                      string
 	stepTraces, stepTracesNone, stepRank, stepTrace, stepTraceRoot, stepTraceSlow        string
@@ -22,7 +22,7 @@ type texts struct {
 	sugDay, sugToday, sugHelp, promptOverview, promptDay, promptToday                    string
 	replyHelp, replyGreeting, replyThanks, replyUnclear, noBaseline                      string
 	findingNoBase                                                                        map[string]string
-	finding, hint                                                                        map[string]string
+	finding                                                                              map[string]string
 	severity                                                                             map[string]string
 	traceTitle, traceNotFound, traceRoot, traceNoError, traceSlow, traceLogs             string
 }
@@ -34,7 +34,6 @@ var textsIT = texts{
 	found:          "### Problemi trovati (%d)",
 	none:           "Nessuna anomalia rispetto al periodo precedente.",
 	summary:        "Richieste: **%s** · error rate **%s** · p95 peggiore **%s**",
-	advice:         "### Cosa controllare",
 	more:           "… e altri %d",
 	partial:        "Controlli non completati: %s.",
 	degraded:       "Metriche parziali (%s): i confronti potrebbero essere incompleti.",
@@ -91,15 +90,6 @@ var textsIT = texts{
 		KindLogPattern:  "Log di errore ripetuto **%s volte** (prima %s): `%s`",
 		KindRootCause:   "Errore originato in `%s`: %s",
 	},
-	hint: map[string]string{
-		KindErrorRate:   "Apri le trace in errore e verifica deploy o dipendenze cambiate nel periodo.",
-		KindNoTraffic:   "Verifica che il servizio sia attivo e che il collector riceva dati.",
-		KindTrafficDrop: "Controlla health check, bilanciatore e client a monte.",
-		KindLatency:     "Confronta gli span lenti: query al database, chiamate esterne, lock.",
-		KindHotspot:     "Filtra le trace per questo endpoint e guarda lo span in errore più profondo.",
-		KindLogPattern:  "Cerca il messaggio nei log e apri una delle trace collegate.",
-		KindRootCause:   "Parti dallo span indicato: è il punto in cui l'errore ha avuto origine.",
-	},
 	traceTitle:    "## Diagnosi trace `%s`",
 	traceNotFound: "Trace non trovata o senza span.",
 	traceRoot:     "**Origine dell'errore:** `%s` in **%s**: %s",
@@ -115,7 +105,6 @@ var textsEN = texts{
 	found:          "### Problems found (%d)",
 	none:           "No anomalies compared with the previous window.",
 	summary:        "Requests: **%s** · error rate **%s** · worst p95 **%s**",
-	advice:         "### What to check",
 	more:           "… and %d more",
 	partial:        "Checks not completed: %s.",
 	degraded:       "Partial metrics (%s): comparisons may be incomplete.",
@@ -172,15 +161,6 @@ var textsEN = texts{
 		KindLogPattern:  "Error log repeated **%s times** (was %s): `%s`",
 		KindRootCause:   "Error originated in `%s`: %s",
 	},
-	hint: map[string]string{
-		KindErrorRate:   "Open the error traces and check deploys or dependencies that changed in the window.",
-		KindNoTraffic:   "Check that the service is up and the collector is receiving data.",
-		KindTrafficDrop: "Check health checks, load balancer and upstream clients.",
-		KindLatency:     "Compare the slow spans: database queries, external calls, locks.",
-		KindHotspot:     "Filter traces by this endpoint and look at the deepest error span.",
-		KindLogPattern:  "Search the message in logs and open one of the linked traces.",
-		KindRootCause:   "Start from the span shown: it is where the error originated.",
-	},
 	traceTitle:    "## Trace diagnosis `%s`",
 	traceNotFound: "Trace not found or without spans.",
 	traceRoot:     "**Error origin:** `%s` in **%s**: %s",
@@ -201,10 +181,13 @@ func formatRange(from, to time.Time) string {
 	if to.Sub(from) >= 24*time.Hour {
 		layout = "02/01 15:04"
 	}
-	return from.UTC().Format(layout) + "–" + to.UTC().Format(layout) + " UTC"
+	// Times are shown in the zone of the request (the viewer's, UTC by default).
+	return from.Format(layout) + "–" + to.In(from.Location()).Format(layout) + " " + from.Format("MST")
 }
 
-func formatFinding(t texts, p phrasing, f Finding) string {
+// formatFinding writes one numbered row: the service only when the analysis
+// covers several, and no trace ids (the row's link opens them).
+func formatFinding(t texts, p phrasing, f Finding, scope Scope) string {
 	n := func(v float64) string { return p.count(int64(v)) }
 	ep := shortEndpoint(f.Endpoint)
 	var line string
@@ -233,18 +216,11 @@ func formatFinding(t texts, p phrasing, f Finding) string {
 		case KindLogPattern:
 			line = fmt.Sprintf(format, n(f.Current), n(f.Baseline), f.Detail)
 		case KindRootCause:
-			line = fmt.Sprintf(format, ep, f.Detail)
+			line = fmt.Sprintf(format, ep, shortError(f.Detail))
 		}
 	}
-	if f.Service != "" {
+	if f.Service != "" && scope.Service == "" {
 		line += " · " + f.Service
-	}
-	if len(f.TraceIDs) > 0 {
-		ids := make([]string, len(f.TraceIDs))
-		for i, id := range f.TraceIDs {
-			ids[i] = "`" + id + "`"
-		}
-		line += " · trace " + strings.Join(ids, ", ")
 	}
 	return t.severity[f.Severity] + " " + line
 }
@@ -277,22 +253,12 @@ func renderWindow(t texts, p phrasing, scope Scope, findings []Finding, cur *met
 		b.WriteString(t.none + "\n")
 	} else {
 		fmt.Fprintf(&b, t.found+"\n", len(findings))
-		seen := map[string]bool{}
-		hints := []string{}
 		for i, f := range findings {
 			if i == maxFindings {
 				fmt.Fprintf(&b, t.more+"\n", len(findings)-maxFindings)
 				break
 			}
-			fmt.Fprintf(&b, "%d. %s\n", i+1, formatFinding(t, p, f))
-			if !seen[f.Kind] {
-				seen[f.Kind] = true
-				hints = append(hints, t.hint[f.Kind])
-			}
-		}
-		b.WriteString("\n" + t.advice + "\n")
-		for i, h := range hints {
-			fmt.Fprintf(&b, "%d. %s\n", i+1, h)
+			fmt.Fprintf(&b, "%d. %s\n", i+1, formatFinding(t, p, f, scope))
 		}
 	}
 	if len(failed) > 0 {

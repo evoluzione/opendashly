@@ -28,6 +28,10 @@ type Context struct {
 	ServiceSet bool     `json:"serviceSet,omitempty"`
 	Detail     bool     `json:"detail,omitempty"`
 	Candidates []string `json:"candidates,omitempty"`
+	// Want is set when the pending question was asked for links ("links");
+	// LinkKinds keeps which data ("logs", "traces", "errors").
+	Want      string `json:"want,omitempty"`
+	LinkKinds string `json:"linkKinds,omitempty"`
 }
 
 // ContextItem is one numbered line of the previous answer.
@@ -67,6 +71,14 @@ func (c *Context) sanitize(services []string) *Context {
 	}
 	out := &Context{From: c.From, To: c.To, Today: c.Today, Yesterday: c.Yesterday, Measure: c.Measure.sanitize(),
 		WindowSet: c.WindowSet, ServiceSet: c.ServiceSet, Detail: c.Detail}
+	if c.Want == wantLinks {
+		out.Want = wantLinks
+		for _, k := range strings.Split(c.LinkKinds, ",") {
+			if k == "logs" || k == "traces" || k == "errors" {
+				out.LinkKinds = strings.Trim(out.LinkKinds+","+k, ",")
+			}
+		}
+	}
 	if c.Pending == slotWindow || c.Pending == slotService {
 		out.Pending = c.Pending
 	}
@@ -149,7 +161,10 @@ const (
 	actMeasure                    // a precise number ("latenza media delle GET")
 	actNoMatch                    // refers to an item the previous answer does not have
 	actAmbiguousRef               // matches several items: ask which one
+	actLinks                      // links to the search page / downloads for a scope
 )
+
+const wantLinks = "links"
 
 type request struct {
 	action      action
@@ -167,6 +182,10 @@ type request struct {
 	serviceSet    bool
 	candidates    []string
 	refCandidates []int // 0-based items matching an ambiguous reference
+	// linkLogs / linkTraces: which data a links request asks for; linkErrors:
+	// only the errors.
+	linkLogs, linkTraces, linkErrors bool
+	rawPlain                         string // the normalized message, for phrase checks at answer time
 }
 
 const (
@@ -248,7 +267,23 @@ func understand(prompt string, services []string, now time.Time, prev *Context) 
 	if ref == 0 && !byContent && hasItems && bareCauseRe.MatchString(plain) {
 		ref = 1
 	}
+	linkRequest := linkRequestRe.MatchString(plain) && in != intentHelp && in != intentThanks
 	switch {
+	case linkRequest:
+		req.action, req.rawPlain = actLinks, plain
+		req.linkLogs, req.linkTraces = logWordsRe.MatchString(plain), traceWordsRe.MatchString(plain)
+		req.linkErrors = req.focus == focusErrors || isStrongErrorRequest(plain)
+		// "scaricameli", "dammi il link": the data of the previous answer.
+		if prev != nil && scope.TraceID == "" && scope.Mentions == 0 && !scope.Explicit {
+			req.scope = prev.scopeAt(now)
+			req.windowSet, req.serviceSet = true, true
+			if req.focus == focusGeneral {
+				req.focus = prev.Focus
+			}
+		} else if prev != nil && scope.TraceID == "" && !selfContained {
+			req.scope = mergeScope(prev.scopeAt(now), scope, plain)
+			req.windowSet, req.serviceSet = true, true
+		}
 	case scope.TraceID != "":
 		req.action = actNew
 	case unsupported != "" && in != intentThanks:
@@ -329,6 +364,13 @@ func fillPending(req request, plain string, now time.Time, prev *Context) (reque
 	out.action = actNew
 	if prev.Measure != nil {
 		out.action, out.measure = actMeasure, *prev.Measure
+	}
+	if prev.Want == wantLinks {
+		out.action = actLinks
+		kinds := "," + prev.LinkKinds + ","
+		out.linkLogs = strings.Contains(kinds, ",logs,") || logWordsRe.MatchString(plain)
+		out.linkTraces = strings.Contains(kinds, ",traces,") || traceWordsRe.MatchString(plain)
+		out.linkErrors = strings.Contains(kinds, ",errors,")
 	}
 	out.scope = Scope{From: now.Add(-defaultWindow), To: now}
 	if prev.WindowSet {
@@ -687,7 +729,6 @@ const (
 	unsupportedChart    = "chart"
 	unsupportedAction   = "action"
 	unsupportedAlert    = "alert"
-	unsupportedExport   = "export"
 	unsupportedBusiness = "business"
 )
 
@@ -707,7 +748,6 @@ var (
 		`scale (up|down|out|in)`, `roll back`, `rollback (di|del|of)`)
 	alertCfgRe = regexp.MustCompile(`\b(crea|creami|creare|imposta|impostami|impostare|configura|configurami|configurare|settami|set up|setup|set|create|add|aggiungi|attiva|metti|mettimi|mettere)\b.{0,40}\b(alert\w*|allarm\w*|notific\w*|regol\w*|rules?|sogli\w*|threshold\w*|avvis\w*)\b|` +
 		`\b(mandami|send me|avvisami|notify me|alert me|avvertimi|scrivimi|email me|ping me)\b.{0,40}\b(se|quando|if|when|appena|as soon as)\b`)
-	exportRe   = phrases(`esporta\w*`, `export\w*`, `scarica\w*`, `download\w*`, `csv`, `pdf`, `excel`, `xlsx`)
 	businessRe = phrases(`quanti utenti`, `how many users`, `utenti attivi`, `active users`, `fatturato`, `revenue`, `vendite`, `sales`, `conversion\w*`, `conversioni`, `quanti ordini`, `how many orders`, `numero di ordini`, `ordini (fatti|di oggi|ricevuti)`, `incassi`)
 	infraRe    = phrases(`cpu`, `memoria`, `memory`, `ram`, `disco`, `disk`, `heap`, `oom`, `memory leak`)
 	// Past or descriptive forms: "si e riavviato", "i pod si riavviano", "dopo il rollback".
@@ -725,8 +765,6 @@ func unsupportedReason(plain string) string {
 		return unsupportedAlert
 	case !cause && !opsEventRe.MatchString(plain) && isOpsRequest(plain):
 		return unsupportedAction
-	case exportRe.MatchString(plain):
-		return unsupportedExport
 	case businessRe.MatchString(plain):
 		return unsupportedBusiness
 	}
@@ -760,6 +798,17 @@ func isOpsRequest(plain string) bool {
 func fuzzyDetail(plain string) bool {
 	for _, tok := range tokens(plain) {
 		if len(tok) >= 6 && (withinEdits(tok, "dettagli", 2) || withinEdits(tok, "details", 1)) && !strings.HasPrefix(tok, "dettagliat") {
+			return true
+		}
+	}
+	return false
+}
+
+// isStrongErrorRequest reports whether a links request is about errors
+// ("scarica i log di errore", "export failed traces").
+func isStrongErrorRequest(plain string) bool {
+	for _, tok := range tokens(plain) {
+		if hasAnyPrefix(tok, errorStems) {
 			return true
 		}
 	}

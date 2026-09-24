@@ -15,7 +15,7 @@ func turn(t *testing.T, prompt string, prev *Context) (*Report, request) {
 
 func runTurn(prompt string, prev *Context) (*Report, request) {
 	req := understand(prompt, corpusServices, testNow, prev.sanitize(corpusServices))
-	if (req.action != actNew && req.action != actMeasure) || req.scope.TraceID != "" {
+	if (req.action != actNew && req.action != actMeasure && req.action != actLinks) || req.scope.TraceID != "" {
 		return nil, req
 	}
 	return phrasingFor("it").askMissing(req, corpusServices, prev), req
