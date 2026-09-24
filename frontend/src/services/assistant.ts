@@ -1,22 +1,32 @@
 import { apiRequest } from './api';
 
+// AssistantContext is opaque to the UI: the backend returns it with each answer
+// and gets it back with the next message, so follow-ups like "il primo" or
+// "e ieri?" refer to the previous answer and pending questions get completed.
+export type AssistantContext = Record<string, unknown>;
+
 export type AssistantMessage = {
   role: 'user' | 'assistant';
   content: string;
+  context?: AssistantContext;
+};
+
+export type AssistantSuggestion = {
+  label: string;
+  prompt: string;
 };
 
 export type AssistantChatResponse = {
   answer: string;
   steps?: string[];
+  suggestions?: AssistantSuggestion[];
+  context?: AssistantContext;
 };
-
-export function getAIAssistantAvailability(): Promise<{ enabled: boolean }> {
-  return apiRequest<{ enabled: boolean }>('/api/ai/availability');
-}
 
 export function sendAssistantMessage(payload: {
   prompt: string;
-  messages: AssistantMessage[];
+  locale: string;
+  context?: AssistantContext;
 }): Promise<AssistantChatResponse> {
   return apiRequest<AssistantChatResponse>('/api/ai/assistant/chat', {
     method: 'POST',

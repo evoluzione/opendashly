@@ -1,29 +1,5 @@
 <div align="center">
 
-<div style="display: inline-flex; align-items: center; gap: 24px; text-align: left;">
-  <picture style="flex: 0 0 auto; display: block; line-height: 0;">
-    <source media="(prefers-color-scheme: dark)" srcset="assets/opendashly-mark-dark.svg" />
-    <source media="(prefers-color-scheme: light)" srcset="assets/opendashly-mark-light.svg" />
-    <img src="assets/opendashly-mark-light.svg" alt="OpenDashly logo" width="96" height="96" style="display: block;" />
-  </picture>
-  <div style="display: flex; flex-direction: column; justify-content: center; line-height: 1; transform: translateY(-2px);">
-    <strong style="font-size: 2.45em; line-height: 0.95; letter-spacing: -0.03em; color: #f8fafc;">Opendashly</strong>
-    <span style="margin-top: 8px; font-size: 1em; letter-spacing: 0.12em; text-transform: uppercase; color: #64748b; line-height: 1;">Dashboard</span>
-  </div>
-</div>
-
-**Complete observability for OpenTelemetry-instrumented services — logs, traces, and metrics in one self-hosted platform.**
-
-[![OpenTelemetry](https://img.shields.io/badge/OpenTelemetry-1.20-6c5ce7?style=flat-square&logo=opentelemetry&logoColor=white)](https://opentelemetry.io)
-[![ClickHouse](https://img.shields.io/badge/ClickHouse-24-FFCC01?style=flat-square&logo=clickhouse&logoColor=black)](https://clickhouse.com)
-[![Go](https://img.shields.io/badge/Go-1.22+-00ADD8?style=flat-square&logo=go&logoColor=white)](https://golang.org)
-[![SvelteKit](https://img.shields.io/badge/SvelteKit-4.2-FF3E00?style=flat-square&logo=svelte&logoColor=white)](https://kit.svelte.dev)
-[![Docker](https://img.shields.io/badge/Docker-ready-2496ED?style=flat-square&logo=docker&logoColor=white)](https://docker.com)
-
-[Quick Start](#-quick-start) · [AI Features](#-ai-powered-queries) · [Production Deploy](#-production-deployment) · [Tech Stack](#-tech-stack)
-
-</div>
-
 ---
 
 ## What is Opendashly?
@@ -48,7 +24,7 @@ flowchart LR
 
 - **High-throughput ingestion** — ClickHouse columnar storage handles millions of events/second with sub-second queries
 - **Trace correlation** — navigate from a log line to its trace and spans in one click
-- **AI observability agent** — ask questions in plain language, the agent investigates your telemetry autonomously and surfaces problems, anomalies, and insights
+- **Automatic diagnosis** — describe a service or time window in plain language; it compares against the previous window and surfaces anomalies, error origins, and evidence, with no LLM or API key
 - **Single-command deploy** — the entire stack runs with `docker compose up`
 - **Data retention policies** — configurable automatic cleanup keeps storage costs predictable
 - **Enterprise auth** — JWT with role-based access control and bcrypt password hashing
@@ -65,13 +41,13 @@ flowchart LR
 docker compose up --build
 ```
 
-| Service | URL |
-|---|---|
-| Dashboard | http://localhost:5173 |
+| Service     | URL                   |
+| ----------- | --------------------- |
+| Dashboard   | http://localhost:5173 |
 | Backend API | http://localhost:8080 |
-| OTLP HTTP | http://localhost:4318 |
-| OTLP gRPC | grpc://localhost:4317 |
-| ClickHouse | http://localhost:8123 |
+| OTLP HTTP   | http://localhost:4318 |
+| OTLP gRPC   | grpc://localhost:4317 |
+| ClickHouse  | http://localhost:8123 |
 
 ### 2. Login
 
@@ -121,36 +97,39 @@ Services simulated: `api-gateway`, `auth-service`, `catalog-service`, `cart-serv
 <details>
 <summary>Load test options</summary>
 
-| Flag | Description | Default |
-|---|---|---|
-| `--duration` | Test duration in seconds | — |
-| `--rps` | Target requests per second | — |
-| `--services` | Active microservices (2–9) | 9 |
-| `--error-rate` | Base error probability (0–1) | 0.02 |
-| `--hot-rate` | Extra traffic on checkout hotspot (0–1) | 0.2 |
-| `--no-metrics` | Disable metrics signal | — |
-| `--no-traces` | Disable traces signal | — |
-| `--collector` | OTLP HTTP base URL | `http://localhost:4318` |
+| Flag             | Description                              | Default                   |
+| ---------------- | ---------------------------------------- | ------------------------- |
+| `--duration`   | Test duration in seconds                 | —                        |
+| `--rps`        | Target requests per second               | —                        |
+| `--services`   | Active microservices (2–9)              | 9                         |
+| `--error-rate` | Base error probability (0–1)            | 0.02                      |
+| `--hot-rate`   | Extra traffic on checkout hotspot (0–1) | 0.2                       |
+| `--no-metrics` | Disable metrics signal                   | —                        |
+| `--no-traces`  | Disable traces signal                    | —                        |
+| `--collector`  | OTLP HTTP base URL                       | `http://localhost:4318` |
 
 </details>
 
 ---
 
-## 🤖 AI Observability Agent
+## 🤖 Automatic Diagnosis
 
-Opendashly ships a built-in AI agent powered by OpenAI. Ask a question in plain language — in Italian or English — and the agent takes it from there: it runs queries against your telemetry, identifies anomalies and error patterns, and returns results directly as log tables, trace lists, and actionable insights. No SQL required, no manual filtering.
+Opendashly ships a built-in diagnosis assistant that runs entirely inside the backend: no LLM, no API key, no external service, and it fits the minimal 1 CPU / 2 GB deployment. It understands Italian and English, sloppy typing and typos.
 
-**Setup:** Settings → AI Configuration → enable, paste your OpenAI API key, choose model.
+- **It asks before it analyzes.** If the time window or the service is missing, it restates what it understood and asks, with one-click answers.
+- **Short answers first.** One sentence with the verdict and at most three numbered points; ask for `dettagli` / `details` for the full report.
+- **It remembers the answer it just gave.** `analizza il primo`, `the second one`, `quello del carrello`, `e ieri?`, `and latency?` refer to the previous answer.
+- **Precise numbers.** `latenza media delle GET del catalogo`, `how many errors did payment have today`, `p95 di /checkout`.
+- **Honest limits.** Charts, restarts, alert setup, exports and business metrics are declined instead of answered with unrelated data.
 
-| You ask | The agent does |
-|---|---|
-| `"why is checkout-service slow right now?"` | Finds slow traces, identifies bottleneck spans, surfaces the root cause |
-| `"any errors in the last hour?"` | Scans all services for errors, groups by service and type, shows log table |
-| `"what's wrong with payment-service?"` | Correlates error logs with traces, highlights anomalies and failure spikes |
-| `"show me the slowest endpoints today"` | Queries trace durations, ranks endpoints, returns a results table |
-| `"mostrami i log di auth-service degli ultimi 10 minuti"` | Fetches and displays the log table directly in the chat |
+| You ask                                                     | The assistant                                                                                              |
+| ----------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
+| `"ci sono errori?"`                                         | asks the window, then the service, then checks error rate, hotspots, error logs and where errors originate |
+| `"checkout-service ultime 2 ore"`                           | compares with the previous 2 hours: error rate, traffic, p95 regressions, new error hotspots, log patterns |
+| `"voglio sapere in media la velocità delle GET del catalogo"` | asks the window, then gives the request-weighted average latency and the slowest GET endpoint             |
+| `"4bf92f3577b34da6a3ce929d0e0e4736"`                        | finds the deepest errored span (where the failure started), the slowest span and linked error logs         |
 
-Available models: `gpt-3.5-turbo` (faster) · `gpt-4` (more accurate)
+The rules are checked against labeled IT/EN corpora in `backend/internal/application/diagnosis/testdata/`.
 
 ---
 
@@ -159,17 +138,18 @@ Available models: `gpt-3.5-turbo` (faster) · `gpt-4` (more accurate)
 The production stack uses prebuilt images from GHCR — no repository clone needed on the host. Just copy `docker-compose.prod.yml`.
 
 **Images:**
+
 - `ghcr.io/evoluzione/opendashly:latest`
 - `ghcr.io/evoluzione/opendashly-clickhouse:latest`
 - `ghcr.io/evoluzione/opendashly-otel-collector:latest`
 
 ### Host requirements
 
-| | Minimum | Recommended |
-|---|---|---|
-| CPU | 1 vCPU | 4 vCPU |
-| RAM | 2 GB | 8 GB |
-| Storage | 20 GB SSD | 50 GB+ SSD |
+|         | Minimum   | Recommended |
+| ------- | --------- | ----------- |
+| CPU     | 1 vCPU    | 4 vCPU      |
+| RAM     | 2 GB      | 8 GB        |
+| Storage | 20 GB SSD | 50 GB+ SSD  |
 
 ### Deploy
 

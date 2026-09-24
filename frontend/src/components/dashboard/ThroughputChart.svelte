@@ -18,6 +18,7 @@
   let lastWidth = 0;
   let lastHeight = 0;
   let lastDataRef: ThroughputPoint[] | null = null;
+  let lastLocale = $locale;
 
   function toEpochSeconds(value: unknown): number | null {
     if (value instanceof Date) {
@@ -87,14 +88,14 @@
 
     chart = new uPlot(
       {
-        title: 'Throughput nel tempo',
+        title: t($locale, 'dashboardSettings.chart.throughput_timeseries.label'),
         width,
         height,
         series: [
           {},
           {
             show: true,
-            label: 'Richieste',
+            label: t($locale, 'dashboard.throughput.requests'),
             stroke: 'var(--color-info-600)',
             width: 2,
             fill: 'rgba(37, 99, 235, 0.1)',
@@ -102,7 +103,7 @@
           },
           {
             show: true,
-            label: 'Errori',
+            label: t($locale, 'dashboard.throughput.errors'),
             stroke: 'var(--color-danger-500)',
             width: 2,
             fill: 'rgba(239, 68, 68, 0.1)',
@@ -116,9 +117,16 @@
         axes: [
           {},
           {
-            label: 'Count',
-            labelSize: 12,
-            size: 50
+            label: t($locale, 'dashboard.throughput.count'),
+            labelSize: 20,
+            // Fit the widest tick label (e.g. "500.000") plus room for the axis label
+            size: (self, values, axisIdx, cycleNum) => {
+              const axis = self.axes[axisIdx];
+              if (cycleNum > 1) return (axis as { _size: number })._size;
+              const longest = (values ?? []).reduce((m, v) => (v.length > m.length ? v : m), '');
+              self.ctx.font = axis.font?.[0] ?? '12px system-ui';
+              return Math.ceil(self.ctx.measureText(longest).width / devicePixelRatio) + 40;
+            }
           }
         ],
         legend: {
@@ -177,12 +185,14 @@
         lastDataRef !== data ||
         lastDataLength !== data.length ||
         lastWidth !== containerWidth ||
-        lastHeight !== nextHeight;
+        lastHeight !== nextHeight ||
+        lastLocale !== $locale;
       if (needsRender) {
         lastDataRef = data;
         lastDataLength = data.length;
         lastWidth = containerWidth;
         lastHeight = nextHeight;
+        lastLocale = $locale;
         renderChart(data, Math.max(320, containerWidth - 40), nextHeight);
       }
     }

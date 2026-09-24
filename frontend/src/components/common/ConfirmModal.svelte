@@ -168,7 +168,7 @@
     align-items: center;
     justify-content: center;
     padding: 24px;
-    z-index: 100;
+    z-index: 1300;
   }
 
   .modal {

@@ -781,7 +781,21 @@ func (s *Service) getLatencyDistribution(ctx context.Context, req DashboardReque
 }
 
 func (s *Service) getSlowestEndpoints(ctx context.Context, req DashboardRequest) ([]EndpointLatency, error) {
-	query := BuildSlowestEndpointsQuery(req.From, req.To, req.ServiceName, 10)
+	return s.slowestEndpoints(ctx, req, 10)
+}
+
+// EndpointLatencies returns latency stats for up to limit endpoints, slowest
+// p95 first. The diagnosis chat uses it to answer "average latency of the
+// GET endpoints of X" beyond the dashboard's top 10.
+func (s *Service) EndpointLatencies(ctx context.Context, req DashboardRequest, limit int) ([]EndpointLatency, error) {
+	if s.Storage == nil {
+		return []EndpointLatency{}, nil
+	}
+	return s.slowestEndpoints(ctx, req, limit)
+}
+
+func (s *Service) slowestEndpoints(ctx context.Context, req DashboardRequest, limit int) ([]EndpointLatency, error) {
+	query := BuildSlowestEndpointsQuery(req.From, req.To, req.ServiceName, limit)
 	log.Printf("metrics.service.getSlowestEndpoints: executing query")
 
 	rows, err := s.Storage.Query(ctx, query)
@@ -820,7 +834,19 @@ func (s *Service) getSlowestEndpoints(ctx context.Context, req DashboardRequest)
 }
 
 func (s *Service) getErrorHotspots(ctx context.Context, req DashboardRequest) ([]ErrorHotspot, error) {
-	query := BuildErrorHotspotsQuery(req.From, req.To, req.ServiceName, 10)
+	return s.errorHotspots(ctx, req, 10)
+}
+
+// EndpointErrors returns error counts for up to limit endpoints that had errors.
+func (s *Service) EndpointErrors(ctx context.Context, req DashboardRequest, limit int) ([]ErrorHotspot, error) {
+	if s.Storage == nil {
+		return []ErrorHotspot{}, nil
+	}
+	return s.errorHotspots(ctx, req, limit)
+}
+
+func (s *Service) errorHotspots(ctx context.Context, req DashboardRequest, limit int) ([]ErrorHotspot, error) {
+	query := BuildErrorHotspotsQuery(req.From, req.To, req.ServiceName, limit)
 	log.Printf("metrics.service.getErrorHotspots: executing query")
 
 	rows, err := s.Storage.Query(ctx, query)

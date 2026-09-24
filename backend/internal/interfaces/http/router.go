@@ -6,6 +6,7 @@ import (
 
 	"opendashly/backend/internal/application/ai"
 	"opendashly/backend/internal/application/dashboard"
+	"opendashly/backend/internal/application/diagnosis"
 	"opendashly/backend/internal/application/metrics"
 	"opendashly/backend/internal/application/query"
 	"opendashly/backend/internal/application/status"
@@ -43,11 +44,9 @@ type routeHandlers struct {
 	statusHandler          *handlers.StatusHandler
 	savedQueriesHandler    *handlers.SavedQueriesHandler
 	smartQueryHandler      *handlers.SmartQueryHandler
-	aiAvailabilityHandler  *handlers.AIAvailabilityHandler
 	aiAssistantChatHandler *handlers.AIAssistantChatHandler
 	aiAssistantSession     *handlers.AIAssistantSessionHandler
 	dashboardHandler       *handlers.DashboardHandler
-	aiSettingsHandler      *handlers.AISettingsHandler
 	attributesHandler      *handlers.AttributesHandler
 	dashboardSettings      *handlers.DashboardSettingsHandler
 	workspaceSettings      *handlers.WorkspaceSettingsHandler
@@ -87,22 +86,22 @@ func buildRouteHandlers(cfg RouterConfig) routeHandlers {
 			Service: cfg.QueryService,
 			Timeout: time.Duration(auto.QueryRequestTimeoutSec) * time.Second,
 		},
-		traceRelatedHandler:   &handlers.TraceRelatedHandler{Service: cfg.RelatedService},
-		traceSpansHandler:     &handlers.TraceSpansHandler{Service: cfg.TraceSpansService},
-		statusHandler:         &handlers.StatusHandler{Service: cfg.StatusService},
-		savedQueriesHandler:   &handlers.SavedQueriesHandler{Repo: cfg.SavedRepo, Runner: cfg.QueryService},
-		smartQueryHandler:     &handlers.SmartQueryHandler{AIService: cfg.AIService},
-		aiAvailabilityHandler: &handlers.AIAvailabilityHandler{Service: cfg.AIService},
-		aiAssistantChatHandler: &handlers.AIAssistantChatHandler{
-			AIService:    cfg.AIService,
-			QueryService: cfg.QueryService,
-		},
+		traceRelatedHandler: &handlers.TraceRelatedHandler{Service: cfg.RelatedService},
+		traceSpansHandler:   &handlers.TraceSpansHandler{Service: cfg.TraceSpansService},
+		statusHandler:       &handlers.StatusHandler{Service: cfg.StatusService},
+		savedQueriesHandler: &handlers.SavedQueriesHandler{Repo: cfg.SavedRepo, Runner: cfg.QueryService},
+		smartQueryHandler:   &handlers.SmartQueryHandler{},
+		aiAssistantChatHandler: &handlers.AIAssistantChatHandler{Runner: &diagnosis.Runner{
+			Query:   cfg.QueryService,
+			Spans:   cfg.TraceSpansService,
+			Related: cfg.RelatedService,
+			Metrics: cfg.DashboardService,
+		}},
 		aiAssistantSession: &handlers.AIAssistantSessionHandler{AIService: cfg.AIService},
 		dashboardHandler: &handlers.DashboardHandler{
 			Service: cfg.DashboardService,
 			Timeout: dashboardTimeout,
 		},
-		aiSettingsHandler: &handlers.AISettingsHandler{Service: cfg.AIService},
 		attributesHandler: &handlers.AttributesHandler{
 			Service: cfg.QueryService,
 			Timeout: time.Duration(auto.QueryAttributesTimeoutSec) * time.Second,
@@ -115,7 +114,6 @@ func buildRouteHandlers(cfg RouterConfig) routeHandlers {
 func registerAPIRoutes(r *chi.Mux, cfg RouterConfig, h routeHandlers) {
 	r.Post("/api/query/run", h.queryHandler.ServeHTTP)
 	r.Post("/api/query/smart", h.smartQueryHandler.ServeHTTP)
-	r.Get("/api/ai/availability", h.aiAvailabilityHandler.Get)
 	r.Post("/api/ai/assistant/chat", h.aiAssistantChatHandler.ServeHTTP)
 	r.Get("/api/ai/assistant/session", h.aiAssistantSession.Get)
 	r.Put("/api/ai/assistant/session", h.aiAssistantSession.Put)
@@ -136,8 +134,6 @@ func registerAPIRoutes(r *chi.Mux, cfg RouterConfig, h routeHandlers) {
 	r.Get("/api/workspace/settings", h.workspaceSettings.Get)
 
 	// Admin Settings
-	r.Get("/api/admin/ai/settings", h.aiSettingsHandler.Get)
-	r.Put("/api/admin/ai/settings", h.aiSettingsHandler.Update)
 	r.Get("/api/admin/dashboard/settings", h.dashboardSettings.Get)
 	r.Put("/api/admin/dashboard/settings", h.dashboardSettings.Update)
 	r.Put("/api/admin/workspace/settings", h.workspaceSettings.Update)
