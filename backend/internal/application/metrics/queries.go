@@ -48,8 +48,10 @@ var latencyBuckets = []struct {
 	{10000, -1, ">10s"},
 }
 
+// formatTime writes a ClickHouse time literal. Rollup buckets are UTC, so
+// times in any other zone (the assistant uses the viewer's) are converted.
 func formatTime(t time.Time) string {
-	return t.Format("2006-01-02 15:04:05")
+	return t.UTC().Format("2006-01-02 15:04:05")
 }
 
 func serviceFilter(serviceName string) string {

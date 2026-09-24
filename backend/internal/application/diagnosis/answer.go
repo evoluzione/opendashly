@@ -121,8 +121,8 @@ func (p phrasing) reply(in intent) string {
 	switch in {
 	case intentHelp:
 		return p.pick(
-			"Trovo cosa non va nella telemetria: confronto un periodo con quello precedente, raggruppo i log di errore e risalgo le trace fino all'origine dell'errore. Rispondo anche a domande precise, come la latenza media delle GET di un servizio.\n\nDimmi un servizio, un periodo o incollami un trace id.",
-			"I find what is wrong in your telemetry: I compare a window with the previous one, group error logs and walk traces back to where the error started. I also answer precise questions, like the average latency of a service's GET endpoints.\n\nTell me a service, a time window or paste a trace id.")
+			"Trovo cosa non va nella telemetria: confronto un periodo con quello precedente, raggruppo i log di errore e risalgo le trace fino all'origine dell'errore. Rispondo anche a domande precise, come la latenza media delle GET di un servizio, e ti do i link per aprire o scaricare log e trace.\n\nDimmi un servizio, un periodo o incollami un trace id.",
+			"I find what is wrong in your telemetry: I compare a window with the previous one, group error logs and walk traces back to where the error started. I also answer precise questions, like the average latency of a service's GET endpoints, and give you links to open or download logs and traces.\n\nTell me a service, a time window or paste a trace id.")
 	case intentGreeting:
 		return p.pick("Ciao! Cosa controllo?", "Hi! What should I check?")
 	case intentThanks:
@@ -150,14 +150,12 @@ var (
 		unsupportedChart:    "Non so disegnare grafici: per quelli c'è la dashboard. Posso però darti i numeri qui.",
 		unsupportedAction:   "Non posso fare azioni sui servizi (riavvii, cancellazioni, deploy, rollback): leggo solo la telemetria.",
 		unsupportedAlert:    "Non posso creare o configurare alert. Posso però dirti se adesso c'è qualcosa che non va.",
-		unsupportedExport:   "Non posso esportare file. Posso riassumerti i dati qui in chat.",
 		unsupportedBusiness: "Non ho dati di business (utenti, vendite, fatturato): vedo solo trace e log dei servizi.",
 	}
 	unsupportedEN = map[string]string{
 		unsupportedChart:    "I can't draw charts: the dashboard has those. I can give you the numbers here.",
 		unsupportedAction:   "I can't act on services (restarts, deletes, deploys, rollbacks): I only read telemetry.",
 		unsupportedAlert:    "I can't create or configure alerts. I can tell you whether something is wrong right now.",
-		unsupportedExport:   "I can't export files. I can summarize the data here in the chat.",
 		unsupportedBusiness: "I have no business data (users, sales, revenue): I only see service traces and logs.",
 	}
 )
@@ -310,7 +308,19 @@ func conciseWindow(p phrasing, scope Scope, focus string, a analysis) (string, [
 
 	switch focus {
 	case focusErrors:
-		if cur != nil && cur.Satisfaction.ErrorRate < 0.01 && len(shown) > 0 && scope.Service != "" {
+		if cur != nil && cur.Satisfaction.Throughput.TotalRequests == 0 {
+			// No traffic: say so, instead of an error rate over zero requests.
+			fmt.Fprintf(&b, p.pick("%s non ci sono richieste%s", "%s there are no requests%s"), win, p.where(scope.Service))
+			if a.base != nil && a.base.Satisfaction.Throughput.TotalRequests > 0 {
+				fmt.Fprintf(&b, p.pick(" (prima %s)", " (was %s)"), p.count(a.base.Satisfaction.Throughput.TotalRequests))
+			}
+			b.WriteString(".")
+			shown = withoutKind(shown, KindNoTraffic)
+			selected = withoutKind(selected, KindNoTraffic)
+			if len(shown) > 0 {
+				b.WriteString(p.pick(" Inoltre:", " Also:"))
+			}
+		} else if cur != nil && cur.Satisfaction.ErrorRate < 0.01 && hasKind(shown, KindRootCause) && scope.Service != "" {
 			fmt.Fprintf(&b, p.pick("%s le risposte di **%s** non hanno errori (%s richieste), ma alcune chiamate che fa verso altri servizi falliscono:",
 				"%s **%s** answers without errors (%s requests), but some of the calls it makes to other services fail:"),
 				win, scope.Service, p.count(cur.Satisfaction.Throughput.TotalRequests))
@@ -508,47 +518,45 @@ type suggestions []Suggestion
 
 const maxSuggestions = 4
 
-func (s *suggestions) add(label, prompt string) {
+func (s *suggestions) add(sug Suggestion) {
 	if len(*s) >= maxSuggestions {
 		return
 	}
 	for _, x := range *s {
-		if x.Prompt == prompt {
+		if x.Prompt == sug.Prompt {
 			return
 		}
 	}
-	*s = append(*s, Suggestion{Label: label, Prompt: prompt})
+	*s = append(*s, sug)
 }
 
 func (p phrasing) detailsSuggestion() Suggestion {
-	return Suggestion{Label: p.pick("Dettagli", "Details"), Prompt: p.pick("dettagli", "details")}
+	return Suggestion{Label: p.pick("Dettagli", "Details"), Prompt: p.pick("dettagli", "details"), Kind: sugInline}
 }
 
 func detailSuggestions(p phrasing) []Suggestion { return []Suggestion{p.detailsSuggestion()} }
 
-// windowSuggestions offers the next moves: details, open the first item,
-// focus on its service or back to all services, widen the window.
+// windowSuggestions offers the next moves: details, then the same analysis
+// on its first service or back on all services, or on a wider window. Each
+// item is analyzed from its own row (Report.Rows).
 func windowSuggestions(p phrasing, scope Scope, items []ContextItem, detail bool) []Suggestion {
 	out := suggestions{}
+
 	if !detail && len(items) > 0 {
-		d := p.detailsSuggestion()
-		out.add(d.Label, d.Prompt)
-	}
-	if len(items) > 0 {
-		out.add(p.pick("Analizza il n.1", "Analyze #1"), p.pick("analizza il primo", "analyze the first one"))
+		out.add(p.detailsSuggestion())
 	}
 	if scope.Service == "" {
 		for _, it := range items {
 			if it.Service != "" {
-				out.add(p.pick("Solo ", "Only ")+it.Service, p.windowPrompt(it.Service, scope.window()))
+				out.add(Suggestion{Label: p.pick("solo ", "only ") + it.Service, Prompt: p.windowPrompt(it.Service, scope.window()), Kind: sugRerun})
 				break
 			}
 		}
 	} else {
-		out.add(p.pick("Tutti i servizi", "All services"), p.windowPrompt("", scope.window()))
+		out.add(Suggestion{Label: p.pick("tutti i servizi", "all services"), Prompt: p.windowPrompt("", scope.window()), Kind: sugRerun})
 	}
 	if scope.window() < 24*time.Hour {
-		out.add(p.pick("Ultime 24 ore", "Last 24 hours"), p.windowPrompt(scope.Service, 24*time.Hour))
+		out.add(Suggestion{Label: p.pick("ultime 24 ore", "last 24 hours"), Prompt: p.windowPrompt(scope.Service, 24*time.Hour), Kind: sugRerun})
 	}
 	return out
 }
@@ -556,13 +564,12 @@ func windowSuggestions(p phrasing, scope Scope, items []ContextItem, detail bool
 func traceSuggestions(p phrasing, root query.TraceSpanEntry, hasRoot, detail bool) []Suggestion {
 	out := suggestions{}
 	if !detail {
-		d := p.detailsSuggestion()
-		out.add(d.Label, d.Prompt)
+		out.add(p.detailsSuggestion())
 	}
 	if hasRoot && root.Service != "" {
-		out.add(p.pick("Solo ", "Only ")+root.Service, p.windowPrompt(root.Service, time.Hour))
+		out.add(Suggestion{Label: p.pick("Analizza ", "Analyze ") + root.Service, Prompt: p.windowPrompt(root.Service, time.Hour)})
 	}
-	out.add(p.pick("Panoramica ultima ora", "Last hour overview"), p.pick("ultima ora", "last hour"))
+	out.add(Suggestion{Label: p.pick("Panoramica ultima ora", "Last hour overview"), Prompt: p.pick("ultima ora", "last hour")})
 	return out
 }
 
@@ -611,6 +618,20 @@ func (p phrasing) askMissing(req request, services []string, prev *Context) *Rep
 	if req.action == actMeasure {
 		m := req.measure
 		ctx.Measure = &m
+	}
+	if req.action == actLinks {
+		ctx.Want = wantLinks
+		kinds := []string{}
+		if req.linkLogs {
+			kinds = append(kinds, "logs")
+		}
+		if req.linkTraces {
+			kinds = append(kinds, "traces")
+		}
+		if req.linkErrors {
+			kinds = append(kinds, "errors")
+		}
+		ctx.LinkKinds = strings.Join(kinds, ",")
 	}
 	var question string
 	var sugs []Suggestion
@@ -661,13 +682,18 @@ func (p phrasing) askMissing(req request, services []string, prev *Context) *Rep
 	default:
 		return nil
 	}
+	for i := range sugs {
+		sugs[i].Kind = sugInline // they answer the question in this message
+	}
 	return &Report{Answer: p.understood(req) + " " + question, Suggestions: sugs, Context: ctx}
 }
 
 // understood restates the request so the user can check it before the analysis.
 func (p phrasing) understood(req request) string {
 	var what string
-	if req.action == actMeasure {
+	if req.action == actLinks {
+		what = p.pick("Ok, preparo i link ai dati", "Ok, I'll prepare the links to the data")
+	} else if req.action == actMeasure {
 		subject := p.subject(req.measure, "")
 		switch req.measure.Metric {
 		case metricErrors:
@@ -709,4 +735,23 @@ func isPresetWindow(s Scope) bool {
 		return true
 	}
 	return false
+}
+
+func hasKind(findings []Finding, kind string) bool {
+	for _, f := range findings {
+		if f.Kind == kind {
+			return true
+		}
+	}
+	return false
+}
+
+func withoutKind(findings []Finding, kind string) []Finding {
+	out := []Finding{}
+	for _, f := range findings {
+		if f.Kind != kind {
+			out = append(out, f)
+		}
+	}
+	return out
 }

@@ -142,9 +142,15 @@ func TestRender(t *testing.T) {
 	}
 	sortFindings(findings)
 	out := renderWindow(textsFor("it"), phrasingFor("it"), scope, findings, dash(10, 1, nil, nil), []string{"log di errore"})
-	for _, want := range []string{"Problemi trovati (2)", "`t1`", "Cosa controllare", "Controlli non completati", "1. 🔴"} {
+	for _, want := range []string{"Problemi trovati (2)", "Controlli non completati", "1. 🔴", "· payments"} {
 		if !strings.Contains(out, want) {
 			t.Errorf("report missing %q:\n%s", want, out)
+		}
+	}
+	// Trace ids and generic advice stay out of the text: each row opens its data.
+	for _, unwanted := range []string{"`t1`", "Cosa controllare"} {
+		if strings.Contains(out, unwanted) {
+			t.Errorf("report should not contain %q:\n%s", unwanted, out)
 		}
 	}
 	if strings.Index(out, "TimeoutError") > strings.Index(out, "`x`") {
@@ -158,25 +164,40 @@ func TestRender(t *testing.T) {
 func TestSuggestionsRoundTrip(t *testing.T) {
 	services := []string{"payment-service"}
 	scope := parseScope("", services, testNow)
-	items := []ContextItem{{Kind: KindRootCause, Service: "payment-service", TraceID: "4bf92f3577b34da6a3ce929d0e0e4736"}}
+	items := []ContextItem{
+		{Kind: KindRootCause, Service: "payment-service", TraceID: "4bf92f3577b34da6a3ce929d0e0e4736"},
+		{Kind: KindHotspot, Service: "payment-service", Endpoint: "GET /orders/123/items"},
+	}
 	prev := &Context{From: scope.From, To: scope.To, Items: items}
 	for _, locale := range []string{"it", "en"} {
-		sugs := windowSuggestions(phrasingFor(locale), scope, items, false)
-		if len(sugs) != 4 {
-			t.Fatalf("%s: got %d suggestions: %+v", locale, len(sugs), sugs)
+		p := phrasingFor(locale)
+		sugs := windowSuggestions(p, scope, items, false)
+		if len(sugs) == 0 || sugs[0].Kind != sugInline {
+			t.Fatalf("%s: details should come first and inline: %+v", locale, sugs)
 		}
-		// Every suggested prompt must be understood, given the answer it follows.
 		if r := understand(sugs[0].Prompt, services, testNow, prev); r.action != actDetails {
 			t.Errorf("%s details prompt %q -> action %d", locale, sugs[0].Prompt, r.action)
 		}
-		if r := understand(sugs[1].Prompt, services, testNow, prev); r.action != actOpenItem || resolveRef(r.ref, items) != 0 {
-			t.Errorf("%s open prompt %q -> action %d ref %d", locale, sugs[1].Prompt, r.action, r.ref)
+		for _, s := range sugs[1:] {
+			if s.Kind != sugRerun {
+				t.Errorf("%s: %q should be a rerun", locale, s.Label)
+			}
 		}
-		if s := parseScope(sugs[2].Prompt, services, testNow); s.Service != "payment-service" || s.window() != time.Hour {
-			t.Errorf("%s service prompt %q parsed as %+v", locale, sugs[2].Prompt, s)
+		// Each row analyzes its own item and opens its own data.
+		rows := p.rows(scope, items)
+		if len(rows) != len(items) {
+			t.Fatalf("%s: got %d rows for %d items", locale, len(rows), len(items))
 		}
-		if s := parseScope(sugs[3].Prompt, services, testNow); s.window() != 24*time.Hour {
-			t.Errorf("%s widen prompt %q parsed as %v", locale, sugs[3].Prompt, s.window())
+		for i, row := range rows {
+			if r := understand(row.Prompt, services, testNow, prev); r.action != actOpenItem || resolveRef(r.ref, items) != i {
+				t.Errorf("%s row %d prompt %q -> action %d ref %d", locale, i, row.Prompt, r.action, r.ref)
+			}
+		}
+		if rows[0].Link.Kind != linkTrace || rows[0].Link.TraceID != items[0].TraceID {
+			t.Errorf("%s: row 0 should open its trace: %+v", locale, rows[0].Link)
+		}
+		if l := rows[1].Link; l.Kind != linkTraces || !l.ErrorsOnly || l.Search != "/orders/" || l.Service != "payment-service" {
+			t.Errorf("%s: row 1 should open the route's error traces: %+v", locale, l)
 		}
 	}
 }
@@ -254,5 +275,20 @@ func TestYesterdayAndRouteWords(t *testing.T) {
 	}
 	if got := phrasingFor("it").window(s); got != "Ieri" {
 		t.Errorf("window label = %q", got)
+	}
+}
+
+func TestTodayUsesTheViewerZone(t *testing.T) {
+	rome, err := time.LoadLocation("Europe/Rome")
+	if err != nil {
+		t.Skip("no zoneinfo")
+	}
+	now := time.Date(2026, 9, 24, 16, 53, 0, 0, rome)
+	s := parseScope("errori di oggi", corpusServices, now)
+	if !s.Today || !s.From.Equal(time.Date(2026, 9, 24, 0, 0, 0, 0, rome)) {
+		t.Fatalf("oggi = %v", s.From)
+	}
+	if got := formatRange(s.From, s.To); got != "00:00–16:53 CEST" {
+		t.Errorf("range label = %q", got)
 	}
 }
