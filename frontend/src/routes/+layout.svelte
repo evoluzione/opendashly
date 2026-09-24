@@ -14,8 +14,12 @@
   onMount(() => {
     initializeLocale();
     void loadSession();
-    void loadWorkspace();
   });
+
+  // The workspace endpoint requires a session: loading it only on mount left
+  // the default title after a fresh login (cleared cookies). Reload per user.
+  $: userId = $authState.user?.id;
+  $: if (userId) void loadWorkspace();
 
   onMount(() => {
     const unsubscribe = authState.subscribe((state) => {

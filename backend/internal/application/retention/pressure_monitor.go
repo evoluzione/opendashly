@@ -130,7 +130,9 @@ func (m *PressureMonitor) loadDiskStats(ctx context.Context) (uint64, uint64, er
 	if m.conn == nil {
 		return 0, 0, nil
 	}
-	query := `SELECT sum(total_space - free_space), sum(total_space)
+	// UInt64 - UInt64 is Int64 in ClickHouse; the uncast scan always failed, so
+	// disk pressure was never detected.
+	query := `SELECT toUInt64(sum(total_space - free_space)), sum(total_space)
 		FROM system.disks
 		WHERE total_space > 0`
 	var used uint64

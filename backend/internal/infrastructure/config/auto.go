@@ -40,7 +40,6 @@ type AutoSettings struct {
 	RetentionPressureMemPct      int
 	RetentionPressureMemBudgetMB int
 	RetentionPressureDiskPct     int
-	RetentionPreCount            bool
 
 	ClickHouseTempDiskMiB        int
 	ClickHouseMaxExecSec         int
@@ -142,7 +141,7 @@ func deriveAutoSettings(r ResourceProfile) AutoSettings {
 		Resources: r,
 
 		ServiceListTimeoutSec:  dashboardTimeout,
-		CleanupIntervalMinutes: 720,
+		CleanupIntervalMinutes: 60,
 
 		RetentionAdaptiveEnabled:     true,
 		MaxLogRetentionDays:          30,
@@ -158,7 +157,6 @@ func deriveAutoSettings(r ResourceProfile) AutoSettings {
 		RetentionPressureMemPct:      85,
 		RetentionPressureMemBudgetMB: clampInt(mem*70/100, 128, 2048),
 		RetentionPressureDiskPct:     90,
-		RetentionPreCount:            false,
 
 		ClickHouseTempDiskMiB:        clampInt(mem, 512, 4096),
 		ClickHouseMaxExecSec:         20,

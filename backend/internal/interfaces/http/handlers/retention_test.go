@@ -37,10 +37,6 @@ func (r *retentionHandlerRepo) CreateCleanupJob(context.Context, retention.Clean
 	return nil
 }
 
-func (r *retentionHandlerRepo) UpdateCleanupJob(context.Context, string, string, uint64, string) error {
-	return nil
-}
-
 func (r *retentionHandlerRepo) ListCleanupJobs(context.Context, int) ([]retention.CleanupJob, error) {
 	return r.jobs, r.listErr
 }

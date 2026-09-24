@@ -123,11 +123,10 @@ func Build(ctx context.Context) (*App, error) {
 	go tuningController.Run(context.Background())
 
 	cleanupService := &retention.CleanupService{
-		Repo:              retentionRepo,
-		Conn:              maintenanceClient.Conn,
-		EnableCountBefore: cfg.RetentionPreCount,
-		AdaptiveOptions:   adaptiveOptions,
-		PressureMonitor:   pressureMonitor,
+		Repo:            retentionRepo,
+		Conn:            maintenanceClient.Conn,
+		AdaptiveOptions: adaptiveOptions,
+		PressureMonitor: pressureMonitor,
 	}
 	cleanupService.EnsureDefaults()
 	queryService.PressureObserver = cleanupService
