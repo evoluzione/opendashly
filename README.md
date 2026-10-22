@@ -142,11 +142,11 @@ No need to clone the repo: the server ships as the `ghcr.io/evoluzione/opendashl
 **Claude Code** (from any terminal):
 
 ```bash
-claude mcp add opendashly --scope user \
+claude mcp add opendashly --scope user -- docker run -i --rm --pull always \
   -e OPENDASHLY_URL=https://opendashly.example.com \
   -e OPENDASHLY_USERNAME=claude \
   -e OPENDASHLY_PASSWORD='...' \
-  -- docker run -i --rm --pull always -e OPENDASHLY_URL -e OPENDASHLY_USERNAME -e OPENDASHLY_PASSWORD ghcr.io/evoluzione/opendashly-mcp
+  ghcr.io/evoluzione/opendashly-mcp
 ```
 
 Check it with `claude mcp list`, then ask Claude things like *"errori di checkout-service nell'ultima ora"*. `--scope user` makes it available in every project; drop it to add it only to the current folder.
@@ -158,12 +158,13 @@ Check it with `claude mcp list`, then ask Claude things like *"errori di checkou
   "mcpServers": {
     "opendashly": {
       "command": "docker",
-      "args": ["run", "-i", "--rm", "--pull", "always", "-e", "OPENDASHLY_URL", "-e", "OPENDASHLY_USERNAME", "-e", "OPENDASHLY_PASSWORD", "ghcr.io/evoluzione/opendashly-mcp"],
-      "env": {
-        "OPENDASHLY_URL": "https://opendashly.example.com",
-        "OPENDASHLY_USERNAME": "claude",
-        "OPENDASHLY_PASSWORD": "..."
-      }
+      "args": [
+        "run", "-i", "--rm", "--pull", "always",
+        "-e", "OPENDASHLY_URL=https://opendashly.example.com",
+        "-e", "OPENDASHLY_USERNAME=claude",
+        "-e", "OPENDASHLY_PASSWORD=...",
+        "ghcr.io/evoluzione/opendashly-mcp"
+      ]
     }
   }
 }
