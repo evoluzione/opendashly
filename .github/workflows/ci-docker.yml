@@ -71,6 +71,8 @@ jobs:
             image: ghcr.io/evoluzione/opendashly-mcp
             context: ./backend
             file: ./backend/cmd/mcp/Dockerfile
+            # Runs on users' machines (Apple Silicon included), not only on servers.
+            platforms: linux/amd64,linux/arm64
     permissions:
       contents: read
       packages: write
@@ -98,6 +100,7 @@ jobs:
         with:
           context: ${{ matrix.context }}
           file: ${{ matrix.file }}
+          platforms: ${{ matrix.platforms || 'linux/amd64' }}
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
