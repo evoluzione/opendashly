@@ -137,26 +137,40 @@ The rules are checked against labeled IT/EN corpora in `backend/internal/applica
 
 `backend/cmd/mcp` is a stdio MCP server that lets Claude (Desktop or Code) read logs and traces through the Opendashly API. Tools: `query_telemetry`, `get_trace`, `get_trace_related`, `list_services`. It only calls read endpoints; use a dedicated non-admin user that has already done its first-login password change.
 
+No need to clone the repo: the server ships as the `ghcr.io/evoluzione/opendashly-mcp` image, you only need Docker.
+
+**Claude Code** (from any terminal):
+
 ```bash
-cd backend && go build -o opendashly-mcp ./cmd/mcp
+claude mcp add opendashly --scope user -- docker run -i --rm --pull always \
+  -e OPENDASHLY_URL=https://opendashly.example.com \
+  -e OPENDASHLY_USERNAME=claude \
+  -e OPENDASHLY_PASSWORD='...' \
+  ghcr.io/evoluzione/opendashly-mcp
 ```
 
-Claude Desktop (`claude_desktop_config.json`) or `.mcp.json` for Claude Code:
+Check it with `claude mcp list`, then ask Claude things like *"errori di checkout-service nell'ultima ora"*. `--scope user` makes it available in every project; drop it to add it only to the current folder.
+
+**Claude Desktop**: add to `claude_desktop_config.json` (Settings → Developer → Edit Config) and restart:
 
 ```json
 {
   "mcpServers": {
     "opendashly": {
-      "command": "/path/to/opendashly-mcp",
-      "env": {
-        "OPENDASHLY_URL": "https://opendashly.example.com",
-        "OPENDASHLY_USERNAME": "claude",
-        "OPENDASHLY_PASSWORD": "..."
-      }
+      "command": "docker",
+      "args": [
+        "run", "-i", "--rm", "--pull", "always",
+        "-e", "OPENDASHLY_URL=https://opendashly.example.com",
+        "-e", "OPENDASHLY_USERNAME=claude",
+        "-e", "OPENDASHLY_PASSWORD=...",
+        "ghcr.io/evoluzione/opendashly-mcp"
+      ]
     }
   }
 }
 ```
+
+Opendashly running on your own machine? Use `http://host.docker.internal:8080` as `OPENDASHLY_URL` (`localhost` inside the container is the container itself). Without Docker: `go build ./cmd/mcp` from `backend/` and use the binary as the command.
 
 ---
 
