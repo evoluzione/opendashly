@@ -67,6 +67,10 @@ jobs:
             image: ghcr.io/evoluzione/opendashly-otel-collector
             context: ./docker/otel-collector
             file: ./docker/otel-collector/Dockerfile
+          - name: mcp
+            image: ghcr.io/evoluzione/opendashly-mcp
+            context: ./backend
+            file: ./backend/cmd/mcp/Dockerfile
     permissions:
       contents: read
       packages: write
