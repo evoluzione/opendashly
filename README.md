@@ -133,6 +133,33 @@ The rules are checked against labeled IT/EN corpora in `backend/internal/applica
 
 ---
 
+## 🔌 Claude (MCP)
+
+`backend/cmd/mcp` is a stdio MCP server that lets Claude (Desktop or Code) read logs and traces through the Opendashly API. Tools: `query_telemetry`, `get_trace`, `get_trace_related`, `list_services`. It only calls read endpoints; use a dedicated non-admin user that has already done its first-login password change.
+
+```bash
+cd backend && go build -o opendashly-mcp ./cmd/mcp
+```
+
+Claude Desktop (`claude_desktop_config.json`) or `.mcp.json` for Claude Code:
+
+```json
+{
+  "mcpServers": {
+    "opendashly": {
+      "command": "/path/to/opendashly-mcp",
+      "env": {
+        "OPENDASHLY_URL": "https://opendashly.example.com",
+        "OPENDASHLY_USERNAME": "claude",
+        "OPENDASHLY_PASSWORD": "..."
+      }
+    }
+  }
+}
+```
+
+---
+
 ## 🐳 Production Deployment
 
 The production stack uses prebuilt images from GHCR — no repository clone needed on the host. Just copy `docker-compose.prod.yml`.
